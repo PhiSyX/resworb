@@ -20,7 +20,7 @@ where
     queue: Vec<Option<I>>,
     offset: usize,
     is_replayed: bool,
-    current: Option<I>,
+    pub current: Option<I>,
     last_consumed_item: Option<I>,
 }
 

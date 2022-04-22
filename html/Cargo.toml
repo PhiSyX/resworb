@@ -1,0 +1,12 @@
+[package]
+name = "resworb-html"
+version = "0.1.0"
+license-file = "../LICENSE"
+edition = "2021"
+
+[lib]
+path = "./lib.rs"
+
+[dependencies]
+log = "^0.4"
+parser = { path = "../parser", package = "resworb-parser" }
