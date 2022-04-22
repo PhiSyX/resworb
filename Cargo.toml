@@ -1,0 +1,11 @@
+[package]
+name = "resworb"
+version = "0.1.0"
+license-file = "./LICENSE"
+edition = "2021"
+
+[[bin]]
+name = "resworb"
+path = "./resworb.rs"
+
+[dependencies]
