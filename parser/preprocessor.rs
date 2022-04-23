@@ -91,8 +91,9 @@ where
         self.is_replayed = true;
     }
 
+    /// Consomme le prochain élément du flux.
     pub fn next_input(&mut self) -> Option<I> {
-        self.tokenizer.next().and_then(|item| {
+        self.next().and_then(|item| {
             let some_item = Some(item);
             self.current = some_item.clone();
             some_item
@@ -131,6 +132,8 @@ where
     Chars: Iterator<Item = char>,
 {
     /// Alias de [InputStreamPreprocessor::next_input]
+    ///
+    /// Consomme le prochain caractère du flux.
     pub fn next_input_char(&mut self) -> Option<Chars::Item> {
         self.next_input()
     }
