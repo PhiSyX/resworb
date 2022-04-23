@@ -6,8 +6,11 @@ use std::collections::VecDeque;
 
 use parser::preprocessor::InputStreamPreprocessor;
 
-use super::{error::HTMLParserError, token::HTMLToken};
-use crate::emit_html_error;
+use super::{
+    error::HTMLParserError,
+    token::{HTMLTagAttribute, HTMLToken},
+};
+use crate::{emit_html_error, parser::token::HTMLTagAttributeName};
 
 // ---- //
 // Type //
@@ -54,6 +57,27 @@ enum State {
 
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName,
+
+    /// 13.2.5.33 Attribute name state
+    AttributeName,
+
+    /// 13.2.5.34 After attribute name state
+    AfterAttributeName,
+
+    /// 13.2.5.35 Before attribute value state
+    BeforeAttributeValue,
+
+    /// 13.2.5.36 Attribute value (double-quoted) state
+    AttributeValueDoubleQuoted,
+
+    /// 13.2.5.37 Attribute value (single-quoted) state
+    AttributeValueSimpleQuoted,
+
+    /// 13.2.5.38 Attribute value (unquoted) state
+    AttributeValueUnquoted,
+
+    /// 13.2.5.39 After attribute value (quoted) state
+    AfterAttributeValueQuoted,
 
     /// 13.2.5.40 Self-closing start tag state
     SelfClosingStartTag,
@@ -216,8 +240,8 @@ where
             // Reprendre dans l'état de faux commentaire.
             | Some('?') => {
                 emit_html_error!(
-                            HTMLParserError::UnexpectedQuestionMarkInsteadOfTagName
-                        );
+                    HTMLParserError::UnexpectedQuestionMarkInsteadOfTagName
+                );
 
                 self.token = Some(HTMLToken::new_comment(String::new()));
 
@@ -376,8 +400,8 @@ where
 
             // EOF
             //
-            // C'est une erreur d'analyse eof-in-tag. Émettre un jeton de
-            // fin de fichier.
+            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
+            // jeton de fin de fichier.
             | None => {
                 emit_html_error!(HTMLParserError::EofInTag);
                 self.token = Some(HTMLToken::EOF);
@@ -391,9 +415,509 @@ where
             | Some(_) => {
                 if let Some(ref mut tag) = self.token {
                     let ch =
-                        self.stream.current.expect("Le caractère courant");
+                        self.stream.current.expect("Le caractère actuel");
                     tag.append_character(ch);
                 }
+                StateIterator::Continue
+            }
+        }
+    }
+
+    fn handle_before_attribute_name_state(&mut self) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Ignorer le caractère
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                StateIterator::Continue
+            }
+
+            // U+002F SOLIDUS (/)
+            // U+003E GREATER-THAN SIGN (>)
+            // EOF
+            //
+            // Reprendre dans l'état après le nom de l'attribut.
+            | Some('/' | '>') | None => {
+                self.reconsume(State::AfterAttributeName);
+                StateIterator::Continue
+            }
+
+            // U+003D EQUALS SIGN (=)
+            //
+            // Il s'agit d'une erreur d'analyse
+            // unexpected-equals-sign-before-attribute-name. Commencer un
+            // nouvel attribut dans le jeton de balise actuel. Définir
+            // le nom de cet attribut sur le caractère d'entrée actuel, et
+            // sa valeur sur une chaîne vide. Passer à l'état de nom
+            // d'attribut.
+            | Some('=') => {
+                emit_html_error!(HTMLParserError::UnexpectedEqualsSignBeforeAttributeName);
+
+                let current_ch =
+                    self.stream.current.expect("Le caractère actuel");
+
+                let mut attribute = HTMLTagAttribute::default();
+                attribute.0 = HTMLTagAttributeName::from(current_ch);
+
+                if let Some(ref mut tag) = self.token {
+                    tag.define_tag_attributes(attribute);
+                }
+
+                self.state.current = State::AttributeName;
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Commence un nouvel attribut dans le jeton de balise actuel.
+            // Définissez le nom et la valeur de cet attribut à la chaîne
+            // vide. Reprendre l'état du nom de l'attribut.
+            | Some(_) => {
+                let attribute = HTMLTagAttribute::default();
+
+                if let Some(ref mut tag) = self.token {
+                    tag.define_tag_attributes(attribute);
+                }
+
+                self.reconsume(State::AttributeName);
+
+                StateIterator::Continue
+            }
+        }
+    }
+
+    /// Lorsque l'agent utilisateur quitte l'état du nom de l'attribut (et
+    /// avant d'émettre le jeton de balise, le cas échéant), le nom de
+    /// l'attribut complet doit être comparé aux autres attributs du même
+    /// jeton ; s'il existe déjà un attribut du jeton portant exactement le
+    /// même nom, il s'agit d'une erreur d'analyse d'attribut en double et
+    /// le nouvel attribut doit être retiré du jeton.
+    ///
+    /// Note: si un attribut est donc retiré d'un token, il n'est plus
+    /// jamais utilisé par l'analyseur syntaxique, de même que la valeur
+    /// qui lui est associée, le cas échéant, et il est donc effectivement
+    /// mis au rebut. Le retrait de l'attribut de cette manière ne modifie
+    /// pas son statut d'"attribut actuel" pour les besoins du tokenizer,
+    /// cependant.
+    fn handle_attribute_name_state(&mut self) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            // U+002F SOLIDUS (/)
+            // U+003E GREATER-THAN SIGN (>)
+            // EOF
+            //
+            // Reprendre dans l'état après le nom de l'attribut.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                self.reconsume(State::AfterAttributeName);
+                StateIterator::Continue
+            }
+            | None | Some('/' | '>') => {
+                self.reconsume(State::AfterAttributeName);
+                StateIterator::Continue
+            }
+
+            // U+003D EQUALS SIGN (=)
+            //
+            // Passer à l'état de la valeur de l'attribut avant.
+            | Some('=') => {
+                self.state.current = State::BeforeAttributeValue;
+                StateIterator::Continue
+            }
+
+            // ASCII upper alpha
+            //
+            // Ajoute la version en minuscules du caractère d'entrée actuel
+            // (ajouter 0x0020 au point de code du caractère) au nom de
+            // l'attribut actuel.
+            | Some(ch) if ch.is_ascii_uppercase() => {
+                if let Some(ref mut tag) = self.token {
+                    tag.append_character_to_attribute_name(
+                        ch.to_ascii_lowercase(),
+                    );
+                }
+                StateIterator::Continue
+            }
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse unexpected-null-character.
+            // Ajoute un caractère U+FFFD REPLACEMENT CHARACTER au nom de
+            // l'attribut actuel.
+            | Some('\0') => {
+                emit_html_error!(HTMLParserError::UnexpectedNullCharacter);
+                self.list.push_back(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ));
+                StateIterator::Continue
+            }
+
+            // U+0022 QUOTATION MARK (")
+            // U+0027 APOSTROPHE (')
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // unexpected-character-in-attribute-name. La traiter comme
+            // l'entrée "Anything else" ci-dessous.
+            //
+            // Anything else
+            //
+            // Ajoute le caractère d'entrée actuel au nom de l'attribut
+            // actuel.
+            | Some(ch) => {
+                if matches!(ch, '"' | '\'' | '<') {
+                    emit_html_error!(
+                        HTMLParserError::UnexpectedCharacterInAttributeName
+                    );
+                }
+
+                if let Some(ref mut tag) = self.token {
+                    let current_ch =
+                        self.stream.current.expect("Le caractère actuel");
+                    tag.append_character_to_attribute_name(current_ch);
+                }
+
+                StateIterator::Continue
+            }
+        }
+    }
+
+    fn handle_after_attribute_name_state(&mut self) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Ignorer le caractère.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                StateIterator::Continue
+            }
+
+            // U+002F SOLIDUS (/)
+            //
+            // Passer à l'état de balise de démarrage auto-fermante.
+            | Some('/') => {
+                self.state.current = State::SelfClosingStartTag;
+                StateIterator::Continue
+            }
+
+            // U+003D EQUALS SIGN (=)
+            //
+            // Passer à l'état d'avant la valeur de l'attribut.
+            | Some('=') => {
+                self.state.current = State::BeforeAttributeValue;
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état de données. Émettre le jeton actuel.
+            | Some('>') => {
+                self.state.current = State::Data;
+                StateIterator::Break
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
+            // jeton de fin de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInTag);
+                self.token = Some(HTMLToken::EOF);
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Commence un nouvel attribut dans le jeton de balise actuel.
+            // Définissez le nom et la valeur de cet attribut à la chaîne
+            // vide. Reprendre l'état du nom de l'attribut.
+            | Some(_) => {
+                let attribute = HTMLTagAttribute::default();
+
+                if let Some(ref mut tag) = self.token {
+                    tag.define_tag_attributes(attribute);
+                }
+
+                self.reconsume(State::AttributeName);
+
+                StateIterator::Continue
+            }
+        }
+    }
+
+    fn handle_before_attribute_value_state(&mut self) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Ignorer le caractère.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                StateIterator::Continue
+            }
+
+            // U+0022 QUOTATION MARK (")
+            //
+            // Passer à l'état de valeur d'attribut (double guillemets).
+            | Some('"') => {
+                self.state.current = State::AttributeValueDoubleQuoted;
+                StateIterator::Continue
+            }
+
+            // U+0027 APOSTROPHE (')
+            //
+            // Passer à l'état de valeur d'attribut (simple guillemet).
+            | Some('\'') => {
+                self.state.current = State::AttributeValueSimpleQuoted;
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse missing-attribute-value.
+            // Passer à l'état de données. Émettre le jeton de balise
+            // actuel.
+            | Some('>') => {
+                emit_html_error!(HTMLParserError::MissingAttributeValue);
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Reprendre à l'état de la valeur de l'attribut (unquoted).
+            | _ => {
+                self.reconsume(State::AttributeValueUnquoted);
+                StateIterator::Continue
+            }
+        }
+    }
+
+    fn handle_attribute_value_quoted_state(
+        &mut self,
+        quote: char,
+    ) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0022 QUOTATION MARK (")
+            //
+            // Passer à l'état de la valeur d'après attribut (quoted).
+            | Some('"') if quote == '"' => {
+                self.state.current = State::AfterAttributeValueQuoted;
+                StateIterator::Continue
+            }
+
+            // U+0027 APOSTROPHE (')
+            //
+            // Passer à l'état de la valeur d'après attribut (quoted).
+            | Some('\'') if quote == '\'' => {
+                self.state.current = State::AfterAttributeValueQuoted;
+                StateIterator::Continue
+            }
+
+            // U+0026 AMPERSAND (&)
+            //
+            // Définir l'état de retour à l'état de la valeur de l'attribut
+            // (entre guillemets). Passer à l'état de référence du
+            // caractère.
+            | Some('&') => {
+                self.state.returns = Some(State::CharacterReference);
+                StateIterator::Continue
+            }
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse unexpected-null-character.
+            // Ajouter un caractère U+FFFD REPLACEMENT CHARACTER
+            // à la valeur de l'attribut actuel.
+            | Some('\0') => {
+                emit_html_error!(HTMLParserError::UnexpectedNullCharacter);
+                if let Some(ref mut html_tok) = self.token {
+                    html_tok.append_character_to_attribute_value(
+                        char::REPLACEMENT_CHARACTER,
+                    );
+                }
+                StateIterator::Continue
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
+            // jeton de fin de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInTag);
+                self.token = Some(HTMLToken::EOF);
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Ajoute le caractère d'entrée actuel à la valeur de
+            // l'attribut actuel.
+            | Some(_) => {
+                let current_ch =
+                    self.stream.current.expect("Le caractère actuel");
+                if let Some(ref mut html_tok) = self.token {
+                    html_tok
+                        .append_character_to_attribute_value(current_ch);
+                }
+                StateIterator::Continue
+            }
+        }
+    }
+
+    fn handle_attribute_value_unquoted_state(&mut self) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Passer à l'état avant le nom d'attribut.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                self.state.current = State::BeforeAttributeName;
+                StateIterator::Continue
+            }
+
+            // U+0026 AMPERSAND (&)
+            //
+            // Définir l'état de retour à l'état de la valeur de l'attribut
+            // (entre guillemets). Passer à l'état de référence du
+            // caractère.
+            | Some('&') => {
+                self.state.returns = Some(State::AttributeValueUnquoted);
+                self.state.current = State::CharacterReference;
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état de données. Émettre le jeton de balise
+            // actuel.
+            | Some('>') => {
+                self.state.current = State::Data;
+                StateIterator::Break
+            }
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse unexpected-null-character.
+            // Ajouter un caractère REPLACEMENT CHARACTER U+FFFD à la
+            // valeur de l'attribut actuel.
+            | Some('\0') => {
+                emit_html_error!(HTMLParserError::UnexpectedNullCharacter);
+
+                if let Some(ref mut tag) = self.token {
+                    tag.append_character_to_attribute_value(
+                        char::REPLACEMENT_CHARACTER,
+                    );
+                }
+
+                StateIterator::Continue
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
+            // jeton de fin de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::UnexpectedNullCharacter);
+                self.token = Some(HTMLToken::EOF);
+                StateIterator::Break
+            }
+
+            // U+0022 QUOTATION MARK (")
+            // U+0027 APOSTROPHE (')
+            // U+003C LESS-THAN SIGN (<)
+            // U+003D EQUALS SIGN (=)
+            // U+0060 GRAVE ACCENT (`)
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // unexpected-character-in-unquoted-attribute-value. La traiter
+            // comme l'entrée "Anything else" ci-dessous.
+
+            // Anything else
+            //
+            // Append the current input character to the current
+            // attribute's value.
+            | Some(ch) => {
+                if matches!(ch, '"' | '\'' | '<' | '=' | '`') {
+                    emit_html_error!(
+                        HTMLParserError::UnexpectedCharacterInUnquotedAttributeValue
+                    );
+                }
+
+                if let Some(ref mut html_tok) = self.token {
+                    let current_ch =
+                        self.stream.current.expect("Le caractère actuel");
+                    html_tok
+                        .append_character_to_attribute_value(current_ch);
+                }
+
+                StateIterator::Continue
+            }
+        }
+    }
+
+    fn handle_after_attribute_value_quoted_state(
+        &mut self,
+    ) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Passer à l'état avant le nom d'attribut.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                self.state.current = State::BeforeAttributeName;
+                StateIterator::Continue
+            }
+
+            // U+002F SOLIDUS (/)
+            //
+            // Passer à l'état de balise de début à fermeture automatique.
+            | Some('/') => {
+                self.state.current = State::SelfClosingStartTag;
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état des données. Émettez le jeton de balise
+            // actuel.
+            | Some('>') => {
+                self.state.current = State::Data;
+                StateIterator::Break
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
+            // jeton de fin de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInTag);
+                self.token = Some(HTMLToken::EOF);
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse
+            // missing-whitespace-between-attributes. Reprendre l'état
+            // avant le nom d'attribut.
+            | Some(_) => {
+                emit_html_error!(
+                    HTMLParserError::MissingWhitespaceBetweenAttributes
+                );
+                self.reconsume(State::BeforeAttributeName);
                 StateIterator::Continue
             }
         }
@@ -416,11 +940,39 @@ where
         }
 
         loop {
-            let state = match self.state.current {
+            let state = match &self.state.current {
                 | State::Data => self.handle_data_state(),
                 | State::TagOpen => self.handle_tag_open_state(),
                 | State::EndTagOpen => self.handle_end_tag_open_state(),
                 | State::TagName => self.handle_tag_name_state(),
+                | State::BeforeAttributeName => {
+                    self.handle_before_attribute_name_state()
+                }
+                | State::AttributeName => {
+                    self.handle_attribute_name_state()
+                }
+                | State::AfterAttributeName => {
+                    self.handle_after_attribute_name_state()
+                }
+                | State::BeforeAttributeValue => {
+                    self.handle_before_attribute_value_state()
+                }
+                | State::AttributeValueDoubleQuoted => {
+                    self.handle_attribute_value_quoted_state('"')
+                }
+                | State::AttributeValueSimpleQuoted => {
+                    self.handle_attribute_value_quoted_state('\'')
+                }
+                | State::AttributeValueUnquoted => {
+                    self.handle_attribute_value_unquoted_state()
+                }
+                | State::AfterAttributeValueQuoted => {
+                    self.handle_after_attribute_value_quoted_state()
+                }
+                // | State::SelfClosingStartTag => todo!(),
+                // | State::BogusComment => todo!(),
+                // | State::MarkupDeclarationOpen => todo!(),
+                // | State::CharacterReference => todo!(),
                 | _ => return None,
             };
 
@@ -459,7 +1011,7 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_div() {
+    fn test_simple_tag() {
         let mut html_tok =
             get_tokenizer_html(include_str!("crashtests/simple_tag.html"));
 
@@ -490,5 +1042,30 @@ mod tests {
             Some(HTMLToken::Character('\n'))
         );
         assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+    }
+
+    #[test]
+    fn test_simple_tag_attributes() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/simple_tag_attributes.html"
+        ));
+
+        let attributes: [(String, String); 3] = [
+            (String::from("id"), String::from("un-id")),
+            (
+                String::from("class"),
+                String::from("css-class_1 css-class-2"),
+            ),
+            (String::from("href"), String::from("#")),
+        ];
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "a".into(),
+                self_closing_flag: false,
+                attributes: attributes.to_vec()
+            })
+        );
     }
 }
