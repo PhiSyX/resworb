@@ -101,6 +101,9 @@ enum State {
     /// 13.2.5.55 DOCTYPE name state
     DOCTYPEName,
 
+    /// 13.2.5.56 After DOCTYPE name state
+    AfterDOCTYPEName,
+
     /// 13.2.5.72 Character reference state
     CharacterReference,
 }
@@ -1187,6 +1190,86 @@ where
             }
         }
     }
+
+    fn handle_doctype_name_state(&mut self) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Passer à l'état après le nom du DOCTYPE.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                self.state.current = State::AfterDOCTYPEName;
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état de données. Émettre le jeton DOCTYPE actuel.
+            | Some('>') => {
+                self.state.current = State::Data;
+                StateIterator::Break
+            }
+
+            // ASCII upper alpha
+            //
+            // Ajouter la version en minuscules du caractère actuel
+            // (ajouter 0x0020 au point de code du caractère) au nom
+            // du jeton DOCTYPE actuel.
+            | Some(ch) if ch.is_ascii_uppercase() => {
+                if let Some(ref mut doctype) = self.token {
+                    doctype.append_character(ch.to_ascii_lowercase());
+                }
+                StateIterator::Continue
+            }
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse unexpected-null-character.
+            // Ajouter un caractère U+FFFD REPLACEMENT
+            // CHARACTER au nom du jeton DOCTYPE actuel.
+            | Some('\0') => {
+                emit_html_error!(HTMLParserError::UnexpectedNullCharacter);
+                if let Some(ref mut doctype) = self.token {
+                    doctype.append_character(char::REPLACEMENT_CHARACTER);
+                }
+                StateIterator::Continue
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émettre d'un jeton de fin
+            // de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInDOCTYPE);
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.list.push_back(doctype_tok);
+                }
+
+                self.token = Some(HTMLToken::EOF);
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Ajouter le caractère actuel au nom du jeton DOCTYPE actuel.
+            | Some(ch) => {
+                if let Some(ref mut doctype) = self.token {
+                    doctype.append_character(ch);
+                }
+                StateIterator::Continue
+            }
+        }
+    }
 }
 
 // -------------- //
@@ -1242,12 +1325,12 @@ where
                 | State::BeforeDOCTYPEName => {
                     self.handle_before_doctype_name_state()
                 }
+                | State::DOCTYPEName => self.handle_doctype_name_state(),
 
-                // | State::DOCTYPEName => todo!(),
+                // | State::AfterDOCTYPEName => todo!(),
                 // | State::SelfClosingStartTag => todo!(),
                 // | State::CommentStart => todo!(),
                 // | State::CharacterReference => todo!(),
-
                 | _ => return None,
             };
 
@@ -1352,7 +1435,7 @@ mod tests {
         assert_eq!(
             html_tok.next_token(),
             Some(HTMLToken::DOCTYPE {
-                name: None,
+                name: Some("html".into()),
                 public_identifier: None,
                 system_identifier: None,
                 force_quirks_flag: false

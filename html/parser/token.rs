@@ -151,16 +151,12 @@ impl HTMLToken {
                 | Self::Comment(_)
         ));
 
-        if let Self::StartTag { name, .. }
-        | Self::EndTag { name, .. }
-        | Self::Comment(name) = self
-        {
-            name.push(ch);
-        }
-
         if let Self::DOCTYPE {
             name: Some(name), ..
-        } = self
+        }
+        | Self::StartTag { name, .. }
+        | Self::EndTag { name, .. }
+        | Self::Comment(name) = self
         {
             name.push(ch);
         }
@@ -204,6 +200,15 @@ impl HTMLToken {
         | Self::EndTag { attributes, .. } = self
         {
             attributes.push(attribute);
+        }
+    }
+
+    pub fn set_force_quirks_flag(&mut self, to: bool) {
+        if let Self::DOCTYPE {
+            force_quirks_flag, ..
+        } = self
+        {
+            *force_quirks_flag = to;
         }
     }
 }
