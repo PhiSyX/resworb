@@ -200,6 +200,16 @@ impl HTMLToken {
         }
     }
 
+    pub fn append_character_to_system_identifier(&mut self, ch: char) {
+        if let Self::DOCTYPE {
+            system_identifier: Some(system_identifier),
+            ..
+        } = self
+        {
+            system_identifier.push(ch);
+        }
+    }
+
     pub fn define_tag_attributes(&mut self, attribute: HTMLTagAttribute) {
         assert!(matches!(
             self,

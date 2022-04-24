@@ -116,9 +116,12 @@ enum State {
     /// 13.2.5.60 DOCTYPE public identifier (single-quoted) state
     DOCTYPEPublicIdentifierSingleQuoted,
 
+    /// 13.2.5.61 After DOCTYPE public identifier state
+    AfterDOCTYPEPublicIdentifier,
 
     /// 13.2.5.62 Between DOCTYPE public and system identifiers state
     BetweenDOCTYPEPublicAndSystemIdentifiers,
+
     /// 13.2.5.63 After DOCTYPE system keyword state
     AfterDOCTYPESystemKeyword,
 
@@ -127,6 +130,9 @@ enum State {
 
     /// 13.2.5.66 DOCTYPE system identifier (single-quoted) state
     DOCTYPESystemIdentifierSingleQuoted,
+
+    /// 13.2.5.67 After DOCTYPE system identifier state
+    AfterDOCTYPESystemIdentifier,
 
     /// 13.2.5.68 Bogus DOCTYPE state
     BogusDOCTYPE,
@@ -1782,6 +1788,91 @@ where
             }
         }
     }
+
+    fn handle_doctype_system_identifier_quoted_state(
+        &mut self,
+        quote: char,
+    ) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0022 QUOTATION MARK (")
+            // U+0027 APOSTROPHE (')
+            //
+            // Passez à l'état d'identifieur système après DOCTYPE.
+            | Some(ch) if ch == quote => {
+                self.state.current = State::AfterDOCTYPESystemIdentifier;
+                StateIterator::Continue
+            }
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // unexpected-null-character. Ajouter un caractère U+FFFD
+            // REPLACEMENT CHARACTER à l'identifieur système du jeton
+            // DOCTYPE actuel.
+            | Some('\0') => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.append_character_to_system_identifier(
+                        char::REPLACEMENT_CHARACTER,
+                    );
+                }
+
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse
+            // abrupt-doctype-system-identifier. Définir le drapeau
+            // force-quirks du jeton DOCTYPE actuel. Passer à l'état de
+            // données. Émettre le jeton DOCTYPE actuel.
+            | Some('>') => {
+                emit_html_error!(
+                    HTMLParserError::AbruptDOCTYPESystemIdentifier
+                );
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                self.state.current = State::Data;
+
+                StateIterator::Break
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émission d'un jeton de fin
+            // de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInDOCTYPE);
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.list.push_back(doctype_tok);
+                }
+
+                self.token = Some(HTMLToken::EOF);
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Ajouter le caractère actuel à l'identifiant système du jeton
+            // DOCTYPE actuel.
+            | Some(ch) => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.append_character_to_system_identifier(ch);
+                }
+                StateIterator::Continue
+            }
+        }
+    }
     fn handle_bogus_doctype_state(&mut self) -> StateIterator {
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
@@ -1894,6 +1985,12 @@ where
                 }
                 | State::BetweenDOCTYPEPublicAndSystemIdentifiers => {
                     self.handle_between_doctype_public_and_system_identifiers_state()
+                }
+                | State::DOCTYPESystemIdentifierDoubleQuoted => {
+                    self.handle_doctype_system_identifier_quoted_state('"')
+                }
+                | State::DOCTYPESystemIdentifierSingleQuoted => {
+                    self.handle_doctype_system_identifier_quoted_state('\'')
                 }
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
 

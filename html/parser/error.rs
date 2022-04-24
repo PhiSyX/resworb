@@ -58,6 +58,14 @@ pub enum HTMLParserError {
     /// l'analyseur syntaxique place le document en mode quirks.
     AbruptDOCTYPEPublicIdentifier,
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// point de code U+003E (>) dans l'identifiant système DOCTYPE (par
+    /// exemple, `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"
+    /// "foo>`). Dans ce cas, si le DOCTYPE est correctement placé
+    /// comme préambule du document, l'analyseur syntaxique place le
+    /// document en mode quirks.
+    AbruptDOCTYPESystemIdentifier,
+
     /// Cette erreur se produit si l'analyseur rencontre une section CDATA
     /// en dehors d'un contenu étranger (SVG ou MathML). L'analyseur
     /// syntaxique traite ces sections CDATA (y compris les chaînes de
@@ -295,6 +303,8 @@ impl fmt::Display for HTMLParserError {
             match self {
                 | Self::AbruptDOCTYPEPublicIdentifier =>
                     "abrupt-doctype-public-identifier",
+                | Self::AbruptDOCTYPESystemIdentifier =>
+                    "abrupt-doctype-system-identifier",
                 | Self::CDATAInHtmlContent => "cdata-in-html-content",
                 | Self::EofBeforeTagName => "eof-before-tag-name",
                 | Self::EofInDOCTYPE => "eof-in-doctype",
