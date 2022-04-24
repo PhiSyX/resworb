@@ -1873,6 +1873,67 @@ where
             }
         }
     }
+
+    fn handle_after_doctype_system_identifier_state(
+        &mut self,
+    ) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Ignorer le caractère.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état de données. Émettre le jeton DOCTYPE actuel.
+            | Some('>') => {
+                self.state.current = State::Data;
+                StateIterator::Break
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
+            // de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInDOCTYPE);
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.list.push_back(doctype_tok);
+                }
+
+                self.token = Some(HTMLToken::EOF);
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur de parse
+            // unexpected-character-after-doctype-system-identifier.
+            // Reprendre dans l'état DOCTYPE fictif. (Cela n'active pas
+            // le drapeau force-quirks du jeton DOCTYPE actuel).
+            | Some(_) => {
+                emit_html_error!(
+                    HTMLParserError::UnexpectedCharacterAfterDoctypeSystemIdentifier
+                );
+                self.reconsume(State::BogusDOCTYPE);
+                StateIterator::Continue
+            }
+        }
+    }
+
     fn handle_bogus_doctype_state(&mut self) -> StateIterator {
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
@@ -1991,6 +2052,9 @@ where
                 }
                 | State::DOCTYPESystemIdentifierSingleQuoted => {
                     self.handle_doctype_system_identifier_quoted_state('\'')
+                }
+                | State::AfterDOCTYPESystemIdentifier => {
+                    self.handle_after_doctype_system_identifier_state()
                 }
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
 
@@ -2121,9 +2185,13 @@ mod tests {
             html_tok.next_token(),
             Some(HTMLToken::DOCTYPE {
                 name: Some("html".into()),
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
+                public_identifier: Some(
+                    "-//W3C//DTD HTML 4.01//EN".into()
+                ),
+                system_identifier: Some(
+                    "http://www.w3.org/TR/html4/strict.dtd".into()
+                ),
+                force_quirks_flag: false
             })
         );
 
@@ -2133,9 +2201,14 @@ mod tests {
             html_tok.next_token(),
             Some(HTMLToken::DOCTYPE {
                 name: Some("math".into()),
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
+                public_identifier: Some(
+                    "-//W3C//DTD MathML 2.0//EN".into()
+                ),
+                system_identifier: Some(
+                    "http://www.w3.org/Math/DTD/mathml2/mathml2.dtd"
+                        .into()
+                ),
+                force_quirks_flag: false
             })
         );
 
@@ -2145,9 +2218,13 @@ mod tests {
             html_tok.next_token(),
             Some(HTMLToken::DOCTYPE {
                 name: Some("svg".into()),
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
+                public_identifier: Some(
+                    "-//W3C//DTD SVG 1.1 Basic//EN".into()
+                ),
+                system_identifier: Some(
+                    "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11-basic.dtd".into()
+                ),
+                force_quirks_flag: false
             })
         );
 
@@ -2157,10 +2234,18 @@ mod tests {
             html_tok.next_token(),
             Some(HTMLToken::DOCTYPE {
                 name: Some("svg:svg".into()),
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
+                public_identifier: Some(
+                    "-//W3C//DTD XHTML 1.1 plus MathML 2.0 plus SVG 1.1//EN".into()
+                ),
+                system_identifier: Some(
+                    "http://www.w3.org/2002/04/xhtml-math-svg/xhtml-math-svg.dtd".into()
+                ),
+                force_quirks_flag: false
             })
         );
+
+        html_tok.next_token();
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
     }
 }

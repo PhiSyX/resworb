@@ -205,6 +205,12 @@ pub enum HTMLParserError {
     /// comme si un espace ASCII était présent.
     MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers,
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre des
+    /// points de code autres que des espaces blancs ASCII ou la fermeture
+    /// U+003E (>) après l'identificateur de système DOCTYPE. L'analyseur
+    /// syntaxique ignore ces points de code.
+    UnexpectedCharacterAfterDoctypeSystemIdentifier,
+
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+0022 ("), U+0027 (') ou U+003C (<) dans un nom
     /// d'attribut. L'analyseur syntaxique inclut ces points de code dans
@@ -332,6 +338,8 @@ impl fmt::Display for HTMLParserError {
                     "missing-whitespace-between-attributes",
                 | Self::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers =>
                      "missing-whitespace-between-doctype-public-and-system-identifiers",
+                | Self::UnexpectedCharacterAfterDoctypeSystemIdentifier
+                    => "unexpected-character-after-doctype-system-identifier",
                 | Self::UnexpectedCharacterInAttributeName =>
                     "unexpected-character-in-attribute-name",
                 | Self::UnexpectedCharacterInUnquotedAttributeValue =>
