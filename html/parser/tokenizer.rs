@@ -1696,6 +1696,92 @@ where
             }
         }
     }
+
+    fn handle_between_doctype_public_and_system_identifiers_state(
+        &mut self,
+    ) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Ignorer le caractère.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état de données. Émettre le jeton DOCTYPE actuel.
+            | Some('>') => {
+                self.state.current = State::Data;
+                StateIterator::Break
+            }
+
+            // U+0022 QUOTATION MARK (")
+            // U+0027 APOSTROPHE (')
+            //
+            // Définir l'identificateur système du jeton DOCTYPE actuel à
+            // la chaîne vide (non manquante), puis passer à l'état
+            // d'identificateur système DOCTYPE (entre guillemets).
+            | Some(ch @ ('"' | '\'')) => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_system_identifier(String::new());
+                }
+
+                self.state.current = if ch == '"' {
+                    State::DOCTYPESystemIdentifierDoubleQuoted
+                } else {
+                    State::DOCTYPESystemIdentifierSingleQuoted
+                };
+
+                StateIterator::Continue
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
+            // de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInDOCTYPE);
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.list.push_back(doctype_tok);
+                }
+
+                self.token = Some(HTMLToken::EOF);
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-quote-before-doctype-system-identifier. Définir le
+            // drapeau force-quirks du jeton DOCTYPE actuel. Reprendre
+            // dans l'état DOCTYPE fictif.
+            | Some(_) => {
+                emit_html_error!(
+                    HTMLParserError::MissingQuoteBeforeDOCTYPESystemIdentifier
+                );
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                self.reconsume(State::BogusDOCTYPE);
+
+                StateIterator::Continue
+            }
+        }
+    }
     fn handle_bogus_doctype_state(&mut self) -> StateIterator {
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
@@ -1805,6 +1891,9 @@ where
                 }
                 | State::AfterDOCTYPEPublicIdentifier => {
                     self.handle_after_doctype_public_identifier_state()
+                }
+                | State::BetweenDOCTYPEPublicAndSystemIdentifiers => {
+                    self.handle_between_doctype_public_and_system_identifiers_state()
                 }
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
 

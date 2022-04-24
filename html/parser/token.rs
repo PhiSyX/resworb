@@ -230,5 +230,13 @@ impl HTMLToken {
             *public_identifier = Some(pi);
         }
     }
+
+    pub fn set_system_identifier(&mut self, si: String) {
+        if let Self::DOCTYPE {
+            system_identifier, ..
+        } = self
+        {
+            *system_identifier = Some(si);
+        }
     }
 }
