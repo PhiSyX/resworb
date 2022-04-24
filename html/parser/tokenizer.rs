@@ -1503,6 +1503,46 @@ where
             }
         }
     }
+
+    fn handle_bogus_doctype_state(&mut self) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état de données. Émettez le jeton DOCTYPE.
+            | Some('>') => {
+                self.state.current = State::Data;
+                StateIterator::Break
+            }
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // unexpected-null-character. Ignorer le caractère.
+            | Some('\0') => {
+                emit_html_error!(HTMLParserError::UnexpectedNullCharacter);
+                StateIterator::Continue
+            }
+
+            // EOF
+            //
+            // Émettre le jeton DOCTYPE. Émettre un jeton de fin de
+            // fichier.
+            | None => {
+                if let Some(doctype_tok) = self.current_token() {
+                    self.list.push_back(doctype_tok);
+                }
+
+                self.token = Some(HTMLToken::EOF);
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Ignorer le caractère
+            | Some(_) => StateIterator::Continue,
+        }
+    }
 }
 
 // -------------- //
@@ -1521,7 +1561,7 @@ where
         }
 
         loop {
-            let state = match dbg!(&self.state.current) {
+            let state = match &self.state.current {
                 | State::Data => self.handle_data_state(),
                 | State::TagOpen => self.handle_tag_open_state(),
                 | State::EndTagOpen => self.handle_end_tag_open_state(),
@@ -1565,12 +1605,12 @@ where
                 | State::AfterDOCTYPEPublicKeyword => {
                     self.handle_after_doctype_public_keyword_state()
                 }
+                | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
 
                 // | State::BeforeDOCTYPEPublicIdentifier
                 // | State::DOCTYPEPublicIdentifierDoubleQuoted
                 // | State::DOCTYPEPublicIdentifierSingleQuoted
                 // | State::AfterDOCTYPESystemKeyword
-                // | State::BogusDOCTYPE
                 // | State::SelfClosingStartTag
                 // | State::CommentStart
                 // | State::CharacterReference => todo!(),
@@ -1698,7 +1738,43 @@ mod tests {
                 name: Some("html".into()),
                 public_identifier: None,
                 system_identifier: None,
-                force_quirks_flag: false
+                force_quirks_flag: true
+            })
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("math".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("svg".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("svg:svg".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
             })
         );
     }
