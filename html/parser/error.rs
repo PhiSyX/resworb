@@ -88,6 +88,15 @@ pub enum HTMLParserError {
     /// dans l'HTML.
     IncorrectlyOpenedComment,
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre une
+    /// séquence de points de code autre que les mots-clés "PUBLIC" et
+    /// "SYSTEM" après un nom de DOCTYPE. Dans ce cas, l'analyseur ignore
+    /// tout identificateur public ou système suivant, et si le DOCTYPE
+    /// est correctement placé en tant que préambule du document, et si
+    /// l'analyseur ne peut pas changer le drapeau de mode est faux, il
+    /// place le document en mode quirks.
+    InvalidCharacterSequenceAfterDOCTYPEName,
+
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// qui n'est pas un alpha ASCII où le premier point de code d'une
     /// balise de début ou d'une balise de fin est attendu. Si une balise
@@ -246,6 +255,8 @@ impl fmt::Display for HTMLParserError {
                 | Self::EofInTag => "eof-in-tag",
                 | Self::IncorrectlyOpenedComment =>
                     "incorrectly-opened-comment",
+                | Self::InvalidCharacterSequenceAfterDOCTYPEName =>
+                    "invalid-character-sequence-after-doctype-name",
                 | Self::InvalidFirstCharacterOfTagName =>
                     "invalid-first-character-of-tag-name",
                 | Self::MissingAttributeValue => "missing-attribute-value",
