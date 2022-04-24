@@ -191,6 +191,14 @@ impl HTMLToken {
     }
 
     pub fn append_character_to_public_identifier(&mut self, ch: char) {
+        assert!(matches!(
+            self,
+            Self::DOCTYPE {
+                public_identifier: Some(_),
+                ..
+            }
+        ));
+
         if let Self::DOCTYPE {
             public_identifier: Some(public_identifier),
             ..
@@ -201,6 +209,14 @@ impl HTMLToken {
     }
 
     pub fn append_character_to_system_identifier(&mut self, ch: char) {
+        assert!(matches!(
+            self,
+            Self::DOCTYPE {
+                system_identifier: Some(_),
+                ..
+            }
+        ));
+
         if let Self::DOCTYPE {
             system_identifier: Some(system_identifier),
             ..
@@ -224,6 +240,8 @@ impl HTMLToken {
     }
 
     pub fn set_force_quirks_flag(&mut self, to: bool) {
+        assert!(matches!(self, Self::DOCTYPE { .. }));
+
         if let Self::DOCTYPE {
             force_quirks_flag, ..
         } = self
@@ -233,6 +251,14 @@ impl HTMLToken {
     }
 
     pub fn set_public_identifier(&mut self, pi: String) {
+        assert!(matches!(
+            self,
+            Self::DOCTYPE {
+                public_identifier: None,
+                ..
+            }
+        ));
+
         if let Self::DOCTYPE {
             public_identifier, ..
         } = self
@@ -242,6 +268,14 @@ impl HTMLToken {
     }
 
     pub fn set_system_identifier(&mut self, si: String) {
+        assert!(matches!(
+            self,
+            Self::DOCTYPE {
+                system_identifier: None,
+                ..
+            }
+        ));
+
         if let Self::DOCTYPE {
             system_identifier, ..
         } = self
