@@ -1347,19 +1347,22 @@ where
             // invalid-character-sequence-after-doctype-name. Mettre
             // le drapeau force-quirks du jeton DOCTYPE actuel à vrai.
             // Reprendre dans l'état bogus DOCTYPE.
-            | Some(_) => {
+            | Some(ch) => {
                 let mut f = false;
 
-                if let Cow::Owned(word) = self.stream.slice_until(6) {
+                if let Cow::Owned(word) = self.stream.slice_until(5) {
                     f = false;
 
-                    if word.to_ascii_uppercase() == "PUBLIC" {
+                    let word =
+                        format!("{ch}{}", word.to_ascii_uppercase());
+
+                    if word == "PUBLIC" {
                         f = true;
 
                         self.state.current =
                             State::AfterDOCTYPEPublicKeyword;
                         self.stream.advance(6);
-                    } else if word.to_ascii_uppercase() == "SYSTEM" {
+                    } else if word == "SYSTEM" {
                         f = true;
 
                         self.state.current =
@@ -1498,12 +1501,105 @@ where
                 if let Some(ref mut doctype_tok) = self.token {
                     doctype_tok.set_force_quirks_flag(true);
                 }
+
                 self.reconsume(State::BogusDOCTYPE);
                 StateIterator::Continue
             }
         }
     }
 
+    fn handle_doctype_public_identifier_quoted(
+        &mut self,
+        quote: char,
+    ) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0022 QUOTATION MARK (")
+            //
+            // Passer à l'état d'après DOCTYPE public identifier.
+            | Some('"') if quote == '"' => {
+                self.state.current = State::AfterDOCTYPEPublicIdentifier;
+                StateIterator::Continue
+            }
+
+            // U+0027 APOSTROPHE (')
+            //
+            // Passer à l'état d'après DOCTYPE public identifier.
+            | Some('\'') if quote == '\'' => {
+                self.state.current = State::AfterDOCTYPEPublicIdentifier;
+                StateIterator::Continue
+            }
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // unexpected-null-character. Ajouter un caractère U+FFFD
+            // REPLACEMENT CHARACTER à l'identifieur public du jeton
+            // DOCTYPE actuel.
+            | Some('\0') => {
+                emit_html_error!(HTMLParserError::UnexpectedNullCharacter);
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.append_character_to_public_identifier(
+                        char::REPLACEMENT_CHARACTER,
+                    );
+                }
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse
+            // abrupt-doctype-public-identifier. Définir le drapeau
+            // force-quirks du jeton DOCTYPE actuel sur vrai. Passer à
+            // l'état de données. Émettre le jeton DOCTYPE actuel.
+            | Some('>') => {
+                emit_html_error!(
+                    HTMLParserError::AbruptDOCTYPEPublicIdentifier
+                );
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                self.state.current = State::Data;
+
+                StateIterator::Break
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émission d'un jeton de fin
+            // de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInDOCTYPE);
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.list.push_back(doctype_tok);
+                }
+
+                self.token = Some(HTMLToken::EOF);
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Ajouter le caractère actuel à l'identifieur public du jeton
+            // DOCTYPE actuel.
+            | Some(ch) => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.append_character_to_public_identifier(ch);
+                }
+
+                StateIterator::Continue
+            }
+        }
+    }
     fn handle_bogus_doctype_state(&mut self) -> StateIterator {
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
@@ -1605,11 +1701,15 @@ where
                 | State::AfterDOCTYPEPublicKeyword => {
                     self.handle_after_doctype_public_keyword_state()
                 }
+                | State::DOCTYPEPublicIdentifierDoubleQuoted => {
+                    self.handle_doctype_public_identifier_quoted('"')
+                }
+                | State::DOCTYPEPublicIdentifierSingleQuoted => {
+                    self.handle_doctype_public_identifier_quoted('\'')
+                }
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
 
                 // | State::BeforeDOCTYPEPublicIdentifier
-                // | State::DOCTYPEPublicIdentifierDoubleQuoted
-                // | State::DOCTYPEPublicIdentifierSingleQuoted
                 // | State::AfterDOCTYPESystemKeyword
                 // | State::SelfClosingStartTag
                 // | State::CommentStart

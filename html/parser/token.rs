@@ -190,6 +190,16 @@ impl HTMLToken {
         }
     }
 
+    pub fn append_character_to_public_identifier(&mut self, ch: char) {
+        if let Self::DOCTYPE {
+            public_identifier: Some(public_identifier),
+            ..
+        } = self
+        {
+            public_identifier.push(ch);
+        }
+    }
+
     pub fn define_tag_attributes(&mut self, attribute: HTMLTagAttribute) {
         assert!(matches!(
             self,
@@ -219,5 +229,6 @@ impl HTMLToken {
         {
             *public_identifier = Some(pi);
         }
+    }
     }
 }

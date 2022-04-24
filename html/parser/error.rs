@@ -51,6 +51,13 @@ macro_rules! emit_html_error {
 /// tableau ci-dessous, qui doivent être utilisés par les vérificateurs de
 /// conformité dans les rapports.
 pub enum HTMLParserError {
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// point de code U+003E (>) dans l'identifiant public DOCTYPE (par
+    /// exemple, `<!DOCTYPE html PUBLIC "foo>`). Dans un tel cas, si le
+    /// DOCTYPE est correctement placé comme préambule du document,
+    /// l'analyseur syntaxique place le document en mode quirks.
+    AbruptDOCTYPEPublicIdentifier,
+
     /// Cette erreur se produit si l'analyseur rencontre une section CDATA
     /// en dehors d'un contenu étranger (SVG ou MathML). L'analyseur
     /// syntaxique traite ces sections CDATA (y compris les chaînes de
@@ -272,6 +279,8 @@ impl fmt::Display for HTMLParserError {
             f,
             "{}",
             match self {
+                | Self::AbruptDOCTYPEPublicIdentifier =>
+                    "abrupt-doctype-public-identifier",
                 | Self::CDATAInHtmlContent => "cdata-in-html-content",
                 | Self::EofBeforeTagName => "eof-before-tag-name",
                 | Self::EofInDOCTYPE => "eof-in-doctype",
