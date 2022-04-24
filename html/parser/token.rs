@@ -211,4 +211,13 @@ impl HTMLToken {
             *force_quirks_flag = to;
         }
     }
+
+    pub fn set_public_identifier(&mut self, pi: String) {
+        if let Self::DOCTYPE {
+            public_identifier, ..
+        } = self
+        {
+            *public_identifier = Some(pi);
+        }
+    }
 }

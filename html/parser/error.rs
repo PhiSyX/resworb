@@ -135,11 +135,34 @@ pub enum HTMLParserError {
     /// quirks.
     MissingDOCTYPEName,
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// point de code U+003E (>) où le début de l'identifiant public
+    /// DOCTYPE est attendu (par exemple, <!DOCTYPE html PUBLIC >). Dans
+    /// un tel cas, si le DOCTYPE est correctement placé comme préambule
+    /// du document, l'analyseur syntaxique place le document en mode
+    /// quirks.
+    MissingDOCTYPEPublicIdentifier,
+
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// U+003E (>) là où un nom de balise de fin est attendu, c'est-à-dire
     /// </>. L'analyseur syntaxique ignore l'ensemble de la séquence de
     /// points de code "</>".
     MissingEndTagName,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre
+    /// l'identificateur public DOCTYPE qui n'est pas précédé d'une
+    /// citation (par exemple, `<!DOCTYPE html PUBLIC -//W3C//DTD HTML
+    /// 4.01//EN">`). Dans un tel cas, l'analyseur syntaxique ignore
+    /// l'identificateur public et, si le DOCTYPE est correctement placé
+    /// en tant que préambule du document, place le document en mode
+    /// quirks.
+    MissingQuoteBeforeDOCTYPEPublicIdentifier,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// DOCTYPE dont le mot clé "PUBLIC" et l'identifiant public ne sont
+    /// pas séparés par un espace ASCII. Dans ce cas, l'analyseur se
+    /// comporte comme si un espace ASCII était présent.
+    MissingWhitespaceAfterDOCTYPEPublicKeyword,
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// DOCTYPE dont le mot clé "DOCTYPE" et le nom ne sont pas séparés
@@ -261,7 +284,13 @@ impl fmt::Display for HTMLParserError {
                     "invalid-first-character-of-tag-name",
                 | Self::MissingAttributeValue => "missing-attribute-value",
                 | Self::MissingDOCTYPEName => "missing-doctype-name",
+                | Self::MissingQuoteBeforeDOCTYPEPublicIdentifier =>
+                    "missing-quote-before-doctype-public-identifier",
+                | Self::MissingDOCTYPEPublicIdentifier =>
+                    "missing-doctype-public-identifier",
                 | Self::MissingEndTagName => "missing-end-tag-name",
+                | Self::MissingWhitespaceAfterDOCTYPEPublicKeyword =>
+                    "missing-whitespace-after-doctype-public-keyword",
                 | Self::MissingWhitespaceBeforeDOCTYPEName =>
                     "missing-whitespace-before-doctype-name",
                 | Self::MissingWhitespaceBetweenAttributes =>

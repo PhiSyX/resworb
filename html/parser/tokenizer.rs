@@ -107,6 +107,15 @@ enum State {
     /// 13.2.5.57 After DOCTYPE public keyword state
     AfterDOCTYPEPublicKeyword,
 
+    /// 13.2.5.58 Before DOCTYPE public identifier state
+    BeforeDOCTYPEPublicIdentifier,
+
+    /// 13.2.5.59 DOCTYPE public identifier (double-quoted) state
+    DOCTYPEPublicIdentifierDoubleQuoted,
+
+    /// 13.2.5.60 DOCTYPE public identifier (single-quoted) state
+    DOCTYPEPublicIdentifierSingleQuoted,
+
     /// 13.2.5.63 After DOCTYPE system keyword state
     AfterDOCTYPESystemKeyword,
 
@@ -1373,6 +1382,127 @@ where
             }
         }
     }
+
+    fn handle_after_doctype_public_keyword_state(
+        &mut self,
+    ) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Passer à l'état après le nom du DOCTYPE.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                self.state.current = State::BeforeDOCTYPEPublicIdentifier;
+                StateIterator::Continue
+            }
+
+            // U+0022 QUOTATION MARK (")
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-whitespace-after-doctype-public-keyword. Donner à
+            // l'identificateur public du jeton DOCTYPE actuel la valeur de
+            // la chaîne vide (non manquante), ensuite passer à l'état
+            // d'identificateur public DOCTYPE (double quoted).
+            | Some('"') => {
+                emit_html_error!(
+                    HTMLParserError::MissingWhitespaceAfterDOCTYPEPublicKeyword
+                );
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_public_identifier(String::new());
+                }
+
+                self.state.current =
+                    State::DOCTYPEPublicIdentifierDoubleQuoted;
+
+                StateIterator::Continue
+            }
+
+            // U+0027 APOSTROPHE (')
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-whitespace-after-doctype-public-keyword. Donner à
+            // l'identificateur public du jeton DOCTYPE actuel la valeur de
+            // la chaîne vide (non manquante), ensuite passer à l'état
+            // d'identificateur public DOCTYPE (single quoted).
+            | Some('\'') => {
+                emit_html_error!(
+                    HTMLParserError::MissingWhitespaceAfterDOCTYPEPublicKeyword
+                );
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_public_identifier(String::new());
+                }
+
+                self.state.current =
+                    State::DOCTYPEPublicIdentifierSingleQuoted;
+
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-doctype-public-identifier. Activer le drapeau
+            // force-quirks du jeton DOCTYPE actuel. Passer à l'état de
+            // données. Émettre le jeton DOCTYPE actuel.
+            | Some('>') => {
+                emit_html_error!(
+                    HTMLParserError::MissingDOCTYPEPublicIdentifier
+                );
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                self.state.current = State::Data;
+
+                StateIterator::Break
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émettre d'un jeton de fin
+            // de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInDOCTYPE);
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.list.push_back(doctype_tok);
+                }
+
+                self.token = Some(HTMLToken::EOF);
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-quote-before-doctype-public-identifier. Définir le
+            // drapeau force-quirks du jeton DOCTYPE actuel à vrai.
+            // Reprendre dans l'état de DOCTYPE fictif.
+            | Some(_) => {
+                emit_html_error!(
+                    HTMLParserError::MissingQuoteBeforeDOCTYPEPublicIdentifier
+                );
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+                self.reconsume(State::BogusDOCTYPE);
+                StateIterator::Continue
+            }
+        }
+    }
 }
 
 // -------------- //
@@ -1391,7 +1521,7 @@ where
         }
 
         loop {
-            let state = match &self.state.current {
+            let state = match dbg!(&self.state.current) {
                 | State::Data => self.handle_data_state(),
                 | State::TagOpen => self.handle_tag_open_state(),
                 | State::EndTagOpen => self.handle_end_tag_open_state(),
@@ -1432,12 +1562,17 @@ where
                 | State::AfterDOCTYPEName => {
                     self.handle_after_doctype_name_state()
                 }
+                | State::AfterDOCTYPEPublicKeyword => {
+                    self.handle_after_doctype_public_keyword_state()
+                }
 
-                // | State::AfterDOCTYPEPublicKeyword => todo!(),
-                // | State::AfterDOCTYPESystemKeyword => todo!(),
-                // | State::BogusDOCTYPE => todo!(),
-                // | State::SelfClosingStartTag => todo!(),
-                // | State::CommentStart => todo!(),
+                // | State::BeforeDOCTYPEPublicIdentifier
+                // | State::DOCTYPEPublicIdentifierDoubleQuoted
+                // | State::DOCTYPEPublicIdentifierSingleQuoted
+                // | State::AfterDOCTYPESystemKeyword
+                // | State::BogusDOCTYPE
+                // | State::SelfClosingStartTag
+                // | State::CommentStart
                 // | State::CharacterReference => todo!(),
                 | _ => return None,
             };
@@ -1539,6 +1674,23 @@ mod tests {
     fn test_doctype() {
         let mut html_tok =
             get_tokenizer_html(include_str!("crashtests/doctype.html"));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: false
+            })
+        );
+    }
+
+    #[test]
+    fn test_doctype_public() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype_public.html"
+        ));
 
         assert_eq!(
             html_tok.next_token(),
