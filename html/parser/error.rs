@@ -51,6 +51,12 @@ macro_rules! emit_html_error {
 /// tableau ci-dessous, qui doivent être utilisés par les vérificateurs de
 /// conformité dans les rapports.
 pub enum HTMLParserError {
+    /// Cette erreur se produit si l'analyseur rencontre une section CDATA
+    /// en dehors d'un contenu étranger (SVG ou MathML). L'analyseur
+    /// syntaxique traite ces sections CDATA (y compris les chaînes de
+    /// tête "[CDATA[" et de fin "]]") comme des commentaires.
+    CDATAInHtmlContent,
+
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée où un nom de balise est attendu. Dans ce cas,
     /// l'analyseur syntaxique traite le début d'une balise de début
@@ -59,9 +65,28 @@ pub enum HTMLParserError {
     EofBeforeTagName,
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
+    /// du flux d'entrée dans un DOCTYPE. Dans un tel cas, si le DOCTYPE
+    /// est correctement placé comme préambule du document, l'analyseur
+    /// syntaxique place le document en mode quirks.
+    EofInDOCTYPE,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée dans une balise de début ou une balise de fin
     /// (par exemple, <div id=). Une telle balise est ignorée.
     EofInTag,
+
+    /// Cette erreur se produit si l'analyseur rencontre la séquence de
+    /// points de code "< !" qui n'est pas immédiatement suivie de deux
+    /// points de code U+002D (-) et qui n'est pas le début d'un DOCTYPE
+    /// ou d'une section CDATA. Tout le contenu qui suit la séquence de
+    /// points de code "< !" jusqu'à un point de code U+003E (>) (si
+    /// présent) ou jusqu'à la fin du flux d'entrée est traité comme un
+    /// commentaire.
+    ///
+    /// Note: une cause possible de cette erreur est l'utilisation d'une
+    /// déclaration de balisage XML (par exemple, <!ELEMENT br EMPTY>)
+    /// dans l'HTML.
+    IncorrectlyOpenedComment,
 
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// qui n'est pas un alpha ASCII où le premier point de code d'une
@@ -99,6 +124,12 @@ pub enum HTMLParserError {
     /// </>. L'analyseur syntaxique ignore l'ensemble de la séquence de
     /// points de code "</>".
     MissingEndTagName,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// DOCTYPE dont le mot clé "DOCTYPE" et le nom ne sont pas séparés
+    /// par un espace ASCII. Dans ce cas, l'analyseur se comporte comme si
+    /// un espace ASCII était présent.
+    MissingWhitespaceBeforeDOCTYPEName,
 
     /// Cette erreur se produit si l'analyseur rencontre des attributs qui
     /// ne sont pas séparés par des espaces blancs ASCII (par exemple,
@@ -202,12 +233,18 @@ impl fmt::Display for HTMLParserError {
             f,
             "{}",
             match self {
+                | Self::CDATAInHtmlContent => "cdata-in-html-content",
                 | Self::EofBeforeTagName => "eof-before-tag-name",
+                | Self::EofInDOCTYPE => "eof-in-doctype",
                 | Self::EofInTag => "eof-in-tag",
+                | Self::IncorrectlyOpenedComment =>
+                    "incorrectly-opened-comment",
                 | Self::InvalidFirstCharacterOfTagName =>
                     "invalid-first-character-of-tag-name",
                 | Self::MissingAttributeValue => "missing-attribute-value",
                 | Self::MissingEndTagName => "missing-end-tag-name",
+                | Self::MissingWhitespaceBeforeDOCTYPEName =>
+                    "missing-whitespace-before-doctype-name",
                 | Self::MissingWhitespaceBetweenAttributes =>
                     "missing-whitespace-between-attributes",
                 | Self::UnexpectedCharacterInAttributeName =>

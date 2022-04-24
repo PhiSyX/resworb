@@ -84,13 +84,25 @@ impl HTMLToken {
     /// être marqués comme [manquants](None) (ce qui est un état distinct
     /// de la chaîne vide), et l'indicateur `force-quirks` doit être
     /// désactivé (son autre état est activé).
-    pub fn new_doctype() -> Self {
+    pub fn new_doctype(doctype: String) -> Self {
         Self::DOCTYPE {
-            name: None,
+            name: Some(doctype),
             public_identifier: None,
             system_identifier: None,
             force_quirks_flag: false,
         }
+    }
+
+    pub fn define_force_quirks_flag(mut self) -> Self {
+        if let Self::DOCTYPE {
+            ref mut force_quirks_flag,
+            ..
+        } = self
+        {
+            *force_quirks_flag = true;
+        }
+
+        self
     }
 
     /// Lorsqu'un jeton de [balise de début](HTMLToken::StartTag) est créé,
@@ -119,17 +131,27 @@ impl HTMLToken {
 }
 
 impl HTMLToken {
-    /// Ajoute un caractère au nom de la balise de début ou de fin
-    /// ou a un commentaire.
+    /// Ajoute un caractère au DOCTYPE, ou nom de la balise de début ou de
+    /// fin ou a un commentaire.
     pub fn append_character(&mut self, ch: char) {
         assert!(matches!(
             self,
-            Self::StartTag { .. } | Self::EndTag { .. } | Self::Comment(_)
+            Self::DOCTYPE { .. }
+                | Self::StartTag { .. }
+                | Self::EndTag { .. }
+                | Self::Comment(_)
         ));
 
         if let Self::StartTag { name, .. }
         | Self::EndTag { name, .. }
         | Self::Comment(name) = self
+        {
+            name.push(ch);
+        }
+
+        if let Self::DOCTYPE {
+            name: Some(name), ..
+        } = self
         {
             name.push(ch);
         }
