@@ -116,8 +116,17 @@ enum State {
     /// 13.2.5.60 DOCTYPE public identifier (single-quoted) state
     DOCTYPEPublicIdentifierSingleQuoted,
 
+
+    /// 13.2.5.62 Between DOCTYPE public and system identifiers state
+    BetweenDOCTYPEPublicAndSystemIdentifiers,
     /// 13.2.5.63 After DOCTYPE system keyword state
     AfterDOCTYPESystemKeyword,
+
+    /// 13.2.5.65 DOCTYPE system identifier (double-quoted) state
+    DOCTYPESystemIdentifierDoubleQuoted,
+
+    /// 13.2.5.66 DOCTYPE system identifier (single-quoted) state
+    DOCTYPESystemIdentifierSingleQuoted,
 
     /// 13.2.5.68 Bogus DOCTYPE state
     BogusDOCTYPE,
@@ -1600,6 +1609,93 @@ where
             }
         }
     }
+
+    fn handle_after_doctype_public_identifier_state(
+        &mut self,
+    ) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Passer à l'état entre DOCTYPE public et identifieurs du
+            // système.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                self.state.current =
+                    State::BetweenDOCTYPEPublicAndSystemIdentifiers;
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            | Some('>') => {
+                self.state.current = State::Data;
+                StateIterator::Break
+            }
+
+            // U+0022 QUOTATION MARK (")
+            // U+0027 APOSTROPHE (')
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-whitespace-between-doctype-public-and-system-identifiers.
+            // Définir l'identifieur système du jeton DOCTYPE actuel
+            // sur une chaîne vide (non manquante), passer à l'état
+            // d'identifieur système DOCTYPE (entre guillemets).
+            | Some(ch @ ('"' | '\'')) => {
+                emit_html_error!(
+                    HTMLParserError::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers
+                );
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_system_identifier(String::new());
+                }
+
+                self.state.current = if ch == '"' {
+                    State::DOCTYPESystemIdentifierDoubleQuoted
+                } else {
+                    State::DOCTYPESystemIdentifierSingleQuoted
+                };
+
+                StateIterator::Continue
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émettre d'un jeton de fin
+            // de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInDOCTYPE);
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.list.push_back(doctype_tok);
+                }
+
+                self.token = Some(HTMLToken::EOF);
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-quote-before-doctype-system-identifier. Définir le
+            // drapeau force-quirks du jeton DOCTYPE actuel. Reprendre
+            // dans l'état DOCTYPE fictif.
+            | Some(_) => {
+                emit_html_error!(
+                    HTMLParserError::MissingQuoteBeforeDOCTYPESystemIdentifier
+                );
+                self.reconsume(State::BogusDOCTYPE);
+                StateIterator::Continue
+            }
+        }
+    }
     fn handle_bogus_doctype_state(&mut self) -> StateIterator {
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
@@ -1706,6 +1802,9 @@ where
                 }
                 | State::DOCTYPEPublicIdentifierSingleQuoted => {
                     self.handle_doctype_public_identifier_quoted('\'')
+                }
+                | State::AfterDOCTYPEPublicIdentifier => {
+                    self.handle_after_doctype_public_identifier_state()
                 }
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
 

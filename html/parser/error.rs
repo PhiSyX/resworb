@@ -165,6 +165,14 @@ pub enum HTMLParserError {
     /// quirks.
     MissingQuoteBeforeDOCTYPEPublicIdentifier,
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre
+    /// l'identifiant système DOCTYPE qui n'est pas précédé d'un guillemet
+    /// (par exemple, `<!DOCTYPE html SYSTEM http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">`).
+    /// Dans un tel cas, l'analyseur syntaxique ignore l'identificateur de
+    /// système et, si le DOCTYPE est correctement placé en tant que
+    /// préambule du document, place le document en mode quirks.
+    MissingQuoteBeforeDOCTYPESystemIdentifier,
+
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// DOCTYPE dont le mot clé "PUBLIC" et l'identifiant public ne sont
     /// pas séparés par un espace ASCII. Dans ce cas, l'analyseur se
@@ -182,6 +190,12 @@ pub enum HTMLParserError {
     /// <div id="foo"class="bar">). Dans ce cas, l'analyseur se comporte
     /// comme si un espace blanc ASCII était présent.
     MissingWhitespaceBetweenAttributes,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// DOCTYPE dont les identifiants public et système ne sont pas
+    /// séparés par un espace ASCII. Dans ce cas, l'analyseur se comporte
+    /// comme si un espace ASCII était présent.
+    MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers,
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+0022 ("), U+0027 (') ou U+003C (<) dans un nom
@@ -295,6 +309,8 @@ impl fmt::Display for HTMLParserError {
                 | Self::MissingDOCTYPEName => "missing-doctype-name",
                 | Self::MissingQuoteBeforeDOCTYPEPublicIdentifier =>
                     "missing-quote-before-doctype-public-identifier",
+                | Self::MissingQuoteBeforeDOCTYPESystemIdentifier =>
+                    "missing-quote-before-doctype-system-identifier",
                 | Self::MissingDOCTYPEPublicIdentifier =>
                     "missing-doctype-public-identifier",
                 | Self::MissingEndTagName => "missing-end-tag-name",
@@ -304,6 +320,8 @@ impl fmt::Display for HTMLParserError {
                     "missing-whitespace-before-doctype-name",
                 | Self::MissingWhitespaceBetweenAttributes =>
                     "missing-whitespace-between-attributes",
+                | Self::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers =>
+                     "missing-whitespace-between-doctype-public-and-system-identifiers",
                 | Self::UnexpectedCharacterInAttributeName =>
                     "unexpected-character-in-attribute-name",
                 | Self::UnexpectedCharacterInUnquotedAttributeValue =>
