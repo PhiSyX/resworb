@@ -119,6 +119,13 @@ pub enum HTMLParserError {
     /// une valeur vide.
     MissingAttributeValue,
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// DOCTYPE auquel il manque un nom (par exemple, `<!DOCTYPE>`). Dans
+    /// un tel cas, si le DOCTYPE est correctement placé comme préambule
+    /// du document, l'analyseur syntaxique place le document en mode
+    /// quirks.
+    MissingDOCTYPEName,
+
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// U+003E (>) là où un nom de balise de fin est attendu, c'est-à-dire
     /// </>. L'analyseur syntaxique ignore l'ensemble de la séquence de
@@ -242,6 +249,7 @@ impl fmt::Display for HTMLParserError {
                 | Self::InvalidFirstCharacterOfTagName =>
                     "invalid-first-character-of-tag-name",
                 | Self::MissingAttributeValue => "missing-attribute-value",
+                | Self::MissingDOCTYPEName => "missing-doctype-name",
                 | Self::MissingEndTagName => "missing-end-tag-name",
                 | Self::MissingWhitespaceBeforeDOCTYPEName =>
                     "missing-whitespace-before-doctype-name",

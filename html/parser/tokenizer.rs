@@ -98,6 +98,9 @@ enum State {
     /// 13.2.5.54 Before DOCTYPE name state
     BeforeDOCTYPEName,
 
+    /// 13.2.5.55 DOCTYPE name state
+    DOCTYPEName,
+
     /// 13.2.5.72 Character reference state
     CharacterReference,
 }
@@ -188,8 +191,8 @@ where
             // U+0000 NULL
             //
             // Il s'agit d'une erreur d'analyse de caractère NULL et
-            // inattendu. Émettre le caractère d'entrée actuel comme un
-            // jeton de caractère.
+            // inattendu. Émettre le caractère actuel comme un jeton de
+            // caractère.
             | Some('\0') => {
                 emit_html_error!(HTMLParserError::UnexpectedNullCharacter);
                 StateIterator::Break
@@ -383,7 +386,7 @@ where
 
             // ASCII upper alpha
             //
-            // Ajoute la version en minuscules du caractère d'entrée actuel
+            // Ajouter la version en minuscules du caractère actuel
             // (ajouter 0x0020 au point de code du caractère) au nom de
             // balise du jeton de balise actuel.
             | Some(ch) if ch.is_ascii_uppercase() => {
@@ -420,7 +423,7 @@ where
 
             // Anything else
             //
-            // Ajoute le caractère d'entrée actuel au nom de balise du
+            // Ajouter le caractère actuel au nom de balise du
             // jeton de balise actuel.
             | Some(ch) => {
                 if let Some(ref mut tag) = self.token {
@@ -458,7 +461,7 @@ where
             // Il s'agit d'une erreur d'analyse
             // unexpected-equals-sign-before-attribute-name. Commencer un
             // nouvel attribut dans le jeton de balise actuel. Définir
-            // le nom de cet attribut sur le caractère d'entrée actuel, et
+            // le nom de cet attribut sur le caractère actuel, et
             // sa valeur sur une chaîne vide. Passer à l'état de nom
             // d'attribut.
             | Some(ch @ '=') => {
@@ -538,7 +541,7 @@ where
 
             // ASCII upper alpha
             //
-            // Ajoute la version en minuscules du caractère d'entrée actuel
+            // Ajouter la version en minuscules du caractère actuel
             // (ajouter 0x0020 au point de code du caractère) au nom de
             // l'attribut actuel.
             | Some(ch) if ch.is_ascii_uppercase() => {
@@ -573,7 +576,7 @@ where
             //
             // Anything else
             //
-            // Ajoute le caractère d'entrée actuel au nom de l'attribut
+            // Ajouter le caractère actuel au nom de l'attribut
             // actuel.
             | Some(ch) => {
                 if matches!(ch, '"' | '\'' | '<') {
@@ -762,7 +765,7 @@ where
 
             // Anything else
             //
-            // Ajoute le caractère d'entrée actuel à la valeur de
+            // Ajouter le caractère actuel à la valeur de
             // l'attribut actuel.
             | Some(ch) => {
                 if let Some(ref mut html_tok) = self.token {
@@ -1026,7 +1029,7 @@ where
 
             // Anything else
             //
-            // Ajouter le caractère d'entrée actuel aux données du jeton de
+            // Ajouter le caractère actuel aux données du jeton de
             // commentaire.
             | Some(ch) => {
                 if let Some(ref mut html_tok) = self.token {
@@ -1065,8 +1068,8 @@ where
             // jeton de fin de fichier.
             | None => {
                 emit_html_error!(HTMLParserError::EofInDOCTYPE);
-                let doctype_tok = HTMLToken::new_doctype(String::new())
-                    .define_force_quirks_flag();
+                let doctype_tok =
+                    HTMLToken::new_doctype().define_force_quirks_flag();
                 self.list.push_back(doctype_tok);
                 self.token = Some(HTMLToken::EOF);
                 StateIterator::Break
@@ -1082,6 +1085,104 @@ where
                     HTMLParserError::MissingWhitespaceBeforeDOCTYPEName
                 );
                 self.reconsume(State::BeforeDOCTYPEName);
+                StateIterator::Continue
+            }
+        }
+    }
+
+    fn handle_before_doctype_name_state(&mut self) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Ignorer le caractère.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                StateIterator::Continue
+            }
+
+            // ASCII upper alpha
+            //
+            // Créer un nouveau jeton DOCTYPE. Définir le nom du jeton
+            // comme la version en minuscules du caractère actuel
+            // (ajoutez 0x0020 au point de code du caractère). Passer à
+            // l'état de nom DOCTYPE.
+            | Some(ch) if ch.is_ascii_uppercase() => {
+                let doctype_token = HTMLToken::new_doctype()
+                    .define_doctype_name(ch.to_ascii_lowercase());
+
+                self.token = Some(doctype_token);
+                self.state.current = State::DOCTYPEName;
+
+                StateIterator::Continue
+            }
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse unexpected-null-character.
+            // Créer un nouveau jeton DOCTYPE. Définir le nom du jeton sur
+            // un caractère U+FFFD REPLACEMENT CHARACTER. Passer à l'état
+            // nom de DOCTYPE.
+            | Some('\0') => {
+                emit_html_error!(HTMLParserError::UnexpectedNullCharacter);
+
+                let doctype_tok = HTMLToken::new_doctype()
+                    .define_doctype_name(char::REPLACEMENT_CHARACTER);
+
+                self.token = Some(doctype_tok);
+                self.state.current = State::DOCTYPEName;
+
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-doctype-name. Créer un nouveau jeton DOCTYPE. Mettre
+            // son drapeau force-quirks à on. Passer à l'état de données.
+            // Émettre le jeton actuel.
+            | Some('>') => {
+                emit_html_error!(HTMLParserError::MissingDOCTYPEName);
+
+                let doctype_tok =
+                    HTMLToken::new_doctype().define_force_quirks_flag();
+
+                self.token = Some(doctype_tok);
+                self.state.current = State::Data;
+
+                StateIterator::Break
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type eof-in-doctype.
+            // Créer un nouveau jeton DOCTYPE. Mettre son drapeau
+            // force-quirks à vrai. Émettre le jeton actuel. Émettre un
+            // jeton de fin de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInDOCTYPE);
+
+                let doctype_tok =
+                    HTMLToken::new_doctype().define_force_quirks_flag();
+
+                self.list.push_back(doctype_tok);
+                self.token = Some(HTMLToken::EOF);
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Créer un nouveau jeton DOCTYPE. Définir le nom du jeton sur
+            // le caractère actuel. Passer à l'état de nom du DOCTYPE.
+            | Some(ch) => {
+                let doctype_tok =
+                    HTMLToken::new_doctype().define_doctype_name(ch);
+
+                self.token = Some(doctype_tok);
+                self.state.current = State::DOCTYPEName;
+
                 StateIterator::Continue
             }
         }
@@ -1138,6 +1239,14 @@ where
                 }
                 | State::BogusComment => self.handle_bogus_comment_state(),
                 | State::DOCTYPE => self.handle_doctype_state(),
+                | State::BeforeDOCTYPEName => {
+                    self.handle_before_doctype_name_state()
+                }
+
+                // | State::DOCTYPEName => todo!(),
+                // | State::SelfClosingStartTag => todo!(),
+                // | State::CommentStart => todo!(),
+                // | State::CharacterReference => todo!(),
 
                 | _ => return None,
             };

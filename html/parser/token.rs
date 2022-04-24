@@ -84,13 +84,22 @@ impl HTMLToken {
     /// être marqués comme [manquants](None) (ce qui est un état distinct
     /// de la chaîne vide), et l'indicateur `force-quirks` doit être
     /// désactivé (son autre état est activé).
-    pub fn new_doctype(doctype: String) -> Self {
+    pub fn new_doctype() -> Self {
         Self::DOCTYPE {
-            name: Some(doctype),
+            name: None,
             public_identifier: None,
             system_identifier: None,
             force_quirks_flag: false,
         }
+    }
+
+    pub fn define_doctype_name(mut self, ch: char) -> Self {
+        if let Self::DOCTYPE { ref mut name, .. } = self {
+            let c = String::from(ch);
+            *name = Some(c);
+        }
+
+        self
     }
 
     pub fn define_force_quirks_flag(mut self) -> Self {
