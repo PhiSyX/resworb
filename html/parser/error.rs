@@ -73,8 +73,7 @@ pub enum HTMLParserError {
     /// suit jusqu'à un point de code U+003E (>) (s'il est présent) ou
     /// jusqu'à la fin du flux d'entrée est traité comme un commentaire.
     ///
-    /// Example:
-    ///   <42></42>
+    /// Example: `<42></42>`
     ///
     /// Parsed into:
     ///   |- html
@@ -90,10 +89,78 @@ pub enum HTMLParserError {
     InvalidFirstCharacterOfTagName,
 
     /// Cette erreur se produit si l'analyseur rencontre un point de code
+    /// U+003E (>) là où une valeur d'attribut est attendue (par exemple,
+    /// `<div id=>`). L'analyseur syntaxique traite l'attribut comme ayant
+    /// une valeur vide.
+    MissingAttributeValue,
+
+    /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// U+003E (>) là où un nom de balise de fin est attendu, c'est-à-dire
     /// </>. L'analyseur syntaxique ignore l'ensemble de la séquence de
     /// points de code "</>".
     MissingEndTagName,
+
+    /// Cette erreur se produit si l'analyseur rencontre des attributs qui
+    /// ne sont pas séparés par des espaces blancs ASCII (par exemple,
+    /// <div id="foo"class="bar">). Dans ce cas, l'analyseur se comporte
+    /// comme si un espace blanc ASCII était présent.
+    MissingWhitespaceBetweenAttributes,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// point de code U+0022 ("), U+0027 (') ou U+003C (<) dans un nom
+    /// d'attribut. L'analyseur syntaxique inclut ces points de code dans
+    /// le nom de l'attribut.
+    ///
+    /// Note: les points de code qui déclenchent cette erreur font
+    /// généralement partie d'une autre construction syntaxique et peuvent
+    /// être le signe d'une faute de frappe autour du nom de l'attribut.
+    ///
+    /// Example: `<div foo<div>`
+    /// En raison d'un point de code U+003E (>) oublié après foo,
+    /// l'analyseur syntaxique traite ce balisage comme un seul élément
+    /// div avec un attribut "foo<div".
+    ///
+    /// Example: `<div id'bar'>`
+    /// En raison d'un point de code U+003D (=) oublié entre un nom
+    /// d'attribut et une valeur, l'analyseur syntaxique traite ce
+    /// balisage comme un élément div dont l'attribut "id'bar'" a une
+    /// valeur vide.
+    UnexpectedCharacterInAttributeName,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// point de code U+0022 ("), U+0027 ('), U+003C (<), U+003D (=) ou
+    /// U+0060 (`) dans une valeur d'attribut (unquoted). L'analyseur
+    /// syntaxique inclut ces points de code dans la valeur de l'attribut.
+    ///
+    /// Note 1: les points de code qui déclenchent cette erreur font
+    /// généralement partie d'une autre construction syntaxique et peuvent
+    /// être le signe d'une faute de frappe autour de la valeur de
+    /// l'attribut.
+    ///
+    /// Note 2: U+0060 (`) figure dans la liste des points de code qui
+    /// déclenchent cette erreur parce que certains agents utilisateurs
+    /// anciens le traitent comme un guillemet.
+    ///
+    /// Exemple: `<div foo=b'ar'>`
+    /// En raison d'un point de code U+0027 (') mal placé, l'analyseur
+    /// définit la valeur de l'attribut "foo" à "b'ar'".
+    UnexpectedCharacterInUnquotedAttributeValue,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// point de code U+003D (=) avant un nom d'attribut. Dans ce cas,
+    /// l'analyseur syntaxique traite U+003D (=) comme le premier point de
+    /// code du nom de l'attribut.
+    ///
+    /// Note: la raison courante de cette erreur est un nom d'attribut
+    /// oublié.
+    ///
+    /// Example: `<div foo="bar" ="baz">`
+    ///
+    /// En raison d'un nom d'attribut oublié, l'analyseur syntaxique
+    /// traite ce balisage comme un élément div avec deux attributs : un
+    /// attribut "foo" avec une valeur "bar" et un attribut "="baz"" avec
+    /// une valeur vide.
+    UnexpectedEqualsSignBeforeAttributeName,
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+0000 NULL dans le flux d'entrée à certaines
@@ -110,7 +177,7 @@ pub enum HTMLParserError {
     /// commentaire.
     ///
     /// Example:
-    ///   <?xml-stylesheet type="text/css" href="style.css"?>
+    ///   `<?xml-stylesheet type="text/css" href="style.css"?>`
     ///
     /// Parsed into:
     ///   |- #comment: ?xml-stylesheet type="text/css" href="style.css"?
@@ -139,7 +206,16 @@ impl fmt::Display for HTMLParserError {
                 | Self::EofInTag => "eof-in-tag",
                 | Self::InvalidFirstCharacterOfTagName =>
                     "invalid-first-character-of-tag-name",
+                | Self::MissingAttributeValue => "missing-attribute-value",
                 | Self::MissingEndTagName => "missing-end-tag-name",
+                | Self::MissingWhitespaceBetweenAttributes =>
+                    "missing-whitespace-between-attributes",
+                | Self::UnexpectedCharacterInAttributeName =>
+                    "unexpected-character-in-attribute-name",
+                | Self::UnexpectedCharacterInUnquotedAttributeValue =>
+                    "unexpected-character-in-unquoted-attribute-value",
+                | Self::UnexpectedEqualsSignBeforeAttributeName =>
+                    "unexpected-equals-sign-before-attribute-name",
                 | Self::UnexpectedNullCharacter =>
                     "unexpected-null-character",
                 | Self::UnexpectedQuestionMarkInsteadOfTagName =>

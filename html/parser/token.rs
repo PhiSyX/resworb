@@ -2,14 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::collections::HashMap;
-
 // ---- //
 // Type //
 // ---- //
 
-pub type TagAttributeName = String;
-pub type TagAttributeValue = String;
+pub type HTMLTagAttributeName = String;
+pub type HTMLTagAttributeValue = String;
+pub type HTMLTagAttribute = (HTMLTagAttributeName, HTMLTagAttributeValue);
 
 // ----------- //
 // Énumération //
@@ -47,7 +46,7 @@ pub enum HTMLToken {
     StartTag {
         name: String,
         self_closing_flag: bool,
-        attributes: HashMap<TagAttributeName, TagAttributeValue>,
+        attributes: Vec<HTMLTagAttribute>,
     },
 
     /// Les balises de fin ont :
@@ -58,7 +57,7 @@ pub enum HTMLToken {
     EndTag {
         name: String,
         self_closing_flag: bool,
-        attributes: HashMap<TagAttributeName, TagAttributeValue>,
+        attributes: Vec<HTMLTagAttribute>,
     },
 
     /// Le jeton de commentaire a une chaîne de caractères.
@@ -102,7 +101,7 @@ impl HTMLToken {
         Self::StartTag {
             name,
             self_closing_flag: false,
-            attributes: HashMap::default(),
+            attributes: Vec::default(),
         }
     }
 
@@ -114,7 +113,7 @@ impl HTMLToken {
         Self::EndTag {
             name,
             self_closing_flag: false,
-            attributes: HashMap::default(),
+            attributes: Vec::default(),
         }
     }
 }
@@ -133,6 +132,47 @@ impl HTMLToken {
         | Self::Comment(name) = self
         {
             name.push(ch);
+        }
+    }
+
+    pub fn append_character_to_attribute_name(&mut self, ch: char) {
+        assert!(matches!(
+            self,
+            Self::StartTag { .. } | Self::EndTag { .. }
+        ));
+
+        if let Self::StartTag { attributes, .. }
+        | Self::EndTag { attributes, .. } = self
+        {
+            let attr = attributes.iter_mut().last().unwrap();
+            attr.0.push(ch);
+        }
+    }
+
+    pub fn append_character_to_attribute_value(&mut self, ch: char) {
+        assert!(matches!(
+            self,
+            Self::StartTag { .. } | Self::EndTag { .. }
+        ));
+
+        if let Self::StartTag { attributes, .. }
+        | Self::EndTag { attributes, .. } = self
+        {
+            let attr = attributes.iter_mut().last().unwrap();
+            attr.1.push(ch);
+        }
+    }
+
+    pub fn define_tag_attributes(&mut self, attribute: HTMLTagAttribute) {
+        assert!(matches!(
+            self,
+            Self::StartTag { .. } | Self::EndTag { .. }
+        ));
+
+        if let Self::StartTag { attributes, .. }
+        | Self::EndTag { attributes, .. } = self
+        {
+            attributes.push(attribute);
         }
     }
 }
