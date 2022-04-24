@@ -42,6 +42,7 @@ pub struct HTMLState {
 // ----------- //
 
 #[derive(Debug)]
+#[allow(clippy::upper_case_acronyms)]
 enum State {
     /// 13.2.5.1 Data state
     Data,
@@ -1071,6 +1072,11 @@ where
                 StateIterator::Break
             }
 
+            // Anything else
+            //
+            // Il s'agit d'une erreur de parse
+            // missing-whitespace-before-doctype-name. Reprendre dans
+            // l'état avant le nom du DOCTYPE.
             | Some(_) => {
                 emit_html_error!(
                     HTMLParserError::MissingWhitespaceBeforeDOCTYPEName
@@ -1171,7 +1177,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "ok"]
     fn test_simple_tag() {
         let mut html_tok =
             get_tokenizer_html(include_str!("crashtests/simple_tag.html"));
@@ -1206,7 +1211,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "ok"]
     fn test_simple_tag_attributes() {
         let mut html_tok = get_tokenizer_html(include_str!(
             "crashtests/simple_tag_attributes.html"
