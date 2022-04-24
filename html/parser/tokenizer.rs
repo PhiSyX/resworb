@@ -104,6 +104,15 @@ enum State {
     /// 13.2.5.56 After DOCTYPE name state
     AfterDOCTYPEName,
 
+    /// 13.2.5.57 After DOCTYPE public keyword state
+    AfterDOCTYPEPublicKeyword,
+
+    /// 13.2.5.63 After DOCTYPE system keyword state
+    AfterDOCTYPESystemKeyword,
+
+    /// 13.2.5.68 Bogus DOCTYPE state
+    BogusDOCTYPE,
+
     /// 13.2.5.72 Character reference state
     CharacterReference,
 }
@@ -1270,6 +1279,100 @@ where
             }
         }
     }
+
+    fn handle_after_doctype_name_state(&mut self) -> StateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Ignorer le caractère.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                StateIterator::Continue
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état de données. Émettre le jeton DOCTYPE actuel.
+            | Some('>') => {
+                self.state.current = State::Data;
+                StateIterator::Break
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
+            // de fichier.
+            | None => {
+                emit_html_error!(HTMLParserError::EofInDOCTYPE);
+
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.list.push_back(doctype_tok);
+                }
+
+                self.token = Some(HTMLToken::EOF);
+
+                StateIterator::Break
+            }
+
+            // Anything else
+            //
+            // Si les six caractères à partir du caractère actuel sont une
+            // correspondance ASCII insensible à la casse pour le
+            // mot "PUBLIC", consommez ces caractères et passez à l'état
+            // après le mot-clé DOCTYPE public.
+            //
+            // Sinon, si les six caractères à partir du caractère d'entrée
+            // actuel sont une correspondance ASCII insensible à la casse
+            // pour le mot "SYSTEM", consommez ces caractères et passez à
+            // l'état après le mot-clé DOCTYPE system.
+            //
+            // Sinon, il s'agit d'une erreur d'analyse de type
+            // invalid-character-sequence-after-doctype-name. Mettre
+            // le drapeau force-quirks du jeton DOCTYPE actuel à vrai.
+            // Reprendre dans l'état bogus DOCTYPE.
+            | Some(_) => {
+                let mut f = false;
+
+                if let Cow::Owned(word) = self.stream.slice_until(6) {
+                    f = false;
+
+                    if word.to_ascii_uppercase() == "PUBLIC" {
+                        f = true;
+
+                        self.state.current =
+                            State::AfterDOCTYPEPublicKeyword;
+                        self.stream.advance(6);
+                    } else if word.to_ascii_uppercase() == "SYSTEM" {
+                        f = true;
+
+                        self.state.current =
+                            State::AfterDOCTYPESystemKeyword;
+                        self.stream.advance(6);
+                    }
+                }
+
+                if !f {
+                    emit_html_error!(HTMLParserError::InvalidCharacterSequenceAfterDOCTYPEName);
+
+                    if let Some(ref mut doctype_tok) = self.token {
+                        doctype_tok.set_force_quirks_flag(true);
+                    }
+
+                    self.reconsume(State::BogusDOCTYPE);
+                }
+
+                StateIterator::Continue
+            }
+        }
+    }
 }
 
 // -------------- //
@@ -1326,8 +1429,13 @@ where
                     self.handle_before_doctype_name_state()
                 }
                 | State::DOCTYPEName => self.handle_doctype_name_state(),
+                | State::AfterDOCTYPEName => {
+                    self.handle_after_doctype_name_state()
+                }
 
-                // | State::AfterDOCTYPEName => todo!(),
+                // | State::AfterDOCTYPEPublicKeyword => todo!(),
+                // | State::AfterDOCTYPESystemKeyword => todo!(),
+                // | State::BogusDOCTYPE => todo!(),
                 // | State::SelfClosingStartTag => todo!(),
                 // | State::CommentStart => todo!(),
                 // | State::CharacterReference => todo!(),
