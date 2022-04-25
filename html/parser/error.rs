@@ -536,4 +536,33 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_error_missing_doctype_identifier() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/missing_doctype_identifier.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+    }
 }
