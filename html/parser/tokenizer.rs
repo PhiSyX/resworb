@@ -1488,6 +1488,102 @@ where
         }
     }
 
+    fn handle_before_doctype_public_identifier_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Passer à l'état après le nom du DOCTYPE.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                self.ignore()
+            }
+
+            // U+0022 QUOTATION MARK (")
+            //
+            // Définir l'identifiant public du jeton DOCTYPE actuel à une
+            // chaîne vide (non manquante), passer à l'état d'identifiant
+            // public DOCTYPE (double quoted).
+            | Some('"') => self
+                .set_token(
+                    HTMLToken::new_doctype().define_doctype_name('\0'),
+                )
+                .switch_state_to(
+                    State::DOCTYPEPublicIdentifierDoubleQuoted,
+                )
+                .and_continue(),
+
+            // U+0027 APOSTROPHE (')
+            //
+            // Définir l'identifiant public du jeton DOCTYPE actuel à une
+            // chaîne vide (non manquante), passer à l'état d'identifiant
+            // public DOCTYPE (simple quoted).
+            | Some('\'') => self
+                .set_token(
+                    HTMLToken::new_doctype().define_doctype_name('\0'),
+                )
+                .switch_state_to(
+                    State::DOCTYPEPublicIdentifierSingleQuoted,
+                )
+                .and_continue(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-doctype-public-identifier. Définir le drapeau
+            // force-quirks du jeton DOCTYPE actuel sur vrai. Passer à
+            // l'état de données. Émettre le jeton DOCTYPE actuel.
+            | Some('>') => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                self.state.switch_to(State::Data).and_break_with_error(
+                    HTMLParserError::MissingDOCTYPEPublicIdentifier,
+                )
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
+            // de fichier.
+            | None => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.emit_token(doctype_tok);
+                }
+
+                self.set_token(HTMLToken::EOF)
+                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
+            }
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-quote-before-doctype-public-identifier. Définir le
+            // drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Reprendre à l'état DOCTYPE fictif.
+            | Some(_) => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                self.reconsume(State::BogusDOCTYPE)
+                    .and_continue_with_error(
+                        HTMLParserError::MissingQuoteBeforeDOCTYPEPublicIdentifier
+                    )
+            }
+        }
+    }
+
     fn handle_doctype_public_identifier_quoted(
         &mut self,
         quote: char,
@@ -1953,6 +2049,9 @@ where
                 | State::AfterDOCTYPEPublicKeyword => {
                     self.handle_after_doctype_public_keyword_state()
                 }
+                | State::BeforeDOCTYPEPublicIdentifier => {
+                    self.handle_before_doctype_public_identifier_state()
+                }
                 | State::DOCTYPEPublicIdentifierDoubleQuoted => {
                     self.handle_doctype_public_identifier_quoted('"')
                 }
@@ -1976,7 +2075,6 @@ where
                 }
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
 
-                // | State::BeforeDOCTYPEPublicIdentifier
                 // | State::AfterDOCTYPESystemKeyword
                 // | State::SelfClosingStartTag
                 // | State::CommentStart
