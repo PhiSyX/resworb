@@ -423,4 +423,21 @@ mod tests {
 
         assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
     }
+
+    #[test]
+    fn test_error_eof_in_doctype() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/eof_in_doctype.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: None,
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+    }
 }
