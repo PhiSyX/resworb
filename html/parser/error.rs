@@ -273,7 +273,6 @@ pub enum HTMLParserError {
     /// oublié.
     ///
     /// Example: `<div foo="bar" ="baz">`
-    ///
     /// En raison d'un nom d'attribut oublié, l'analyseur syntaxique
     /// traite ce balisage comme un élément div avec deux attributs : un
     /// attribut "foo" avec une valeur "bar" et un attribut "="baz"" avec
@@ -369,5 +368,50 @@ impl fmt::Display for HTMLParserError {
                     "unexpected-question-mark-instead-of-tag-name",
             }
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use parser::preprocessor::InputStreamPreprocessor;
+
+    use crate::parser::{token::HTMLToken, tokenizer::HTMLTokenizer};
+
+    fn get_tokenizer_html(
+        input: &'static str,
+    ) -> HTMLTokenizer<impl Iterator<Item = char>> {
+        let stream = InputStreamPreprocessor::new(input.chars());
+        HTMLTokenizer::new(stream)
+    }
+
+    #[test]
+    fn test_error_abrupt_doctype_identifier() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/abrupt_doctype_identifier.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: Some("foo".into()),
+                system_identifier: None,
+                force_quirks_flag: true,
+            })
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: Some(
+                    "-//W3C//DTD HTML 4.01//EN".into()
+                ),
+                system_identifier: Some("foo".into()),
+                force_quirks_flag: true,
+            })
+        );
     }
 }
