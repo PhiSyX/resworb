@@ -99,7 +99,7 @@ pub enum HTMLParserError {
     /// commentaire.
     ///
     /// Note: une cause possible de cette erreur est l'utilisation d'une
-    /// déclaration de balisage XML (par exemple, <!ELEMENT br EMPTY>)
+    /// déclaration de balisage XML (par exemple, `<!ELEMENT br EMPTY>`)
     /// dans l'HTML.
     IncorrectlyOpenedComment,
 
@@ -448,5 +448,23 @@ mod tests {
         ));
 
         assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+    }
+
+    #[test]
+    fn test_error_incorrectly_opened_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/incorrectly_opened_comment.html"
+        ));
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('<')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character(' ')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('!')));
+        // DOCTYPE ...
+        html_tok.nth(8);
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("ELEMENT br EMPTY".into()))
+        );
     }
 }
