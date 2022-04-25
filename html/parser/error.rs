@@ -307,6 +307,14 @@ pub enum HTMLParserError {
     /// href="style.css"?>`) ou une déclaration XML (par exemple, `<?xml
     /// version="1.0" encoding="UTF-8"?>`) utilisée dans HTML.
     UnexpectedQuestionMarkInsteadOfTagName,
+
+    /// Cette erreur se produit si l'analyseur rencontre un point de code
+    /// U+002F (/) qui ne fait pas partie d'une valeur d'attribut citée et
+    /// qui n'est pas immédiatement suivi d'un point de code U+003E (>)
+    /// dans une balise (par exemple, `<div / id="foo">`). Dans ce cas,
+    /// l'analyseur se comporte comme s'il rencontrait un espace blanc
+    /// ASCII.
+    UnexpectedSolidusInTag,
 }
 
 // -------------- //
@@ -366,6 +374,7 @@ impl fmt::Display for HTMLParserError {
                     "unexpected-null-character",
                 | Self::UnexpectedQuestionMarkInsteadOfTagName =>
                     "unexpected-question-mark-instead-of-tag-name",
+                | Self::UnexpectedSolidusInTag => "unexpected-solidus-in-tag",
             }
         )
     }
@@ -779,6 +788,22 @@ mod tests {
                 r#"?xml-stylesheet type="text/css" href="style.css"?"#
                     .into()
             ))
+        );
+    }
+
+    #[test]
+    fn test_error_unexpected_solidus_in_tag() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/unexpected_solidus_in_tag.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![("id".into(), "foo".into())]
+            })
         );
     }
 }
