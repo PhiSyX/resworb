@@ -93,6 +93,27 @@ impl HTMLToken {
         }
     }
 
+    pub fn define_doctype_name(mut self, ch: char) -> Self {
+        if let Self::DOCTYPE { ref mut name, .. } = self {
+            let c = String::from(ch);
+            *name = Some(c);
+        }
+
+        self
+    }
+
+    pub fn define_force_quirks_flag(mut self) -> Self {
+        if let Self::DOCTYPE {
+            ref mut force_quirks_flag,
+            ..
+        } = self
+        {
+            *force_quirks_flag = true;
+        }
+
+        self
+    }
+
     /// Lorsqu'un jeton de [balise de début](HTMLToken::StartTag) est créé,
     /// son indicateur de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
@@ -119,15 +140,21 @@ impl HTMLToken {
 }
 
 impl HTMLToken {
-    /// Ajoute un caractère au nom de la balise de début ou de fin
-    /// ou a un commentaire.
+    /// Ajoute un caractère au DOCTYPE, ou nom de la balise de début ou de
+    /// fin ou a un commentaire.
     pub fn append_character(&mut self, ch: char) {
         assert!(matches!(
             self,
-            Self::StartTag { .. } | Self::EndTag { .. } | Self::Comment(_)
+            Self::DOCTYPE { .. }
+                | Self::StartTag { .. }
+                | Self::EndTag { .. }
+                | Self::Comment(_)
         ));
 
-        if let Self::StartTag { name, .. }
+        if let Self::DOCTYPE {
+            name: Some(name), ..
+        }
+        | Self::StartTag { name, .. }
         | Self::EndTag { name, .. }
         | Self::Comment(name) = self
         {
@@ -163,6 +190,42 @@ impl HTMLToken {
         }
     }
 
+    pub fn append_character_to_public_identifier(&mut self, ch: char) {
+        assert!(matches!(
+            self,
+            Self::DOCTYPE {
+                public_identifier: Some(_),
+                ..
+            }
+        ));
+
+        if let Self::DOCTYPE {
+            public_identifier: Some(public_identifier),
+            ..
+        } = self
+        {
+            public_identifier.push(ch);
+        }
+    }
+
+    pub fn append_character_to_system_identifier(&mut self, ch: char) {
+        assert!(matches!(
+            self,
+            Self::DOCTYPE {
+                system_identifier: Some(_),
+                ..
+            }
+        ));
+
+        if let Self::DOCTYPE {
+            system_identifier: Some(system_identifier),
+            ..
+        } = self
+        {
+            system_identifier.push(ch);
+        }
+    }
+
     pub fn define_tag_attributes(&mut self, attribute: HTMLTagAttribute) {
         assert!(matches!(
             self,
@@ -173,6 +236,51 @@ impl HTMLToken {
         | Self::EndTag { attributes, .. } = self
         {
             attributes.push(attribute);
+        }
+    }
+
+    pub fn set_force_quirks_flag(&mut self, to: bool) {
+        assert!(matches!(self, Self::DOCTYPE { .. }));
+
+        if let Self::DOCTYPE {
+            force_quirks_flag, ..
+        } = self
+        {
+            *force_quirks_flag = to;
+        }
+    }
+
+    pub fn set_public_identifier(&mut self, pi: String) {
+        assert!(matches!(
+            self,
+            Self::DOCTYPE {
+                public_identifier: None,
+                ..
+            }
+        ));
+
+        if let Self::DOCTYPE {
+            public_identifier, ..
+        } = self
+        {
+            *public_identifier = Some(pi);
+        }
+    }
+
+    pub fn set_system_identifier(&mut self, si: String) {
+        assert!(matches!(
+            self,
+            Self::DOCTYPE {
+                system_identifier: None,
+                ..
+            }
+        ));
+
+        if let Self::DOCTYPE {
+            system_identifier, ..
+        } = self
+        {
+            *system_identifier = Some(si);
         }
     }
 }

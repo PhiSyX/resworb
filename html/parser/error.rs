@@ -51,6 +51,27 @@ macro_rules! emit_html_error {
 /// tableau ci-dessous, qui doivent être utilisés par les vérificateurs de
 /// conformité dans les rapports.
 pub enum HTMLParserError {
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// point de code U+003E (>) dans l'identifiant public DOCTYPE (par
+    /// exemple, `<!DOCTYPE html PUBLIC "foo>`). Dans un tel cas, si le
+    /// DOCTYPE est correctement placé comme préambule du document,
+    /// l'analyseur syntaxique place le document en mode quirks.
+    AbruptDOCTYPEPublicIdentifier,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// point de code U+003E (>) dans l'identifiant système DOCTYPE (par
+    /// exemple, `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"
+    /// "foo>`). Dans ce cas, si le DOCTYPE est correctement placé
+    /// comme préambule du document, l'analyseur syntaxique place le
+    /// document en mode quirks.
+    AbruptDOCTYPESystemIdentifier,
+
+    /// Cette erreur se produit si l'analyseur rencontre une section CDATA
+    /// en dehors d'un contenu étranger (SVG ou MathML). L'analyseur
+    /// syntaxique traite ces sections CDATA (y compris les chaînes de
+    /// tête "[CDATA[" et de fin "]]") comme des commentaires.
+    CDATAInHtmlContent,
+
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée où un nom de balise est attendu. Dans ce cas,
     /// l'analyseur syntaxique traite le début d'une balise de début
@@ -59,9 +80,37 @@ pub enum HTMLParserError {
     EofBeforeTagName,
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
+    /// du flux d'entrée dans un DOCTYPE. Dans un tel cas, si le DOCTYPE
+    /// est correctement placé comme préambule du document, l'analyseur
+    /// syntaxique place le document en mode quirks.
+    EofInDOCTYPE,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée dans une balise de début ou une balise de fin
     /// (par exemple, <div id=). Une telle balise est ignorée.
     EofInTag,
+
+    /// Cette erreur se produit si l'analyseur rencontre la séquence de
+    /// points de code "< !" qui n'est pas immédiatement suivie de deux
+    /// points de code U+002D (-) et qui n'est pas le début d'un DOCTYPE
+    /// ou d'une section CDATA. Tout le contenu qui suit la séquence de
+    /// points de code "< !" jusqu'à un point de code U+003E (>) (si
+    /// présent) ou jusqu'à la fin du flux d'entrée est traité comme un
+    /// commentaire.
+    ///
+    /// Note: une cause possible de cette erreur est l'utilisation d'une
+    /// déclaration de balisage XML (par exemple, <!ELEMENT br EMPTY>)
+    /// dans l'HTML.
+    IncorrectlyOpenedComment,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre une
+    /// séquence de points de code autre que les mots-clés "PUBLIC" et
+    /// "SYSTEM" après un nom de DOCTYPE. Dans ce cas, l'analyseur ignore
+    /// tout identificateur public ou système suivant, et si le DOCTYPE
+    /// est correctement placé en tant que préambule du document, et si
+    /// l'analyseur ne peut pas changer le drapeau de mode est faux, il
+    /// place le document en mode quirks.
+    InvalidCharacterSequenceAfterDOCTYPEName,
 
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// qui n'est pas un alpha ASCII où le premier point de code d'une
@@ -94,17 +143,86 @@ pub enum HTMLParserError {
     /// une valeur vide.
     MissingAttributeValue,
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// DOCTYPE auquel il manque un nom (par exemple, `<!DOCTYPE>`). Dans
+    /// un tel cas, si le DOCTYPE est correctement placé comme préambule
+    /// du document, l'analyseur syntaxique place le document en mode
+    /// quirks.
+    MissingDOCTYPEName,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// point de code U+003E (>) où le début de l'identifiant public
+    /// DOCTYPE est attendu (par exemple, `<!DOCTYPE html PUBLIC >`). Dans
+    /// un tel cas, si le DOCTYPE est correctement placé comme préambule
+    /// du document, l'analyseur syntaxique place le document en mode
+    /// quirks.
+    MissingDOCTYPEPublicIdentifier,
+
+    /// Cette erreur se produit si l'analyseur rencontre un point de code
+    /// U+003E (>) où le début de l'identificateur de système DOCTYPE est
+    /// attendu (par exemple, `<!DOCTYPE html SYSTEM >`). Dans un tel cas,
+    /// si le DOCTYPE est correctement placé comme préambule du document,
+    /// l'analyseur syntaxique place le document en mode quirks.
+    MissingDOCTYPESystemIdentifier,
+
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// U+003E (>) là où un nom de balise de fin est attendu, c'est-à-dire
     /// </>. L'analyseur syntaxique ignore l'ensemble de la séquence de
     /// points de code "</>".
     MissingEndTagName,
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre
+    /// l'identificateur public DOCTYPE qui n'est pas précédé d'une
+    /// citation (par exemple, `<!DOCTYPE html PUBLIC -//W3C//DTD HTML
+    /// 4.01//EN">`). Dans un tel cas, l'analyseur syntaxique ignore
+    /// l'identificateur public et, si le DOCTYPE est correctement placé
+    /// en tant que préambule du document, place le document en mode
+    /// quirks.
+    MissingQuoteBeforeDOCTYPEPublicIdentifier,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre
+    /// l'identifiant système DOCTYPE qui n'est pas précédé d'un guillemet
+    /// (par exemple, `<!DOCTYPE html SYSTEM http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">`).
+    /// Dans un tel cas, l'analyseur syntaxique ignore l'identificateur de
+    /// système et, si le DOCTYPE est correctement placé en tant que
+    /// préambule du document, place le document en mode quirks.
+    MissingQuoteBeforeDOCTYPESystemIdentifier,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// DOCTYPE dont le mot clé "PUBLIC" et l'identifiant public ne sont
+    /// pas séparés par un espace ASCII. Dans ce cas, l'analyseur se
+    /// comporte comme si un espace ASCII était présent.
+    MissingWhitespaceAfterDOCTYPEPublicKeyword,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// DOCTYPE dont le mot-clé "SYSTEM" et l'identificateur de système ne
+    /// sont pas séparés par un espace ASCII. Dans ce cas, l'analyseur se
+    /// comporte comme si un espace ASCII était présent.
+    MissingWhitespaceAfterDOCTYPESystemKeyword,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// DOCTYPE dont le mot clé "DOCTYPE" et le nom ne sont pas séparés
+    /// par un espace ASCII. Dans ce cas, l'analyseur se comporte comme si
+    /// un espace ASCII était présent.
+    MissingWhitespaceBeforeDOCTYPEName,
+
     /// Cette erreur se produit si l'analyseur rencontre des attributs qui
     /// ne sont pas séparés par des espaces blancs ASCII (par exemple,
     /// <div id="foo"class="bar">). Dans ce cas, l'analyseur se comporte
     /// comme si un espace blanc ASCII était présent.
     MissingWhitespaceBetweenAttributes,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// DOCTYPE dont les identifiants public et système ne sont pas
+    /// séparés par un espace ASCII. Dans ce cas, l'analyseur se comporte
+    /// comme si un espace ASCII était présent.
+    MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre des
+    /// points de code autres que des espaces blancs ASCII ou la fermeture
+    /// U+003E (>) après l'identificateur de système DOCTYPE. L'analyseur
+    /// syntaxique ignore ces points de code.
+    UnexpectedCharacterAfterDoctypeSystemIdentifier,
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+0022 ("), U+0027 (') ou U+003C (<) dans un nom
@@ -202,14 +320,43 @@ impl fmt::Display for HTMLParserError {
             f,
             "{}",
             match self {
+                | Self::AbruptDOCTYPEPublicIdentifier =>
+                    "abrupt-doctype-public-identifier",
+                | Self::AbruptDOCTYPESystemIdentifier =>
+                    "abrupt-doctype-system-identifier",
+                | Self::CDATAInHtmlContent => "cdata-in-html-content",
                 | Self::EofBeforeTagName => "eof-before-tag-name",
+                | Self::EofInDOCTYPE => "eof-in-doctype",
                 | Self::EofInTag => "eof-in-tag",
+                | Self::IncorrectlyOpenedComment =>
+                    "incorrectly-opened-comment",
+                | Self::InvalidCharacterSequenceAfterDOCTYPEName =>
+                    "invalid-character-sequence-after-doctype-name",
                 | Self::InvalidFirstCharacterOfTagName =>
                     "invalid-first-character-of-tag-name",
                 | Self::MissingAttributeValue => "missing-attribute-value",
+                | Self::MissingDOCTYPEName => "missing-doctype-name",
+                | Self::MissingQuoteBeforeDOCTYPEPublicIdentifier =>
+                    "missing-quote-before-doctype-public-identifier",
+                | Self::MissingQuoteBeforeDOCTYPESystemIdentifier =>
+                    "missing-quote-before-doctype-system-identifier",
+                | Self::MissingDOCTYPEPublicIdentifier =>
+                    "missing-doctype-public-identifier",
+                | Self::MissingDOCTYPESystemIdentifier =>
+                    "missing-doctype-system-identifier",
                 | Self::MissingEndTagName => "missing-end-tag-name",
+                | Self::MissingWhitespaceAfterDOCTYPEPublicKeyword =>
+                    "missing-whitespace-after-doctype-public-keyword",
+                | Self::MissingWhitespaceAfterDOCTYPESystemKeyword =>
+                    "missing-whitespace-after-doctype-system-keyword",
+                | Self::MissingWhitespaceBeforeDOCTYPEName =>
+                    "missing-whitespace-before-doctype-name",
                 | Self::MissingWhitespaceBetweenAttributes =>
                     "missing-whitespace-between-attributes",
+                | Self::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers =>
+                     "missing-whitespace-between-doctype-public-and-system-identifiers",
+                | Self::UnexpectedCharacterAfterDoctypeSystemIdentifier
+                    => "unexpected-character-after-doctype-system-identifier",
                 | Self::UnexpectedCharacterInAttributeName =>
                     "unexpected-character-in-attribute-name",
                 | Self::UnexpectedCharacterInUnquotedAttributeValue =>
