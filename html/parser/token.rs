@@ -239,6 +239,23 @@ impl HTMLToken {
         }
     }
 
+    pub fn set_self_closing_tag(&mut self, to: bool) {
+        assert!(matches!(
+            self,
+            Self::StartTag { .. } | Self::EndTag { .. }
+        ));
+
+        if let Self::StartTag {
+            self_closing_flag, ..
+        }
+        | Self::EndTag {
+            self_closing_flag, ..
+        } = self
+        {
+            *self_closing_flag = to;
+        }
+    }
+
     pub fn set_force_quirks_flag(&mut self, to: bool) {
         assert!(matches!(self, Self::DOCTYPE { .. }));
 

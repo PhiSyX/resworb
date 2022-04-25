@@ -979,6 +979,41 @@ where
         }
     }
 
+    fn handle_self_closing_start_tag_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Définir le drapeau de fermeture automatique au jeton de
+            // balise actuel sur vrai. Passer à l'état de données. Émettre
+            // le jeton actuel.
+            | Some('>') => {
+                if let Some(ref mut tag_tok) = self.token {
+                    tag_tok.set_self_closing_tag(true);
+                }
+                self.state.switch_to(State::Data).and_break()
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
+            // jeton de fin de fichier.
+            | None => self
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error(HTMLParserError::EofInTag),
+
+            // Anything else
+            // Il s'agit d'une erreur de parse unexpected-solidus-in-tag.
+            // Reprendre dans l'état avant le nom de l'attribut.
+            | Some(_) => self
+                .reconsume(State::BeforeAttributeName)
+                .and_continue_with_error(
+                    HTMLParserError::UnexpectedSolidusInTag,
+                ),
+        }
+    }
+
     fn handle_markup_declaration_open_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
@@ -2236,6 +2271,9 @@ where
                 | State::AfterAttributeValueQuoted => {
                     self.handle_after_attribute_value_quoted_state()
                 }
+                | State::SelfClosingStartTag => {
+                    self.handle_self_closing_start_tag_state()
+                }
                 | State::MarkupDeclarationOpen => {
                     self.handle_markup_declaration_open_state()
                 }
@@ -2318,5 +2356,48 @@ impl Default for HTMLState {
             current: State::Data,
             returns: None,
         }
+    }
+}
+
+// ---- //
+// Test //
+// ---- //
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_tokenizer_html(
+        input: &'static str,
+    ) -> HTMLTokenizer<impl Iterator<Item = char>> {
+        let stream = InputStreamPreprocessor::new(input.chars());
+        HTMLTokenizer::new(stream)
+    }
+
+    #[test]
+    fn test_tag() {
+        let mut html_tok =
+            get_tokenizer_html(include_str!("crashtests/tag/tag.html"));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![("id".into(), "foo".into())]
+            })
+        );
+
+        // Hello World</div> ...
+        html_tok.nth(12);
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "input".into(),
+                self_closing_flag: true,
+                attributes: vec![("value".into(), "Hello World".into())]
+            })
+        );
     }
 }
