@@ -87,7 +87,7 @@ pub enum HTMLParserError {
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée dans une balise de début ou une balise de fin
-    /// (par exemple, <div id=). Une telle balise est ignorée.
+    /// (par exemple, `<div id=`). Une telle balise est ignorée.
     EofInTag,
 
     /// Cette erreur se produit si l'analyseur rencontre la séquence de
@@ -99,7 +99,7 @@ pub enum HTMLParserError {
     /// commentaire.
     ///
     /// Note: une cause possible de cette erreur est l'utilisation d'une
-    /// déclaration de balisage XML (par exemple, <!ELEMENT br EMPTY>)
+    /// déclaration de balisage XML (par exemple, `<!ELEMENT br EMPTY>`)
     /// dans l'HTML.
     IncorrectlyOpenedComment,
 
@@ -208,7 +208,7 @@ pub enum HTMLParserError {
 
     /// Cette erreur se produit si l'analyseur rencontre des attributs qui
     /// ne sont pas séparés par des espaces blancs ASCII (par exemple,
-    /// <div id="foo"class="bar">). Dans ce cas, l'analyseur se comporte
+    /// `<div id="foo"class="bar">`). Dans ce cas, l'analyseur se comporte
     /// comme si un espace blanc ASCII était présent.
     MissingWhitespaceBetweenAttributes,
 
@@ -273,7 +273,6 @@ pub enum HTMLParserError {
     /// oublié.
     ///
     /// Example: `<div foo="bar" ="baz">`
-    ///
     /// En raison d'un nom d'attribut oublié, l'analyseur syntaxique
     /// traite ce balisage comme un élément div avec deux attributs : un
     /// attribut "foo" avec une valeur "bar" et un attribut "="baz"" avec
@@ -369,5 +368,417 @@ impl fmt::Display for HTMLParserError {
                     "unexpected-question-mark-instead-of-tag-name",
             }
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use parser::preprocessor::InputStreamPreprocessor;
+
+    use crate::parser::{token::HTMLToken, tokenizer::HTMLTokenizer};
+
+    fn get_tokenizer_html(
+        input: &'static str,
+    ) -> HTMLTokenizer<impl Iterator<Item = char>> {
+        let stream = InputStreamPreprocessor::new(input.chars());
+        HTMLTokenizer::new(stream)
+    }
+
+    #[test]
+    fn test_error_abrupt_doctype_identifier() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/abrupt_doctype_identifier.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: Some("foo".into()),
+                system_identifier: None,
+                force_quirks_flag: true,
+            })
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: Some(
+                    "-//W3C//DTD HTML 4.01//EN".into()
+                ),
+                system_identifier: Some("foo".into()),
+                force_quirks_flag: true,
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_eof_before_tag_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/eof_before_tag_name.html"
+        ));
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+    }
+
+    #[test]
+    fn test_error_eof_in_doctype() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/eof_in_doctype.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: None,
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_eof_in_tag() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/eof_in_tag.html"
+        ));
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+    }
+
+    #[test]
+    fn test_error_incorrectly_opened_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/incorrectly_opened_comment.html"
+        ));
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('<')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character(' ')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('!')));
+        // DOCTYPE ...
+        html_tok.nth(8);
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("ELEMENT br EMPTY".into()))
+        );
+    }
+
+    #[test]
+    fn test_error_invalid_character_sequence_after_doctype_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/invalid_character_sequence_after_doctype_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_invalid_first_character_of_tag_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/invalid_first_character_of_tag_name.html"
+        ));
+
+        // |- #text: <42>
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('<')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('4')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('2')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('>')));
+
+        // |- #comment: 42
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("42".into()))
+        );
+    }
+
+    #[test]
+    fn test_error_missing_attribute_value() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/missing_attribute_value.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![("id".into(), "".into())]
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_missing_doctype_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/missing_doctype_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: None,
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_missing_doctype_identifier() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/missing_doctype_identifier.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_missing_end_tag_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/missing_end_tag_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::new_start_tag("div".into()))
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+    }
+
+    #[test]
+    #[ignore = "pas sûr du comportement."]
+    fn test_error_missing_quote_before_doctype_identifier() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/missing_quote_before_doctype_identifier.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_missing_whitespace_after_doctype_keyword() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/missing_whitespace_after_doctype_keyword.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: Some(
+                    "-//W3C//DTD HTML 4.01//EN".into()
+                ),
+                system_identifier: None,
+                force_quirks_flag: false
+            })
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: Some("http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd".into()),
+                force_quirks_flag: false
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_missing_whitespace_before_doctype_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/missing_whitespace_before_doctype_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: Some(
+                    "-//W3C//DTD HTML 4.01//EN".into()
+                ),
+                system_identifier: None,
+                force_quirks_flag: false
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_missing_whitespace_between_attributes() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/missing_whitespace_between_attributes.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![
+                    ("id".into(), "foo".into()),
+                    ("class".into(), "bar".into())
+                ]
+            })
+        );
+    }
+
+    #[test]
+    #[ignore = "pas sûr du contenu HTML du test."]
+    fn test_error_missing_whitespace_between_doctype_identifiers() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/missing_whitespace_between_doctype_identifiers.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: Some(
+                    "-//W3C//DTD HTML 4.01//EN".into()
+                ),
+                system_identifier: None,
+                force_quirks_flag: false
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_unexpected_character_in_attribute_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/unexpected_character_in_attribute_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![("foo<div".into(), "".into())]
+            })
+        );
+
+        html_tok.next_token();
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![("id'bar'".into(), "".into())]
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_unexpected_character_in_unquoted_attribute_value() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/unexpected_character_in_unquoted_attribute_value.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![("foo".into(), "b'ar'".into())]
+            })
+        );
+    }
+
+    #[test]
+    #[ignore = "bug: n'a pas le comportement attendu."]
+    fn test_error_unexpected_equals_sign_before_attribute_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/unexpected_equals_sign_before_attribute_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![
+                    ("foo".into(), "bar".into()),
+                    (r#"="baz""#.into(), "".into())
+                ]
+            })
+        );
+    }
+
+    #[test]
+    #[ignore = "bug: n'a pas le comportement attendu."]
+    fn test_error_unexpected_question_mark_instead_of_tag_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/unexpected_question_mark_instead_of_tag_name.html"
+        ));
+
+        // |- #comment: ?xml-stylesheet type="text/css" href="style.css"?
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment(
+                r#"?xml-stylesheet type="text/css" href="style.css"?"#
+                    .into()
+            ))
+        );
     }
 }
