@@ -1104,27 +1104,25 @@ where
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
-            // Passer à l'état de tiret de début de commentaire.
-            | Some('-') => self
-                .state
-                .switch_to(State::CommentStartDash)
-                .and_continue(),
+            // Passer à l'état `comment-start-dash`.
+            | Some('-') => {
+                self.state.switch_to("comment-start-dash").and_continue()
+            }
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Il s'agit d'une erreur d'analyse
-            // abrupt-closing-of-empty-comment. Passer à l'état de données.
-            // Émettre le jeton de commentaire actuel.
-            | Some('>') => {
-                self.state.switch_to(State::Data).and_break_with_error(
-                    HTMLParserError::AbruptClosingOfEmptyComment,
-                )
-            }
+            // Il s'agit d'une erreur d'analyse de type
+            // `abrupt-closing-of-empty-comment`. Passer à l'état `data`.
+            // Émettre le jeton `comment` actuel.
+            | Some('>') => self
+                .state
+                .switch_to("data")
+                .and_break_with_error("abrupt-closing-of-empty-comment"),
 
             // Anything else
             //
             // Reprendre dans l'état de commentaire.
-            | _ => self.reconsume(State::Comment).and_continue(),
+            | _ => self.reconsume("comment").and_continue(),
         }
     }
 
@@ -1136,7 +1134,7 @@ where
             //
             // Passez à l'état final du commentaire.
             | Some('-') => {
-                self.state.switch_to(State::CommentEnd).and_continue()
+                self.state.switch_to("comment-end").and_continue()
             }
 
             // U+003E GREATER-THAN SIGN (>)
@@ -1144,35 +1142,31 @@ where
             // Il s'agit d'une erreur d'analyse
             // abrupt-closing-of-empty-comment. Passer à l'état de données.
             // Émettre le jeton de commentaire actuel.
-            | Some('>') => {
-                self.state.switch_to(State::Data).and_break_with_error(
-                    HTMLParserError::AbruptClosingOfEmptyComment,
-                )
-            }
+            | Some('>') => self
+                .state
+                .switch_to("data")
+                .and_break_with_error("abrupt-closing-of-empty-comment"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-comment. Émettre le
-            // jeton de commentaire courant. Émettre un jeton de fin de
-            // fichier.
-            | None => {
-                if let Some(comment_tok) = self.current_token() {
-                    self.emit_token(comment_tok);
-                }
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInComment)
-            }
+            // Il s'agit d'une erreur d'analyse de type `eof-in-comment`.
+            // Émettre le jeton `comment` actuel. Émettre un jeton `end of
+            // file`.
+            | None => self
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-comment"),
 
             // Anything else
             //
             // Ajouter un caractère U+002D HYPHEN-MINUS (-) aux données du
-            // jeton de commentaire. Reprendre l'état de commentaire.
-            | Some(_) => {
-                if let Some(ref mut comment_tok) = self.token {
+            // jeton `comment`. Reprendre l'état `comment`.
+            | Some(_) => self
+                .change_current_token(|comment_tok| {
                     comment_tok.append_character('-');
-                }
-                self.reconsume(State::Comment).and_continue()
-            }
+                })
+                .reconsume("comment")
+                .and_continue(),
         }
     }
 
@@ -1629,7 +1623,7 @@ where
         match self.stream.next_input_char() {
             // U+0022 QUOTATION MARK (")
             //
-            // Passer à l'état `after-doctype-public-identifierµ.
+            // Passer à l'état `after-doctype-public-identifier`.
             | Some('"') if quote == '"' => self
                 .state
                 .switch_to("after-doctype-public-identifier")

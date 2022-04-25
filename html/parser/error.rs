@@ -339,6 +339,7 @@ impl FromStr for HTMLParserError {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
+            | "abrupt-closing-of-empty-comment" => Self::AbruptClosingOfEmptyComment,
             | "abrupt-doctype-public-identifier" => Self::AbruptDOCTYPEPublicIdentifier,
             | "abrupt-doctype-system-identifier" => Self::AbruptDOCTYPESystemIdentifier,
             | "cdata-in-html-content" => Self::CDATAInHtmlContent,
