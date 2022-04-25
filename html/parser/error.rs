@@ -744,4 +744,24 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    #[ignore = "bug: n'a pas le comportement attendu."]
+    fn test_error_unexpected_equals_sign_before_attribute_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/unexpected_equals_sign_before_attribute_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![
+                    ("foo".into(), "bar".into()),
+                    (r#"="baz""#.into(), "".into())
+                ]
+            })
+        );
+    }
 }
