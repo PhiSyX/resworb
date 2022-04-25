@@ -152,11 +152,18 @@ pub enum HTMLParserError {
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+003E (>) où le début de l'identifiant public
-    /// DOCTYPE est attendu (par exemple, <!DOCTYPE html PUBLIC >). Dans
+    /// DOCTYPE est attendu (par exemple, `<!DOCTYPE html PUBLIC >`). Dans
     /// un tel cas, si le DOCTYPE est correctement placé comme préambule
     /// du document, l'analyseur syntaxique place le document en mode
     /// quirks.
     MissingDOCTYPEPublicIdentifier,
+
+    /// Cette erreur se produit si l'analyseur rencontre un point de code
+    /// U+003E (>) où le début de l'identificateur de système DOCTYPE est
+    /// attendu (par exemple, `<!DOCTYPE html SYSTEM >`). Dans un tel cas,
+    /// si le DOCTYPE est correctement placé comme préambule du document,
+    /// l'analyseur syntaxique place le document en mode quirks.
+    MissingDOCTYPESystemIdentifier,
 
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// U+003E (>) là où un nom de balise de fin est attendu, c'est-à-dire
@@ -186,6 +193,12 @@ pub enum HTMLParserError {
     /// pas séparés par un espace ASCII. Dans ce cas, l'analyseur se
     /// comporte comme si un espace ASCII était présent.
     MissingWhitespaceAfterDOCTYPEPublicKeyword,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// DOCTYPE dont le mot-clé "SYSTEM" et l'identificateur de système ne
+    /// sont pas séparés par un espace ASCII. Dans ce cas, l'analyseur se
+    /// comporte comme si un espace ASCII était présent.
+    MissingWhitespaceAfterDOCTYPESystemKeyword,
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// DOCTYPE dont le mot clé "DOCTYPE" et le nom ne sont pas séparés
@@ -329,9 +342,13 @@ impl fmt::Display for HTMLParserError {
                     "missing-quote-before-doctype-system-identifier",
                 | Self::MissingDOCTYPEPublicIdentifier =>
                     "missing-doctype-public-identifier",
+                | Self::MissingDOCTYPESystemIdentifier =>
+                    "missing-doctype-system-identifier",
                 | Self::MissingEndTagName => "missing-end-tag-name",
                 | Self::MissingWhitespaceAfterDOCTYPEPublicKeyword =>
                     "missing-whitespace-after-doctype-public-keyword",
+                | Self::MissingWhitespaceAfterDOCTYPESystemKeyword =>
+                    "missing-whitespace-after-doctype-system-keyword",
                 | Self::MissingWhitespaceBeforeDOCTYPEName =>
                     "missing-whitespace-before-doctype-name",
                 | Self::MissingWhitespaceBetweenAttributes =>

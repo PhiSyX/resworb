@@ -157,6 +157,9 @@ enum State {
     /// 13.2.5.63 After DOCTYPE system keyword state
     AfterDOCTYPESystemKeyword,
 
+    /// 13.2.5.64 Before DOCTYPE system identifier state
+    BeforeDOCTYPESystemIdentifier,
+
     /// 13.2.5.65 DOCTYPE system identifier (double-quoted) state
     DOCTYPESystemIdentifierDoubleQuoted,
 
@@ -1400,9 +1403,9 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // missing-whitespace-after-doctype-public-keyword. Donner à
-            // l'identifieur public du jeton DOCTYPE actuel la valeur de
+            // l'identifiant public du jeton DOCTYPE actuel la valeur de
             // la chaîne vide (non manquante), ensuite passer à l'état
-            // d'identifieur public DOCTYPE (double quoted).
+            // d'identifiant public DOCTYPE (double quoted).
             | Some('"') => {
                 if let Some(ref mut doctype_tok) = self.token {
                     doctype_tok.set_public_identifier(String::new());
@@ -1418,9 +1421,9 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // missing-whitespace-after-doctype-public-keyword. Donner à
-            // l'identifieur public du jeton DOCTYPE actuel la valeur de
+            // l'identifiant public du jeton DOCTYPE actuel la valeur de
             // la chaîne vide (non manquante), ensuite passer à l'état
-            // d'identifieur public DOCTYPE (single quoted).
+            // d'identifiant public DOCTYPE (single quoted).
             | Some('\'') => {
                 emit_html_error!(
                     HTMLParserError::MissingWhitespaceAfterDOCTYPEPublicKeyword
@@ -1609,7 +1612,7 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // unexpected-null-character. Ajouter un caractère U+FFFD
-            // REPLACEMENT CHARACTER à l'identifieur public du jeton
+            // REPLACEMENT CHARACTER à l'identifiant public du jeton
             // DOCTYPE actuel.
             | Some('\0') => {
                 if let Some(ref mut doctype_tok) = self.token {
@@ -1658,7 +1661,7 @@ where
 
             // Anything else
             //
-            // Ajouter le caractère actuel à l'identifieur public du jeton
+            // Ajouter le caractère actuel à l'identifiant public du jeton
             // DOCTYPE actuel.
             | Some(ch) => {
                 if let Some(ref mut doctype_tok) = self.token {
@@ -1693,9 +1696,9 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // missing-whitespace-between-doctype-public-and-system-identifiers.
-            // Définir l'identifieur système du jeton DOCTYPE actuel
+            // Définir l'identifiant système du jeton DOCTYPE actuel
             // sur une chaîne vide (non manquante), passer à l'état
-            // d'identifieur système DOCTYPE (entre guillemets).
+            // d'identifiant système DOCTYPE (entre guillemets).
             | Some(ch @ ('"' | '\'')) => {
                 if let Some(ref mut doctype_tok) = self.token {
                     doctype_tok.set_system_identifier(String::new());
@@ -1765,9 +1768,9 @@ where
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
             //
-            // Définir l'identifieur système du jeton DOCTYPE actuel à
+            // Définir l'identifiant système du jeton DOCTYPE actuel à
             // la chaîne vide (non manquante), puis passer à l'état
-            // d'identifieur système DOCTYPE (entre guillemets).
+            // d'identifiant système DOCTYPE (entre guillemets).
             | Some(ch @ ('"' | '\'')) => {
                 if let Some(ref mut doctype_tok) = self.token {
                     doctype_tok.set_system_identifier(String::new());
@@ -1819,6 +1822,111 @@ where
         }
     }
 
+    fn handle_after_doctype_system_keyword_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Passer à l'état d'identifiant système avant DOCTYPE.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => self
+                .state
+                .switch_to(State::BeforeDOCTYPESystemIdentifier)
+                .and_continue(),
+
+            // U+0022 QUOTATION MARK (")
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-whitespace-after-doctype-system-keyword.
+            // Définir l'identifiant système du jeton DOCTYPE actuel
+            // à une chaîne vide (non manquante), passer à l'état
+            // d'identifiant système DOCTYPE (double quoted).
+            | Some('"') => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_system_identifier(String::new());
+                }
+                self.state
+                    .switch_to(State::DOCTYPESystemIdentifierDoubleQuoted)
+                    .and_continue_with_error(
+                        HTMLParserError::MissingWhitespaceAfterDOCTYPESystemKeyword
+                    )
+            }
+
+            // U+0027 APOSTROPHE (')
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-whitespace-after-doctype-system-keyword.
+            // Définir l'identifiant système du jeton DOCTYPE actuel
+            // à une chaîne vide (non manquante), passer à l'état
+            // d'identifiant système DOCTYPE (single quoted).
+            | Some('\'') => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_system_identifier(String::new());
+                }
+                self.state
+                    .switch_to(State::DOCTYPESystemIdentifierSingleQuoted)
+                    .and_continue_with_error(
+                        HTMLParserError::MissingWhitespaceAfterDOCTYPESystemKeyword
+                    )
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-doctype-system-identifier. Définir le drapeau
+            // force-quirks du jeton DOCTYPE actuel sur vrai. Passer à
+            // l'état de données. Émettre le jeton DOCTYPE actuel.
+            | Some('>') => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+                self.state.switch_to(State::Data).and_break_with_error(
+                    HTMLParserError::MissingDOCTYPESystemIdentifier,
+                )
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
+            // de fichier.
+            | None => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.emit_token(doctype_tok);
+                }
+
+                self.set_token(HTMLToken::EOF)
+                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
+            }
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-quote-before-doctype-system-identifier. Définir le
+            // drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Reprendre dans l'état DOCTYPE fictif.
+            | Some(_) => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                self.set_token(HTMLToken::EOF)
+                    .reconsume(State::BogusDOCTYPE)
+                    .and_continue_with_error(
+                        HTMLParserError::MissingQuoteBeforeDOCTYPESystemIdentifier
+                    )
+            }
+        }
+    }
+
     fn handle_doctype_system_identifier_quoted_state(
         &mut self,
         quote: char,
@@ -1827,7 +1935,7 @@ where
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
             //
-            // Passez à l'état d'identifieur système après DOCTYPE.
+            // Passez à l'état d'identifiant système après DOCTYPE.
             | Some(ch) if ch == quote => self
                 .state
                 .switch_to(State::AfterDOCTYPESystemIdentifier)
@@ -1837,7 +1945,7 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // unexpected-null-character. Ajouter un caractère U+FFFD
-            // REPLACEMENT CHARACTER à l'identifieur système du jeton
+            // REPLACEMENT CHARACTER à l'identifiant système du jeton
             // DOCTYPE actuel.
             | Some('\0') => {
                 if let Some(ref mut doctype_tok) = self.token {
@@ -2063,6 +2171,9 @@ where
                 }
                 | State::BetweenDOCTYPEPublicAndSystemIdentifiers => {
                     self.handle_between_doctype_public_and_system_identifiers_state()
+                }
+                | State::AfterDOCTYPESystemKeyword => {
+                    self.handle_after_doctype_system_keyword_state()
                 }
                 | State::DOCTYPESystemIdentifierDoubleQuoted => {
                     self.handle_doctype_system_identifier_quoted_state('"')
