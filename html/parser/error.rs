@@ -414,4 +414,13 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_error_eof_before_tag_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/eof_before_tag_name.html"
+        ));
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+    }
 }
