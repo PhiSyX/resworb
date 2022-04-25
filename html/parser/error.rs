@@ -700,4 +700,32 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_error_unexpected_character_in_attribute_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/unexpected_character_in_attribute_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![("foo<div".into(), "".into())]
+            })
+        );
+
+        html_tok.next_token();
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![("id'bar'".into(), "".into())]
+            })
+        );
+    }
 }
