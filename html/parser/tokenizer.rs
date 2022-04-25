@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::{borrow::Cow, collections::VecDeque};
+use std::{borrow::Cow, collections::VecDeque, str::FromStr};
 
 use parser::preprocessor::InputStreamPreprocessor;
 
@@ -27,8 +27,9 @@ trait HTMLStateIteratorInterface {
 
     fn and_continue_with_error(
         &self,
-        err: HTMLParserError,
+        err: &str,
     ) -> ResultHTMLStateIterator {
+        let err = err.parse().unwrap();
         Err((err, HTMLStateIterator::Continue))
     }
 
@@ -36,12 +37,14 @@ trait HTMLStateIteratorInterface {
         Ok(HTMLStateIterator::Break)
     }
 
-    fn and_break_with_error(
-        &self,
-        err: HTMLParserError,
-    ) -> ResultHTMLStateIterator {
+    fn and_break_with_error(&self, err: &str) -> ResultHTMLStateIterator {
+        let err = err.parse().unwrap();
         Err((err, HTMLStateIterator::Break))
     }
+}
+
+trait HTMLCharacterInterface {
+    fn is_html_whitespace(&self) -> bool;
 }
 
 // ---- //
@@ -211,12 +214,32 @@ where
         if let Some(token) = self.token.clone() {
             self.temp.push_back(token);
         }
-
         self.pop_token()
     }
 
     pub fn next_token(&mut self) -> Option<HTMLToken> {
         self.next()
+    }
+
+    fn pop_token(&mut self) -> Option<HTMLToken> {
+        self.temp.pop_front()
+    }
+
+    fn change_current_token<F: FnOnce(&mut HTMLToken)>(
+        &mut self,
+        callback: F,
+    ) -> &mut Self {
+        if let Some(ref mut token) = self.token {
+            callback(token);
+        }
+        self
+    }
+
+    fn and_emit_current_token(&mut self) -> &mut Self {
+        if let Some(token) = self.current_token() {
+            self.emit_token(token);
+        }
+        self
     }
 
     fn emit_token(&mut self, token: HTMLToken) -> &mut Self {
@@ -229,17 +252,13 @@ where
         self
     }
 
-    fn pop_token(&mut self) -> Option<HTMLToken> {
-        self.temp.pop_front()
-    }
-
-    fn reconsume(&mut self, state: State) -> &mut Self {
+    fn reconsume(&mut self, state: &str) -> &mut Self {
         self.stream.rollback();
         self.state.switch_to(state);
         self
     }
 
-    fn switch_state_to(&mut self, state: State) -> &mut Self {
+    fn switch_state_to(&mut self, state: &str) -> &mut Self {
         self.state.switch_to(state);
         self
     }
@@ -254,7 +273,8 @@ impl HTMLState {
     /// Change l'état actuel par un nouvel état.
     /// Terme `switch_to` venant de la spécification HTML "Switch to the
     /// ..."
-    fn switch_to(&mut self, state: State) -> &mut Self {
+    fn switch_to(&mut self, state: &str) -> &mut Self {
+        let state = state.parse().unwrap();
         self.current = state;
         self
     }
@@ -262,7 +282,8 @@ impl HTMLState {
     /// Change l'état de retour par un nouvel état.
     /// Terme `set_return` venant de spécification HTML "Set the return
     /// state to the ..."
-    fn set_return(&mut self, state: State) -> &mut Self {
+    fn set_return(&mut self, state: &str) -> &mut Self {
+        let state = state.parse().unwrap();
         self.returns = Some(state);
         self
     }
@@ -280,38 +301,36 @@ where
         match self.stream.next_input_char() {
             // U+0026 AMPERSAND (&)
             //
-            // Définir l'état de retour à l'état de données. Passer à
-            // l'état de référence de caractère.
+            // Définir l'état de retour à l'état `data`. Passer à l'état
+            // `character-reference`.
             | Some('&') => self
                 .state
-                .set_return(State::Data)
-                .switch_to(State::CharacterReference)
+                .set_return("data")
+                .switch_to("character-reference")
                 .and_continue(),
 
             // U+003C LESS-THAN SIGN (<)
             //
-            // Passer à l'état de balise ouverte.
-            | Some('<') => {
-                self.state.switch_to(State::TagOpen).and_continue()
-            }
+            // Passer à l'état `tag-open`.
+            | Some('<') => self.state.switch_to("tag-open").and_continue(),
 
             // U+0000 NULL
             //
-            // Il s'agit d'une erreur d'analyse de caractère NULL et
-            // inattendu. Émettre le caractère actuel comme un jeton de
-            // caractère.
-            | Some('\0') => self.and_break_with_error(
-                HTMLParserError::UnexpectedNullCharacter,
-            ),
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character. Émettre le caractère
+            // actuel comme un jeton de caractère.
+            | Some('\0') => {
+                self.and_break_with_error("unexpected-null-character")
+            }
 
             // EOF
             //
-            // Émettre un jeton de fin de fichier.
+            // Émettre un jeton `end of file`.
             | None => self.set_token(HTMLToken::EOF).and_break(),
 
             // Anything else
             //
-            // Émettre le caractère actuel comme un jeton de caractère.
+            // Émettre le caractère actuel comme un jeton `character`.
             | Some(ch) => {
                 self.set_token(HTMLToken::Character(ch)).and_break()
             }
@@ -322,65 +341,64 @@ where
         match self.stream.next_input_char() {
             // U+0021 EXCLAMATION MARK (!)
             //
-            // Passer à l'état ouvert de la déclaration de balisage.
+            // Passer à l'état `markup-declaration-open`.
             | Some('!') => self
                 .state
-                .switch_to(State::MarkupDeclarationOpen)
+                .switch_to("markup-declaration-open")
                 .and_continue(),
 
             // U+002F SOLIDUS (/)
             //
-            // Passer à l'état ouvert de la balise de fin.
+            // Passer à l'état `end-tag-open`.
             | Some('/') => {
-                self.state.switch_to(State::EndTagOpen).and_continue()
+                self.state.switch_to("end-tag-open").and_continue()
             }
 
             // ASCII alpha
             //
-            // Créer un nouveau jeton de balise de départ, définir son nom
-            // de balise à la chaîne vide. Reprendre dans l'état de nom de
-            // balise.
+            // Créer un nouveau jeton `start tag`, et définir son nom
+            // en une chaîne de caractères vide. Reprendre dans `tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
                 .set_token(HTMLToken::new_start_tag(String::new()))
-                .reconsume(State::TagName)
+                .reconsume("tag-name")
                 .and_continue(),
 
             // U+003F QUESTION MARK (?)
             //
-            // Il s'agit d'une erreur d'analyse
-            // unexpected-question-mark-instead-of-tag-name. Créer un jeton
-            // de commentaire dont les données sont une chaîne vide.
-            // Reprendre dans l'état de faux commentaire.
-            | Some('?') => {
-                self.set_token(HTMLToken::new_comment(String::new()))
-                    .reconsume(State::BogusComment)
-                    .and_break_with_error(HTMLParserError::UnexpectedQuestionMarkInsteadOfTagName)
-            }
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-question-mark-instead-of-tag-name`. Créer un
+            // jeton de `comment` dont les données sont une chaîne de
+            // caractères vide. Reprendre dans l'état de `bogus-comment`.
+            | Some('?') => self
+                .set_token(HTMLToken::new_comment(String::new()))
+                .reconsume("bogus-comment")
+                .and_break_with_error(
+                    "unexpected-question-mark-instead-of-tag-name",
+                ),
 
             // EOF
             //
-            // Ceci est une erreur d'analyse eof-before-tag-name. Émettre
-            // un jeton de caractère U+003C LESS-THAN SIGN et un jeton de
-            // fin de fichier.
-            | None => {
-                self.emit_token(HTMLToken::Character('<'))
-                    .set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofBeforeTagName)
-            }
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-before-tag-name`. Émettre un jeton de
+            // `character` U+003C LESS-THAN SIGN et un jeton de
+            // `end of file`.
+            | None => self
+                .emit_token(HTMLToken::Character('<'))
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-before-tag-name"),
 
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // invalid-first-character-of-tag-name. Émettre un jeton de
-            // caractère U+003C LESS-THAN SIGN. Reprendre dans l'état de
-            // données.
-            | Some(_) => {
-                self.emit_token(HTMLToken::Character('<'))
-                    .reconsume(State::Data)
-                    .and_continue_with_error(
-                        HTMLParserError::InvalidFirstCharacterOfTagName,
-                    )
-            }
+            // `invalid-first-character-of-tag-name`. Émettre un jeton de
+            // `character` U+003C LESS-THAN SIGN. Reprendre dans l'état
+            // `data`.
+            | Some(_) => self
+                .emit_token(HTMLToken::Character('<'))
+                .reconsume("data")
+                .and_continue_with_error(
+                    "invalid-first-character-of-tag-name",
+                ),
         }
     }
 
@@ -388,44 +406,45 @@ where
         match self.stream.next_input_char() {
             // ASCII alpha
             //
-            // Créer un nouveau jeton de balise de fin, définir son nom de
-            // balise à la chaîne vide. Reprendre l'état de nom de balise.
+            // Créer un nouveau jeton `end tag`, et lui définir son nom
+            // comme une chaîne de caractères vide. Reprendre l'état
+            // `tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
                 .set_token(HTMLToken::new_end_tag(String::new()))
-                .reconsume(State::TagName)
+                .reconsume("tag-name")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Il s'agit d'une erreur d'analyse missing-end-tag-name.
-            // Passer à l'état de données.
-            | Some('>') => {
-                self.state.switch_to(State::Data).and_continue_with_error(
-                    HTMLParserError::MissingEndTagName,
-                )
-            }
+            // Il s'agit d'une erreur d'analyse de type
+            // `missing-end-tag-name`. Passer à l'état `data`.
+            | Some('>') => self
+                .state
+                .switch_to("data")
+                .and_continue_with_error("missing-end-tag-name"),
 
             // EOF
             //
-            // Ceci est une erreur d'analyse eof-before-tag-name. Émettre
-            // un jeton de caractère U+003C LESS-THAN SIGN, un jeton de
-            // caractère U+002F SOLIDUS et un jeton de fin de fichier.
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-before-tag-name`. Émettre un jeton `character`
+            // U+003C LESS-THAN SIGN, un jeton de `character` U+002F
+            // SOLIDUS et un jeton `end of file`.
             | None => self
                 .emit_token(HTMLToken::Character('<'))
                 .emit_token(HTMLToken::Character('/'))
-                .and_break_with_error(HTMLParserError::EofBeforeTagName),
+                .and_break_with_error("eof-before-tag-name"),
 
             // Anything else
             //
-            // Il s'agit d'une erreur de parse
-            // invalid-first-character-of-tag-name. Créer un jeton de
-            // commentaire dont les données sont la chaîne vide. Reprendre
-            // l'état de faux commentaire.
+            // Il s'agit d'une erreur d'analyse de type
+            // `invalid-first-character-of-tag-name`. Créer un jeton
+            // `comment` dont les données sont chaîne une chaîne de
+            // caractères vide. Reprendre l'état de `bogus-comment`.
             | Some(_) => self
                 .set_token(HTMLToken::new_comment(String::new()))
-                .reconsume(State::BogusComment)
+                .reconsume("bogus-comment")
                 .and_continue_with_error(
-                    HTMLParserError::InvalidFirstCharacterOfTagName,
+                    "invalid-first-character-of-tag-name",
                 ),
         }
     }
@@ -437,77 +456,69 @@ where
             // U+000C FORM FEED (FF)
             // U+0020 SPACE
             //
-            // Si le jeton de balise de fin actuel est un jeton de balise
-            // de fin approprié, passez à l'état before du nom de
-            // l'attribut. Sinon, traitez-le comme indiqué dans l'entrée
-            // "Anything else" ci-dessous.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => self
+            // Si le jeton `end tag` actuel est un jeton `end tag`
+            // approprié, passez à l'état `before-attribute-name`. Sinon,
+            // traitez-le comme indiqué dans l'entrée "Anything
+            // else" ci-dessous.
+            | Some(ch) if ch.is_html_whitespace() => self
                 .state
-                .switch_to(State::BeforeAttributeName)
+                .switch_to("before-attribute-name")
                 .and_continue(),
 
             // U+002F SOLIDUS (/)
             //
-            // Si le jeton de fin actuel est un jeton de fin approprié, il
-            // faut passer à l'état de balise de début à fermeture
-            // automatique. Sinon, traitez-le comme dans l'entrée
-            // "Anything else" ci-dessous.
+            // Si le jeton `end tag` actuel est un jeton `end tag`
+            // approprié, passez l'état de balise de
+            // `self-closing-start-tag`. Sinon, traitez-le comme dans
+            // l'entrée "Anything else" ci-dessous.
             | Some('/') => self
                 .state
-                .switch_to(State::SelfClosingStartTag)
+                .switch_to("self-closing-start-tag")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état de données. Émettre le jeton de balise
-            // actuel.
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            // Passer à l'état `data`. Émettre le jeton `tag` actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // ASCII upper alpha
             //
             // Ajouter la version en minuscules du caractère actuel
-            // (ajouter 0x0020 au point de code du caractère) au nom de
-            // balise du jeton de balise actuel.
-            | Some(ch) if ch.is_ascii_uppercase() => {
-                if let Some(ref mut tag) = self.token {
-                    tag.append_character(ch.to_ascii_lowercase());
-                }
-                self.and_continue()
-            }
+            // (ajouter 0x0020 au point de code du caractère) au nom du
+            // jeton `tag` actuel.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch.to_ascii_lowercase());
+                })
+                .and_continue(),
 
             // U+0000 NULL
             //
-            // Il s'agit d'une erreur d'analyse de caractère NULL et
-            // inattendu. Ajouter un caractère U+FFFD REPLACEMENT
-            // CHARACTER au nom de balise du jeton de balise actuel.
-            | Some('\0') => {
-                if let Some(ref mut tag) = self.token {
-                    tag.append_character(char::REPLACEMENT_CHARACTER);
-                }
-
-                self.and_continue_with_error(
-                    HTMLParserError::UnexpectedNullCharacter,
-                )
-            }
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Ajouter un caractère U+FFFD
+            // `REPLACEMENT_CHARACTER` au nom du jeton `tag` actuel.
+            | Some('\0') => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(char::REPLACEMENT_CHARACTER);
+                })
+                .and_continue_with_error("unexpected-null-character"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
-            // jeton de fin de fichier.
+            // Il s'agit d'une erreur d'analyse de type ` eof-in-tag`.
+            // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error(HTMLParserError::EofInTag),
+                .and_break_with_error("eof-in-tag"),
 
             // Anything else
             //
-            // Ajouter le caractère actuel au nom de balise du
-            // jeton de balise actuel.
-            | Some(ch) => {
-                if let Some(ref mut tag) = self.token {
-                    tag.append_character(ch);
-                }
-                self.and_continue()
-            }
+            // Ajouter le caractère actuel au nom du jeton `tag` actuel.
+            | Some(ch) => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch);
+                })
+                .and_continue(),
         }
     }
 
@@ -520,73 +531,52 @@ where
             // U+000C FORM FEED (FF)
             // U+0020 SPACE
             //
-            // Ignorer le caractère
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
-                self.ignore()
-            }
+            // Ignorer le caractère.
+            | Some(ch) if ch.is_html_whitespace() => self.ignore(),
 
             // U+002F SOLIDUS (/)
             // U+003E GREATER-THAN SIGN (>)
             // EOF
             //
-            // Reprendre dans l'état après le nom de l'attribut.
+            // Reprendre dans l'état `after-attribute-name`.
             | Some('/' | '>') | None => {
-                self.reconsume(State::AfterAttributeName).and_continue()
+                self.reconsume("after-attribute-name").and_continue()
             }
 
             // U+003D EQUALS SIGN (=)
             //
-            // Il s'agit d'une erreur d'analyse
-            // unexpected-equals-sign-before-attribute-name. Commencer un
-            // nouvel attribut dans le jeton de balise actuel. Définir
-            // le nom de cet attribut sur le caractère actuel, et
-            // sa valeur sur une chaîne vide. Passer à l'état de nom
-            // d'attribut.
-            | Some(ch @ '=') => {
-                let mut attribute = HTMLTagAttribute::default();
-                attribute.0 = HTMLTagAttributeName::from(ch);
-
-                if let Some(ref mut tag) = self.token {
-                    tag.define_tag_attributes(attribute);
-                }
-
-                self.state
-                    .switch_to(State::AttributeName)
-                    .and_break_with_error(
-                        HTMLParserError::UnexpectedEqualsSignBeforeAttributeName
-                    )
-            }
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-equals-sign-before-attribute-name`. Commencer un
+            // nouvel attribut dans le jeton `tag` actuel. Définir le nom
+            // de cet attribut sur le caractère actuel, et sa valeur une
+            // chaîne de caractères vide. Passer à l'état `attribute-name`.
+            | Some(ch @ '=') => self
+                .change_current_token(|tag_tok| {
+                    let mut attribute = HTMLTagAttribute::default();
+                    attribute.0 = HTMLTagAttributeName::from(ch);
+                    tag_tok.define_tag_attributes(attribute);
+                })
+                .switch_state_to("attribute-name")
+                .and_break_with_error(
+                    "unexpected-equals-sign-before-attribute-name",
+                ),
 
             // Anything else
             //
-            // Commence un nouvel attribut dans le jeton de balise actuel.
-            // Définissez le nom et la valeur de cet attribut à la chaîne
-            // vide. Reprendre l'état du nom de l'attribut.
-            | Some(_) => {
-                let attribute = HTMLTagAttribute::default();
-
-                if let Some(ref mut tag) = self.token {
-                    tag.define_tag_attributes(attribute);
-                }
-
-                self.reconsume(State::AttributeName).and_continue()
-            }
+            // Commencer un nouvel attribut dans le jeton `tag` actuel.
+            // Le nom et la valeur de cet attribut ont pour valeur une
+            // chaîne de caractères vide.
+            // Reprendre l'état `attribute-name`.
+            | Some(_) => self
+                .change_current_token(|tag_tok| {
+                    let attribute = HTMLTagAttribute::default();
+                    tag_tok.define_tag_attributes(attribute);
+                })
+                .reconsume("attribute-name")
+                .and_continue(),
         }
     }
 
-    /// Lorsque l'agent utilisateur quitte l'état du nom de l'attribut (et
-    /// avant d'émettre le jeton de balise, le cas échéant), le nom de
-    /// l'attribut complet doit être comparé aux autres attributs du même
-    /// jeton ; s'il existe déjà un attribut du jeton portant exactement le
-    /// même nom, il s'agit d'une erreur d'analyse d'attribut en double et
-    /// le nouvel attribut doit être retiré du jeton.
-    ///
-    /// Note: si un attribut est donc retiré d'un token, il n'est plus
-    /// jamais utilisé par l'analyseur syntaxique, de même que la valeur
-    /// qui lui est associée, le cas échéant, et il est donc effectivement
-    /// mis au rebut. Le retrait de l'attribut de cette manière ne modifie
-    /// pas son statut d'"attribut actuel" pour les besoins du tokenizer,
-    /// cependant.
     fn handle_attribute_name_state(&mut self) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
@@ -597,20 +587,20 @@ where
             // U+003E GREATER-THAN SIGN (>)
             // EOF
             //
-            // Reprendre dans l'état après le nom de l'attribut.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
-                self.reconsume(State::AfterAttributeName).and_continue()
+            // Reprendre dans l'état `after-attribute-name`.
+            | Some(ch) if ch.is_html_whitespace() => {
+                self.reconsume("after-attribute-name").and_continue()
             }
             | None | Some('/' | '>') => {
-                self.reconsume(State::AfterAttributeName).and_continue()
+                self.reconsume("after-attribute-name").and_continue()
             }
 
             // U+003D EQUALS SIGN (=)
             //
-            // Passer à l'état de la valeur de l'attribut avant.
+            // Passer à l'état `before-attribute-value`.
             | Some('=') => self
                 .state
-                .switch_to(State::BeforeAttributeValue)
+                .switch_to("before-attribute-value")
                 .and_continue(),
 
             // ASCII upper alpha
@@ -618,35 +608,31 @@ where
             // Ajouter la version en minuscules du caractère actuel
             // (ajouter 0x0020 au point de code du caractère) au nom de
             // l'attribut actuel.
-            | Some(ch) if ch.is_ascii_uppercase() => {
-                if let Some(ref mut tag) = self.token {
-                    tag.append_character_to_attribute_name(
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character_to_attribute_name(
                         ch.to_ascii_lowercase(),
                     );
-                }
-
-                self.and_continue()
-            }
+                })
+                .and_continue(),
 
             // U+0000 NULL
             //
-            // Il s'agit d'une erreur d'analyse unexpected-null-character.
-            // Ajoute un caractère U+FFFD REPLACEMENT CHARACTER au nom de
-            // l'attribut actuel.
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Ajouter un caractère U+FFFD
+            // `REPLACEMENT_CHARACTER` au nom de l'attribut actuel.
             | Some('\0') => self
                 .emit_token(HTMLToken::Character(
                     char::REPLACEMENT_CHARACTER,
                 ))
-                .and_continue_with_error(
-                    HTMLParserError::UnexpectedNullCharacter,
-                ),
+                .and_continue_with_error("unexpected-null-character"),
 
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
             // U+003C LESS-THAN SIGN (<)
             //
             // Il s'agit d'une erreur d'analyse de type
-            // unexpected-character-in-attribute-name. La traiter comme
+            // `unexpected-character-in-attribute-name`. La traiter comme
             // l'entrée "Anything else" ci-dessous.
             //
             // Anything else
@@ -654,12 +640,14 @@ where
             // Ajouter le caractère actuel au nom de l'attribut
             // actuel.
             | Some(ch) => {
-                if let Some(ref mut tag) = self.token {
-                    tag.append_character_to_attribute_name(ch);
-                }
+                self.change_current_token(|tag_tok| {
+                    tag_tok.append_character_to_attribute_name(ch);
+                });
 
                 if matches!(ch, '"' | '\'' | '<') {
-                    self.and_continue_with_error(HTMLParserError::UnexpectedCharacterInAttributeName)
+                    self.and_continue_with_error(
+                        "unexpected-character-in-attribute-name",
+                    )
                 } else {
                     self.and_continue()
                 }
@@ -677,53 +665,49 @@ where
             // U+0020 SPACE
             //
             // Ignorer le caractère.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
-                self.and_continue()
-            }
+            | Some(ch) if ch.is_html_whitespace() => self.ignore(),
 
             // U+002F SOLIDUS (/)
             //
-            // Passer à l'état de balise de démarrage auto-fermante.
+            // Passer à l'état `self-closing-start-tag`.
             | Some('/') => self
                 .state
-                .switch_to(State::SelfClosingStartTag)
+                .switch_to("self-closing-start-tag")
                 .and_continue(),
 
             // U+003D EQUALS SIGN (=)
             //
-            // Passer à l'état d'avant la valeur de l'attribut.
+            // Passer à l'état `before-attribute-value`.
             | Some('=') => self
                 .state
-                .switch_to(State::BeforeAttributeValue)
+                .switch_to("before-attribute-value")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état de données. Émettre le jeton actuel.
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            // Passer à l'état `data`. Émettre le jeton actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
-            // jeton de fin de fichier.
+            // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
+            // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error(HTMLParserError::EofInTag),
+                .and_break_with_error("eof-in-tag"),
 
             // Anything else
             //
-            // Commence un nouvel attribut dans le jeton de balise actuel.
-            // Définissez le nom et la valeur de cet attribut à la chaîne
-            // vide. Reprendre l'état du nom de l'attribut.
-            | Some(_) => {
-                let attribute = HTMLTagAttribute::default();
-
-                if let Some(ref mut tag) = self.token {
-                    tag.define_tag_attributes(attribute);
-                }
-
-                self.reconsume(State::AttributeName).and_continue()
-            }
+            // Commencer un nouvel attribut dans le jeton `tag` actuel.
+            // Définir le nom et la valeur de cet attribut à une chaîne de
+            // caractères vide. Reprendre l'état `attribute-name`.
+            | Some(_) => self
+                .change_current_token(|tag_tok| {
+                    let attribute = HTMLTagAttribute::default();
+                    tag_tok.define_tag_attributes(attribute);
+                })
+                .reconsume("attribute-name")
+                .and_continue(),
         }
     }
 
@@ -737,41 +721,39 @@ where
             // U+0020 SPACE
             //
             // Ignorer le caractère.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
-                self.ignore()
-            }
+            | Some(ch) if ch.is_html_whitespace() => self.ignore(),
 
             // U+0022 QUOTATION MARK (")
             //
-            // Passer à l'état de valeur d'attribut (double guillemets).
+            // Passer à l'état `attribute-value-double-quoted`.
             | Some('"') => self
                 .state
-                .switch_to(State::AttributeValueDoubleQuoted)
+                .switch_to("attribute-value-double-quoted")
                 .and_continue(),
 
             // U+0027 APOSTROPHE (')
             //
-            // Passer à l'état de valeur d'attribut (simple guillemet).
+            // Passer à l'état `attribute-value-simple-quoted`.
             | Some('\'') => self
                 .state
-                .switch_to(State::AttributeValueSimpleQuoted)
+                .switch_to("attribute-value-simple-quoted")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Il s'agit d'une erreur d'analyse missing-attribute-value.
-            // Passer à l'état de données. Émettre le jeton de balise
-            // actuel.
-            | Some('>') => self.and_break_with_error(
-                HTMLParserError::MissingAttributeValue,
-            ),
+            // Il s'agit d'une erreur d'analyse de type
+            // `missing-attribute-value`. Passer à l'état `data`. Émettre
+            // le jeton `tag` actuel.
+            | Some('>') => {
+                self.and_break_with_error("missing-attribute-value")
+            }
 
             // Anything else
             //
-            // Reprendre à l'état de la valeur de l'attribut (unquoted).
-            | _ => self
-                .reconsume(State::AttributeValueUnquoted)
-                .and_continue(),
+            // Reprendre dans l'état `attribute-value-unquoted`.
+            | _ => {
+                self.reconsume("attribute-value-unquoted").and_continue()
+            }
         }
     }
 
@@ -782,65 +764,61 @@ where
         match self.stream.next_input_char() {
             // U+0022 QUOTATION MARK (")
             //
-            // Passer à l'état de la valeur d'après attribut (quoted).
+            // Passer à l'état `after-attribute-value-quoted`.
             | Some('"') if quote == '"' => self
                 .state
-                .switch_to(State::AfterAttributeValueQuoted)
+                .switch_to("after-attribute-value-quoted")
                 .and_continue(),
 
             // U+0027 APOSTROPHE (')
             //
-            // Passer à l'état de la valeur d'après attribut (quoted).
+            // Passer à l'état `after-attribute-value-quoted`.
             | Some('\'') if quote == '\'' => self
                 .state
-                .switch_to(State::AfterAttributeValueQuoted)
+                .switch_to("after-attribute-value-quoted")
                 .and_continue(),
 
             // U+0026 AMPERSAND (&)
             //
-            // Définir l'état de retour à l'état de la valeur de l'attribut
-            // (entre guillemets). Passer à l'état de référence du
-            // caractère.
+            // Définir l'état de retour à l'état
+            // `attribute-value-double-quoted`. Passer à l'état
+            // `character-reference`.
             | Some('&') => self
                 .state
-                .set_return(State::CharacterReference)
+                .set_return("attribute-value-double-quoted")
+                .switch_to("character-reference")
                 .and_continue(),
 
             // U+0000 NULL
             //
-            // Il s'agit d'une erreur d'analyse unexpected-null-character.
-            // Ajouter un caractère U+FFFD REPLACEMENT CHARACTER
-            // à la valeur de l'attribut actuel.
-            | Some('\0') => {
-                if let Some(ref mut html_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Ajouter un caractère U+FFFD
+            // `REPLACEMENT_CHARACTER` à la valeur de l'attribut actuel.
+            | Some('\0') => self
+                .change_current_token(|html_tok| {
                     html_tok.append_character_to_attribute_value(
                         char::REPLACEMENT_CHARACTER,
                     );
-                }
-
-                self.and_continue_with_error(
-                    HTMLParserError::UnexpectedNullCharacter,
-                )
-            }
+                })
+                .and_continue_with_error("unexpected-null-character"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
-            // jeton de fin de fichier.
+            // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
+            // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error(HTMLParserError::EofInTag),
+                .and_break_with_error("eof-in-tag"),
 
             // Anything else
             //
-            // Ajouter le caractère actuel à la valeur de
-            // l'attribut actuel.
-            | Some(ch) => {
-                if let Some(ref mut html_tok) = self.token {
+            // Ajouter le caractère actuel à la valeur de l'attribut
+            // actuel.
+            | Some(ch) => self
+                .change_current_token(|html_tok| {
                     html_tok.append_character_to_attribute_value(ch);
-                }
-                self.and_continue()
-            }
+                })
+                .and_continue(),
         }
     }
 
@@ -853,53 +831,48 @@ where
             // U+000C FORM FEED (FF)
             // U+0020 SPACE
             //
-            // Passer à l'état avant le nom d'attribut.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => self
+            // Passer à l'état `before-attribute-name`.
+            | Some(ch) if ch.is_html_whitespace() => self
                 .state
-                .switch_to(State::BeforeAttributeName)
+                .switch_to("before-attribute-name")
                 .and_continue(),
 
             // U+0026 AMPERSAND (&)
             //
-            // Définir l'état de retour à l'état de la valeur de l'attribut
-            // (entre guillemets). Passer à l'état de référence du
-            // caractère.
+            // Définir l'état de retour à `attribute-value-unquoted`.
+            // Passer à l'état `character-reference`.
             | Some('&') => self
                 .state
-                .set_return(State::AttributeValueUnquoted)
-                .switch_to(State::CharacterReference)
+                .set_return("attribute-value-unquoted")
+                .switch_to("character-reference")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état de données. Émettre le jeton de balise
-            // actuel.
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            // Passer à l'état `data`. Émettre le jeton `tag` actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // U+0000 NULL
             //
-            // Il s'agit d'une erreur d'analyse unexpected-null-character.
-            // Ajouter un caractère REPLACEMENT CHARACTER U+FFFD à la
-            // valeur de l'attribut actuel.
-            | Some('\0') => {
-                if let Some(ref mut tag) = self.token {
-                    tag.append_character_to_attribute_value(
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Ajouter un caractère
+            // `REPLACEMENT_CHARACTER` U+FFFD à la valeur de l'attribut
+            // actuel.
+            | Some('\0') => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character_to_attribute_value(
                         char::REPLACEMENT_CHARACTER,
                     );
-                }
-
-                self.and_continue_with_error(
-                    HTMLParserError::UnexpectedNullCharacter,
-                )
-            }
+                })
+                .and_continue_with_error("unexpected-null-character"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
-            // jeton de fin de fichier.
-            | None => self.set_token(HTMLToken::EOF).and_break_with_error(
-                HTMLParserError::UnexpectedNullCharacter,
-            ),
+            // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
+            // Émettre un jeton `end of file`.
+            | None => self
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("unexpected-null-character"),
 
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
@@ -908,20 +881,22 @@ where
             // U+0060 GRAVE ACCENT (`)
             //
             // Il s'agit d'une erreur d'analyse de type
-            // unexpected-character-in-unquoted-attribute-value. La traiter
-            // comme l'entrée "Anything else" ci-dessous.
-
+            // `unexpected-character-in-unquoted-attribute-value`. La
+            // traiter comme l'entrée "Anything else" ci-dessous.
+            //
             // Anything else
             //
-            // Append the current input character to the current
-            // attribute's value.
+            // Ajouter le caractère actuel à la valeur de l'attribut
+            // actuel.
             | Some(ch) => {
-                if let Some(ref mut html_tok) = self.token {
+                self.change_current_token(|html_tok| {
                     html_tok.append_character_to_attribute_value(ch);
-                }
+                });
 
                 if matches!(ch, '"' | '\'' | '<' | '=' | '`') {
-                    self.and_continue_with_error(HTMLParserError::UnexpectedCharacterInUnquotedAttributeValue)
+                    self.and_continue_with_error(
+                        "unexpected-character-in-unquoted-attribute-value",
+                    )
                 } else {
                     self.and_continue()
                 }
@@ -938,43 +913,42 @@ where
             // U+000C FORM FEED (FF)
             // U+0020 SPACE
             //
-            // Passer à l'état avant le nom d'attribut.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => self
+            // Passer à l'état `before-attribute-name`.
+            | Some(ch) if ch.is_html_whitespace() => self
                 .state
-                .switch_to(State::BeforeAttributeName)
+                .switch_to("before-attribute-name")
                 .and_continue(),
 
             // U+002F SOLIDUS (/)
             //
-            // Passer à l'état de balise de début à fermeture automatique.
+            // Passer à l'état `self-closing-start-tag`.
             | Some('/') => self
                 .state
-                .switch_to(State::SelfClosingStartTag)
+                .switch_to("self-closing-start-tag")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état des données. Émettez le jeton de balise
-            // actuel.
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            // Passer à l'état `data`. Émettez le jeton `tag` actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
-            // jeton de fin de fichier.
+            // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
+            // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error(HTMLParserError::EofInTag),
+                .and_break_with_error("eof-in-tag"),
 
             // Anything else
             //
-            // Il s'agit d'une erreur d'analyse
-            // missing-whitespace-between-attributes. Reprendre l'état
-            // avant le nom d'attribut.
+            // Il s'agit d'une erreur d'analyse de type
+            // `missing-whitespace-between-attributes`. Reprendre l'état
+            // `before-attribute-name`.
             | Some(_) => self
-                .reconsume(State::BeforeAttributeName)
+                .reconsume("before-attribute-name")
                 .and_continue_with_error(
-                    HTMLParserError::MissingWhitespaceBetweenAttributes,
+                    "missing-whitespace-between-attributes",
                 ),
         }
     }
@@ -985,32 +959,31 @@ where
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Définir le drapeau de fermeture automatique au jeton de
-            // balise actuel sur vrai. Passer à l'état de données. Émettre
-            // le jeton actuel.
-            | Some('>') => {
-                if let Some(ref mut tag_tok) = self.token {
+            // Définir le drapeau `self-closing` au jeton `tag` actuel sur
+            // vrai. Passer à l'état `data`. Émettre le jeton actuel.
+            | Some('>') => self
+                .change_current_token(|tag_tok| {
                     tag_tok.set_self_closing_tag(true);
-                }
-                self.state.switch_to(State::Data).and_break()
-            }
+                })
+                .switch_state_to("data")
+                .and_break(),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-tag. Émettre un
-            // jeton de fin de fichier.
+            // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
+            // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error(HTMLParserError::EofInTag),
+                .and_break_with_error("eof-in-tag"),
 
             // Anything else
-            // Il s'agit d'une erreur de parse unexpected-solidus-in-tag.
-            // Reprendre dans l'état avant le nom de l'attribut.
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-solidus-in-tag`. Reprendre dans l'état
+            // `before-attribute-name`.
             | Some(_) => self
-                .reconsume(State::BeforeAttributeName)
-                .and_continue_with_error(
-                    HTMLParserError::UnexpectedSolidusInTag,
-                ),
+                .reconsume("before-attribute-name")
+                .and_continue_with_error("unexpected-solidus-in-tag"),
         }
     }
 
@@ -1021,26 +994,26 @@ where
 
         // Two U+002D HYPHEN-MINUS characters (-)
         //
-        // Consommer ces deux caractères, créer un jeton de commentaire
-        // dont les données sont la chaîne vide, et passer à l'état de
-        // début de commentaire.
+        // Consommer ces deux caractères, créer un jeton `comment`
+        // dont les données sont une chaîne de caractères vide, passer à
+        // l'état `comment-start`.
         if let Cow::Borrowed("--") = self.stream.slice_until(2) {
             f = true;
 
             self.stream.advance(2);
-            self.set_token(HTMLToken::new_comment(String::new()));
-            self.state.switch_to(State::CommentStart);
+            self.set_token(HTMLToken::new_comment(String::new()))
+                .switch_state_to("comment-start");
         } else if let Cow::Owned(word) = self.stream.slice_until(7) {
             f = false;
 
             // Correspondance ASCII insensible à la casse pour le mot
             // "DOCTYPE".
             //
-            // Consommer ces caractères et passer à l'état DOCTYPE.
+            // Consommer ces caractères et passer à l'état `doctype`.
             if word.to_ascii_lowercase() == "doctype" {
                 f = true;
 
-                self.state.switch_to(State::DOCTYPE);
+                self.switch_state_to("doctype");
                 self.stream.advance(7);
             }
             // La chaîne "[CDATA[" (les cinq lettres majuscules "CDATA"
@@ -1049,32 +1022,30 @@ where
             // Consommer ces caractères. S'il existe un noeud courant
             // ajusté et qu'il ne s'agit pas d'un élément de l'espace de
             // noms HTML, alors passer à l'état de section CDATA. Sinon, il
-            // s'agit d'une erreur d'analyse cdata-in-html-content. Créer
-            // un jeton de commentaire dont les données sont la chaîne
-            // "[CDATA[". Passer à l'état de commentaire fictif.
+            // s'agit d'une erreur d'analyse `cdata-in-html-content`. Créer
+            // un jeton `comment` dont les données sont une chaîne de
+            // caractères "[CDATA[". Passer à l'état `bogus-comment`.
             else if word == "[CDATA[" {
                 f = true;
 
                 // todo: adjusted current node
                 // HTMLParserError::CDATAInHtmlContent;
                 self.set_token(HTMLToken::new_comment(word))
-                    .switch_state_to(State::BogusComment);
+                    .switch_state_to("bogus-comment");
                 self.stream.advance(7);
             }
         }
 
         // Anything else
         //
-        // Il s'agit d'une erreur d'analyse incorrectly-opened-comment.
-        // Créer un jeton de commentaire dont les données sont une
-        // chaîne vide. Passer à l'état de commentaire fictif
-        // (ne consommez rien dans l'état actuel).
+        // Il s'agit d'une erreur d'analyse de type
+        // `incorrectly-opened-comment`. Créer un jeton `comment` dont les
+        // données sont une chaîne de caractères vide. Passer à l'état
+        // `bogus-comment` (ne pas consommer dans l'état actuel).
         if !f {
             self.set_token(HTMLToken::new_comment(String::new()))
-                .switch_state_to(State::BogusComment)
-                .and_continue_with_error(
-                    HTMLParserError::IncorrectlyOpenedComment,
-                )
+                .switch_state_to("bogus-comment")
+                .and_continue_with_error("incorrectly-opened-comment")
         } else {
             self.and_continue()
         }
@@ -1084,45 +1055,36 @@ where
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état de données. Émettre le jeton de commentaire
-            // actuel.
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            // Passer à l'état `data`. Émettre le jeton `comment` actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // EOF
             //
-            // Émettre le commentaire. Émettre un jeton de fin de fichier.
-            | None => {
-                if let Some(comment_tok) = self.current_token() {
-                    self.emit_token(comment_tok);
-                }
-                self.set_token(HTMLToken::EOF).and_break()
-            }
+            // Émettre `comment`. Émettre un jeton `end of file`.
+            | None => self
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break(),
 
             // U+0000 NULL
             //
             // Il s'agit d'une erreur d'analyse de type
-            // unexpected-null-character. Ajouter un caractère U+FFFD
-            // REPLACEMENT CHARACTER aux données du jeton de commentaire.
-            | Some('\0') => {
-                if let Some(ref mut html_tok) = self.token {
+            // `unexpected-null-character`. Ajouter un caractère U+FFFD
+            // `REPLACEMENT_CHARACTER` aux données du jeton `comment`.
+            | Some('\0') => self
+                .change_current_token(|html_tok| {
                     html_tok.append_character(char::REPLACEMENT_CHARACTER);
-                }
-
-                self.and_continue_with_error(
-                    HTMLParserError::UnexpectedNullCharacter,
-                )
-            }
+                })
+                .and_continue_with_error("unexpected-null-character"),
 
             // Anything else
             //
-            // Ajouter le caractère actuel aux données du jeton de
-            // commentaire.
-            | Some(ch) => {
-                if let Some(ref mut html_tok) = self.token {
+            // Ajouter le caractère actuel aux données du jeton `comment`.
+            | Some(ch) => self
+                .change_current_token(|html_tok| {
                     html_tok.append_character(ch);
-                }
-                self.and_continue()
-            }
+                })
+                .and_continue(),
         }
     }
 
@@ -1133,39 +1095,38 @@ where
             // U+000C FORM FEED (FF)
             // U+0020 SPACE
             //
-            // Passer à l'état d'avant nom du DOCTYPE.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => self
-                .state
-                .switch_to(State::BeforeDOCTYPEName)
-                .and_continue(),
+            // Passer à l'état `before-doctype-name`.
+            | Some(ch) if ch.is_html_whitespace() => {
+                self.state.switch_to("before-doctype-name").and_continue()
+            }
 
             // ASCII upper alpha
             //
-            // Reprendre l'état d'avant le nom du DOCTYPE.
+            // Reprendre l'état `before-doctype-name`.
             | Some(ch) if ch.is_ascii_uppercase() => {
-                self.reconsume(State::BeforeDOCTYPEName).and_continue()
+                self.reconsume("before-doctype-name").and_continue()
             }
 
-            // Il s'agit d'une erreur d'analyse de type eof-in-doctype.
-            // Créer un nouveau jeton DOCTYPE. Mettre son drapeau
+            // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
+            // Créer un nouveau jeton `doctype`. Mettre son drapeau
             // force-quirks à vrai. Émettre le jeton actuel. Émettre un
-            // jeton de fin de fichier.
+            // jeton `end of file`.
             | None => self
                 .emit_token(
                     HTMLToken::new_doctype().define_force_quirks_flag(),
                 )
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error(HTMLParserError::EofInDOCTYPE),
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
-            // Il s'agit d'une erreur de parse
-            // missing-whitespace-before-doctype-name. Reprendre dans
-            // l'état avant le nom du DOCTYPE.
+            // Il s'agit d'une erreur d'analyse de type
+            // `missing-whitespace-before-doctype-name`. Reprendre dans
+            // l'état `before-doctype-name`.
             | Some(_) => self
-                .reconsume(State::BeforeDOCTYPEName)
+                .reconsume("before-doctype-name")
                 .and_continue_with_error(
-                    HTMLParserError::MissingWhitespaceBeforeDOCTYPEName,
+                    "missing-whitespace-before-doctype-name",
                 ),
         }
     }
@@ -1180,75 +1141,71 @@ where
             // U+0020 SPACE
             //
             // Ignorer le caractère.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
-                self.ignore()
-            }
+            | Some(ch) if ch.is_html_whitespace() => self.ignore(),
 
             // ASCII upper alpha
             //
-            // Créer un nouveau jeton DOCTYPE. Définir le nom du jeton
+            // Créer un nouveau jeton `doctype`. Définir le nom du jeton
             // comme la version en minuscules du caractère actuel
             // (ajoutez 0x0020 au point de code du caractère). Passer à
-            // l'état de nom DOCTYPE.
+            // l'état `doctype-name`.
             | Some(ch) if ch.is_ascii_uppercase() => self
                 .set_token(
                     HTMLToken::new_doctype()
                         .define_doctype_name(ch.to_ascii_lowercase()),
                 )
-                .switch_state_to(State::DOCTYPEName)
+                .switch_state_to("doctype-name")
                 .and_continue(),
 
             // U+0000 NULL
             //
-            // Il s'agit d'une erreur d'analyse unexpected-null-character.
-            // Créer un nouveau jeton DOCTYPE. Définir le nom du jeton sur
-            // un caractère U+FFFD REPLACEMENT CHARACTER. Passer à l'état
-            // nom de DOCTYPE.
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Créer un nouveau jeton
+            // `doctype`. Définir le nom du jeton sur un caractère U+FFFD
+            // `REPLACEMENT_CHARACTER`. Passer à l'état `doctype-name`.
             | Some('\0') => self
                 .set_token(
                     HTMLToken::new_doctype()
                         .define_doctype_name(char::REPLACEMENT_CHARACTER),
                 )
-                .switch_state_to(State::DOCTYPEName)
-                .and_continue_with_error(
-                    HTMLParserError::UnexpectedNullCharacter,
-                ),
+                .switch_state_to("doctype-name")
+                .and_continue_with_error("unexpected-null-character"),
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-doctype-name. Créer un nouveau jeton DOCTYPE. Mettre
-            // son drapeau force-quirks à on. Passer à l'état de données.
-            // Émettre le jeton actuel.
+            // missing-doctype-name`. Créer un nouveau jeton `doctype`.
+            // Mettre son drapeau force-quirks à vrai. Passer à l'état
+            // `data`. Émettre le jeton actuel.
             | Some('>') => self
                 .set_token(
                     HTMLToken::new_doctype().define_force_quirks_flag(),
                 )
-                .switch_state_to(State::Data)
-                .and_break_with_error(HTMLParserError::MissingDOCTYPEName),
+                .switch_state_to("data")
+                .and_break_with_error("missing-doctype-name"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse de type eof-in-doctype.
-            // Créer un nouveau jeton DOCTYPE. Mettre son drapeau
+            // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
+            // Créer un nouveau jeton `doctype`. Mettre son drapeau
             // force-quirks à vrai. Émettre le jeton actuel. Émettre un
-            // jeton de fin de fichier.
+            // jeton de `end of file`.
             | None => self
                 .emit_token(
                     HTMLToken::new_doctype().define_force_quirks_flag(),
                 )
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error(HTMLParserError::EofInDOCTYPE),
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
-            // Créer un nouveau jeton DOCTYPE. Définir le nom du jeton sur
-            // le caractère actuel. Passer à l'état de nom du DOCTYPE.
+            // Créer un nouveau jeton `doctype`. Définir le nom du jeton
+            // sur le caractère actuel. Passer à l'état `doctype-name`.
             | Some(ch) => self
                 .set_token(
                     HTMLToken::new_doctype().define_doctype_name(ch),
                 )
-                .switch_state_to(State::DOCTYPEName)
+                .switch_state_to("doctype-name")
                 .and_continue(),
         }
     }
@@ -1260,71 +1217,63 @@ where
             // U+000C FORM FEED (FF)
             // U+0020 SPACE
             //
-            // Passer à l'état après le nom du DOCTYPE.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => self
-                .state
-                .switch_to(State::AfterDOCTYPEName)
-                .and_continue(),
+            // Passer à l'état `after-doctype-name`.
+            | Some(ch) if ch.is_html_whitespace() => {
+                self.state.switch_to("after-doctype-name").and_continue()
+            }
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état de données. Émettre le jeton DOCTYPE actuel.
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // ASCII upper alpha
             //
             // Ajouter la version en minuscules du caractère actuel
             // (ajouter 0x0020 au point de code du caractère) au nom
-            // du jeton DOCTYPE actuel.
-            | Some(ch) if ch.is_ascii_uppercase() => {
-                if let Some(ref mut doctype) = self.token {
-                    doctype.append_character(ch.to_ascii_lowercase());
-                }
-                self.and_continue()
-            }
+            // du jeton `doctype` actuel.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .change_current_token(|doctype_tok| {
+                    doctype_tok.append_character(ch.to_ascii_lowercase());
+                })
+                .and_continue(),
 
             // U+0000 NULL
             //
-            // Il s'agit d'une erreur d'analyse unexpected-null-character.
-            // Ajouter un caractère U+FFFD REPLACEMENT
-            // CHARACTER au nom du jeton DOCTYPE actuel.
-            | Some('\0') => {
-                if let Some(ref mut doctype) = self.token {
-                    doctype.append_character(char::REPLACEMENT_CHARACTER);
-                }
-                self.and_continue_with_error(
-                    HTMLParserError::UnexpectedNullCharacter,
-                )
-            }
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Ajouter un caractère U+FFFD
+            // REPLACEMENT CHARACTER au nom du jeton `doctype`
+            // actuel.
+            | Some('\0') => self
+                .change_current_token(|doctype_tok| {
+                    doctype_tok
+                        .append_character(char::REPLACEMENT_CHARACTER);
+                })
+                .and_continue_with_error("unexpected-null-character"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émettre d'un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton `doctype` actuel
+            // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
+            // jeton de `end of file`.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
-            // Ajouter le caractère actuel au nom du jeton DOCTYPE actuel.
-            | Some(ch) => {
-                if let Some(ref mut doctype) = self.token {
-                    doctype.append_character(ch);
-                }
-                self.and_continue()
-            }
+            // Ajouter le caractère actuel au nom du jeton `doctype`
+            // actuel.
+            | Some(ch) => self
+                .change_current_token(|doctype_tok| {
+                    doctype_tok.append_character(ch);
+                })
+                .and_continue(),
         }
     }
 
@@ -1338,50 +1287,43 @@ where
             // U+0020 SPACE
             //
             // Ignorer le caractère.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
-                self.ignore()
-            }
+            | Some(ch) if ch.is_html_whitespace() => self.ignore(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état de données. Émettre le jeton DOCTYPE actuel.
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton `doctype` actuel
+            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // jeton `end of file`.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
             // Si les six caractères à partir du caractère actuel sont une
             // correspondance ASCII insensible à la casse pour le
             // mot "PUBLIC", consommez ces caractères et passez à l'état
-            // après le mot-clé DOCTYPE public.
+            // `after-doctype-public-keyword`.
             //
             // Sinon, si les six caractères à partir du caractère d'entrée
             // actuel sont une correspondance ASCII insensible à la casse
             // pour le mot "SYSTEM", consommez ces caractères et passez à
-            // l'état après le mot-clé DOCTYPE system.
+            // l'état `after-doctype-system-keyword`.
             //
             // Sinon, il s'agit d'une erreur d'analyse de type
-            // invalid-character-sequence-after-doctype-name. Mettre
-            // le drapeau force-quirks du jeton DOCTYPE actuel à vrai.
-            // Reprendre dans l'état bogus DOCTYPE.
+            // `invalid-character-sequence-after-doctype-name`. Mettre
+            // le drapeau force-quirks du jeton actuel à vrai. Reprendre
+            // dans l'état `bogus-doctype`.
             | Some(ch) => {
                 let mut f = false;
 
@@ -1395,23 +1337,25 @@ where
                         f = true;
 
                         self.state
-                            .switch_to(State::AfterDOCTYPEPublicKeyword);
+                            .switch_to("after-doctype-public-keyword");
                         self.stream.advance(6);
                     } else if word == "SYSTEM" {
                         f = true;
 
                         self.state
-                            .switch_to(State::AfterDOCTYPESystemKeyword);
+                            .switch_to("after-doctype-system-keyword");
                         self.stream.advance(6);
                     }
                 }
 
                 if !f {
-                    if let Some(ref mut doctype_tok) = self.token {
+                    self.change_current_token(|doctype_tok| {
                         doctype_tok.set_force_quirks_flag(true);
-                    }
-                    self.reconsume(State::BogusDOCTYPE)
-                        .and_continue_with_error(HTMLParserError::InvalidCharacterSequenceAfterDOCTYPEName)
+                    })
+                    .reconsume("bogus-doctype")
+                    .and_continue_with_error(
+                        "invalid-character-sequence-after-doctype-name",
+                    )
                 } else {
                     self.and_continue()
                 }
@@ -1428,101 +1372,85 @@ where
             // U+000C FORM FEED (FF)
             // U+0020 SPACE
             //
-            // Passer à l'état après le nom du DOCTYPE.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => self
+            // Passer à l'état `before-doctype-public-identifier`.
+            | Some(ch) if ch.is_html_whitespace() => self
                 .state
-                .switch_to(State::BeforeDOCTYPEPublicIdentifier)
+                .switch_to("before-doctype-public-identifier")
                 .and_continue(),
 
             // U+0022 QUOTATION MARK (")
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-whitespace-after-doctype-public-keyword. Donner à
-            // l'identifiant public du jeton DOCTYPE actuel la valeur de
-            // la chaîne vide (non manquante), ensuite passer à l'état
-            // d'identifiant public DOCTYPE (double quoted).
-            | Some('"') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-whitespace-after-doctype-public-keyword`. Donner à
+            // l'identifiant public du jeton `doctype` actuel la valeur de
+            // la chaîne de caractères vide, passer à l'état
+            // `doctype-public-identifier-double-quoted`.
+            | Some('"') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_public_identifier(String::new());
-                }
-                self.state
-                    .switch_to(State::DOCTYPEPublicIdentifierDoubleQuoted)
-                    .and_continue_with_error(
-                        HTMLParserError::MissingWhitespaceAfterDOCTYPEPublicKeyword
-                    )
-            }
+                })
+                .switch_state_to("doctype-public-identifier-double-quoted")
+                .and_continue_with_error(
+                    "missing-whitespace-after-doctype-public-keyword",
+                ),
 
             // U+0027 APOSTROPHE (')
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-whitespace-after-doctype-public-keyword. Donner à
-            // l'identifiant public du jeton DOCTYPE actuel la valeur de
-            // la chaîne vide (non manquante), ensuite passer à l'état
-            // d'identifiant public DOCTYPE (single quoted).
-            | Some('\'') => {
-                emit_html_error!(
-                    HTMLParserError::MissingWhitespaceAfterDOCTYPEPublicKeyword
-                );
-
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-whitespace-after-doctype-public-keyword`. Donner à
+            // l'identifiant public du jeton `doctype` actuel la valeur de
+            // la chaîne de caractères vide, passer à l'état
+            // `doctype-public-identifier-single-quoted`.
+            | Some('\'') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_public_identifier(String::new());
-                }
-
-                self.state
-                    .switch_to(State::DOCTYPEPublicIdentifierSingleQuoted)
-                    .and_continue()
-            }
+                })
+                .switch_state_to("doctype-public-identifier-single-quoted")
+                .and_continue_with_error(
+                    "missing-whitespace-after-doctype-public-keyword",
+                ),
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-doctype-public-identifier. Activer le drapeau
-            // force-quirks du jeton DOCTYPE actuel. Passer à l'état de
-            // données. Émettre le jeton DOCTYPE actuel.
-            | Some('>') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-doctype-public-identifier`. Définir le drapeau
+            // force-quirks du jeton `doctype` actuel sur vrai. Passer à
+            // l'état `data`. Émettre le jeton `doctype` actuel.
+            | Some('>') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                self.state.switch_to(State::Data).and_break_with_error(
-                    HTMLParserError::MissingDOCTYPEPublicIdentifier,
-                )
-            }
+                })
+                .switch_state_to("data")
+                .and_break_with_error("missing-doctype-public-identifier"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émettre d'un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton `doctype` actuel
+            // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
+            // jeton `end of file`.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-quote-before-doctype-public-identifier. Définir le
-            // drapeau force-quirks du jeton DOCTYPE actuel à vrai.
-            // Reprendre dans l'état de DOCTYPE fictif.
-            | Some(_) => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-quote-before-doctype-public-identifier`. Définir le
+            // drapeau force-quirks du jeton `doctype` actuel sur vrai.
+            // Reprendre dans l'état `bogus-doctype`.
+            | Some(_) => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-                self.reconsume(State::BogusDOCTYPE)
-                    .and_continue_with_error(
-                        HTMLParserError::MissingQuoteBeforeDOCTYPEPublicIdentifier
-                    )
-            }
+                })
+                .reconsume("bogus-doctype")
+                .and_continue_with_error(
+                    "missing-quote-before-doctype-public-identifier",
+                ),
         }
     }
 
@@ -1535,90 +1463,74 @@ where
             // U+000C FORM FEED (FF)
             // U+0020 SPACE
             //
-            // Passer à l'état après le nom du DOCTYPE.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
-                self.ignore()
-            }
+            // Ignorer le caractère.
+            | Some(ch) if ch.is_html_whitespace() => self.ignore(),
 
             // U+0022 QUOTATION MARK (")
             //
-            // Définir l'identifiant public du jeton DOCTYPE actuel à une
-            // chaîne vide (non manquante), passer à l'état d'identifiant
-            // public DOCTYPE (double quoted).
+            // Définir l'identifiant public du jeton `doctype` actuel à une
+            // chaîne de caractères vide, passer à l'état
+            // `doctype-public-identifier-double-quoted`.
             | Some('"') => self
                 .set_token(
                     HTMLToken::new_doctype().define_doctype_name('\0'),
                 )
-                .switch_state_to(
-                    State::DOCTYPEPublicIdentifierDoubleQuoted,
-                )
+                .switch_state_to("doctype-public-identifier-double-quoted")
                 .and_continue(),
 
             // U+0027 APOSTROPHE (')
             //
-            // Définir l'identifiant public du jeton DOCTYPE actuel à une
-            // chaîne vide (non manquante), passer à l'état d'identifiant
-            // public DOCTYPE (simple quoted).
+            // Définir l'identifiant public du jeton `doctype` actuel à une
+            // chaîne de caractères vide, passer à l'état
+            // `doctype-public-identifier-single-quoted`.
             | Some('\'') => self
                 .set_token(
                     HTMLToken::new_doctype().define_doctype_name('\0'),
                 )
-                .switch_state_to(
-                    State::DOCTYPEPublicIdentifierSingleQuoted,
-                )
+                .switch_state_to("doctype-public-identifier-single-quoted")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-doctype-public-identifier. Définir le drapeau
-            // force-quirks du jeton DOCTYPE actuel sur vrai. Passer à
-            // l'état de données. Émettre le jeton DOCTYPE actuel.
-            | Some('>') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-doctype-public-identifier`. Définir le drapeau
+            // force-quirks du jeton `doctype` actuel sur vrai. Passer à
+            // l'état `data`. Émettre le jeton `doctype` actuel.
+            | Some('>') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                self.state.switch_to(State::Data).and_break_with_error(
-                    HTMLParserError::MissingDOCTYPEPublicIdentifier,
-                )
-            }
+                })
+                .switch_state_to("data")
+                .and_break_with_error("missing-doctype-public-identifier"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton `doctype` actuel
+            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // jeton `end of file`.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-quote-before-doctype-public-identifier. Définir le
-            // drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Reprendre à l'état DOCTYPE fictif.
-            | Some(_) => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-quote-before-doctype-public-identifier`. Définir le
+            // drapeau force-quirks du jeton `doctype` actuel sur vrai.
+            // Reprendre à l'état `bogus-doctype`.
+            | Some(_) => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                self.reconsume(State::BogusDOCTYPE)
-                    .and_continue_with_error(
-                        HTMLParserError::MissingQuoteBeforeDOCTYPEPublicIdentifier
-                    )
-            }
+                })
+                .reconsume("bogus-doctype")
+                .and_continue_with_error(
+                    "missing-quote-before-doctype-public-identifier",
+                ),
         }
     }
 
@@ -1629,81 +1541,70 @@ where
         match self.stream.next_input_char() {
             // U+0022 QUOTATION MARK (")
             //
-            // Passer à l'état d'après DOCTYPE public identifier.
+            // Passer à l'état `after-doctype-public-identifierµ.
             | Some('"') if quote == '"' => self
                 .state
-                .switch_to(State::AfterDOCTYPEPublicIdentifier)
+                .switch_to("after-doctype-public-identifier")
                 .and_continue(),
 
             // U+0027 APOSTROPHE (')
             //
-            // Passer à l'état d'après DOCTYPE public identifier.
+            // Passer à l'état `after-doctype-public-identifier`.
             | Some('\'') if quote == '\'' => self
                 .state
-                .switch_to(State::AfterDOCTYPEPublicIdentifier)
+                .switch_to("after-doctype-public-identifier")
                 .and_continue(),
 
             // U+0000 NULL
             //
             // Il s'agit d'une erreur d'analyse de type
-            // unexpected-null-character. Ajouter un caractère U+FFFD
-            // REPLACEMENT CHARACTER à l'identifiant public du jeton
-            // DOCTYPE actuel.
-            | Some('\0') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `unexpected-null-character`. Ajouter un caractère U+FFFD
+            // `REPLACEMENT_CHARACTER` à l'identifiant public du jeton
+            // `doctype` actuel.
+            | Some('\0') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.append_character_to_public_identifier(
                         char::REPLACEMENT_CHARACTER,
                     );
-                }
-                self.and_continue_with_error(
-                    HTMLParserError::UnexpectedNullCharacter,
-                )
-            }
+                })
+                .and_continue_with_error("unexpected-null-character"),
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Il s'agit d'une erreur d'analyse
-            // abrupt-doctype-public-identifier. Définir le drapeau
-            // force-quirks du jeton DOCTYPE actuel sur vrai. Passer à
-            // l'état de données. Émettre le jeton DOCTYPE actuel.
-            | Some('>') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse de type
+            // `abrupt-doctype-public-identifier`. Définir le drapeau
+            // force-quirks du jeton `doctype` actuel sur vrai. Passer à
+            // l'état `data`. Émettre le jeton `doctype` actuel.
+            | Some('>') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-                self.state.switch_to(State::Data).and_break_with_error(
-                    HTMLParserError::AbruptDOCTYPEPublicIdentifier,
-                )
-            }
+                })
+                .switch_state_to("data")
+                .and_break_with_error("abrupt-doctype-public-identifier"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émission d'un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton `doctype` actuel
+            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // jeton `end of file`.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
             // Ajouter le caractère actuel à l'identifiant public du jeton
-            // DOCTYPE actuel.
-            | Some(ch) => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `doctype` actuel.
+            | Some(ch) => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.append_character_to_public_identifier(ch);
-                }
-                self.and_continue()
-            }
+                })
+                .and_continue(),
         }
     }
 
@@ -1716,68 +1617,65 @@ where
             // U+000C FORM FEED (FF)
             // U+0020 SPACE
             //
-            // Passer à l'état entre DOCTYPE public et identifieurs du
-            // système.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => self
+            // Passer à l'état
+            // `between-doctype-public-and-system-identifiers`.
+            | Some(ch) if ch.is_html_whitespace() => self
                 .state
-                .switch_to(State::BetweenDOCTYPEPublicAndSystemIdentifiers)
+                .switch_to("between-doctype-public-and-system-identifiers")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            //
+            // Passer à l'état `data`. Émettre le jeton `DOCTYPE` actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-whitespace-between-doctype-public-and-system-identifiers.
-            // Définir l'identifiant système du jeton DOCTYPE actuel
-            // sur une chaîne vide (non manquante), passer à l'état
-            // d'identifiant système DOCTYPE (entre guillemets).
+            // `missing-whitespace-between-doctype-public-and-system-identifiers`.
+            // Définir l'identifiant système du jeton `doctype` actuel
+            // sur une chaîne de caractères vide, passer à l'état
+            // `doctype-system-identifier-double-quoted` ou
+            // `doctype-system-identifier-single-quoted`.
             | Some(ch @ ('"' | '\'')) => {
-                if let Some(ref mut doctype_tok) = self.token {
+                let err = "missing-whitespace-between-doctype-public-and-system-identifiers";
+                self.change_current_token(|doctype_tok| {
                     doctype_tok.set_system_identifier(String::new());
-                }
-
-                self.state.switch_to(if ch == '"' {
-                    State::DOCTYPESystemIdentifierDoubleQuoted
+                })
+                .switch_state_to(if ch == '"' {
+                    "doctype-system-identifier-double-quoted"
                 } else {
-                    State::DOCTYPESystemIdentifierSingleQuoted
-                }).and_continue_with_error(
-                    HTMLParserError::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers
-                )
+                    "doctype-system-identifier-single-quoted"
+                })
+                .and_continue_with_error(err)
             }
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émettre d'un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton `doctype` actuel
+            // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
+            // jeton `end of file`.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-quote-before-doctype-system-identifier. Définir le
-            // drapeau force-quirks du jeton DOCTYPE actuel. Reprendre
-            // dans l'état DOCTYPE fictif.
-            | Some(_) => self
-                .reconsume(State::BogusDOCTYPE)
-                .and_continue_with_error(
-                HTMLParserError::MissingQuoteBeforeDOCTYPESystemIdentifier,
-            ),
+            // `missing-quote-before-doctype-system-identifier`. Définir le
+            // drapeau force-quirks du jeton `doctype` actuel. Reprendre
+            // dans l'état `bogus-doctype`.
+            | Some(_) => {
+                self.reconsume("bogus-doctype").and_continue_with_error(
+                    "missing-quote-before-doctype-system-identifier",
+                )
+            }
         }
     }
 
@@ -1791,69 +1689,59 @@ where
             // U+0020 SPACE
             //
             // Ignorer le caractère.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
-                self.ignore()
-            }
+            | Some(ch) if ch.is_html_whitespace() => self.ignore(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état de données. Émettre le jeton DOCTYPE actuel.
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
             //
-            // Définir l'identifiant système du jeton DOCTYPE actuel à
-            // la chaîne vide (non manquante), puis passer à l'état
-            // d'identifiant système DOCTYPE (entre guillemets).
-            | Some(ch @ ('"' | '\'')) => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Définir l'identifiant système du jeton `doctype` actuel à
+            // la chaîne de caractères vide, puis passer à l'état
+            // `doctype-system-identifier-double-quoted` ou
+            // `doctype-system-identifier-single-quoted`.
+            | Some(ch @ ('"' | '\'')) => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_system_identifier(String::new());
-                }
-
-                self.state
-                    .switch_to(if ch == '"' {
-                        State::DOCTYPESystemIdentifierDoubleQuoted
-                    } else {
-                        State::DOCTYPESystemIdentifierSingleQuoted
-                    })
-                    .and_continue()
-            }
+                })
+                .switch_state_to(if ch == '"' {
+                    "doctype-system-identifier-double-quoted"
+                } else {
+                    "doctype-system-identifier-single-quoted"
+                })
+                .and_continue(),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton `doctype` actuel
+            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // jeton `end of file`.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-quote-before-doctype-system-identifier. Définir le
-            // drapeau force-quirks du jeton DOCTYPE actuel. Reprendre
-            // dans l'état DOCTYPE fictif.
-            | Some(_) => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-quote-before-doctype-system-identifier`. Définir le
+            // drapeau force-quirks du jeton `doctype` actuel. Reprendre
+            // dans l'état `bogus-doctype`.
+            | Some(_) => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-                self.reconsume(State::BogusDOCTYPE)
-                    .and_continue_with_error(
-                        HTMLParserError::MissingQuoteBeforeDOCTYPESystemIdentifier
-                    )
-            }
+                })
+                .reconsume("bogus-doctype")
+                .and_continue_with_error(
+                    "missing-quote-before-doctype-system-identifier",
+                ),
         }
     }
 
@@ -1866,99 +1754,86 @@ where
             // U+000C FORM FEED (FF)
             // U+0020 SPACE
             //
-            // Passer à l'état d'identifiant système avant DOCTYPE.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => self
+            // Passer à l'état `before-doctype-system-identifier`.
+            | Some(ch) if ch.is_html_whitespace() => self
                 .state
-                .switch_to(State::BeforeDOCTYPESystemIdentifier)
+                .switch_to("before-doctype-system-identifier")
                 .and_continue(),
 
             // U+0022 QUOTATION MARK (")
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-whitespace-after-doctype-system-keyword.
-            // Définir l'identifiant système du jeton DOCTYPE actuel
-            // à une chaîne vide (non manquante), passer à l'état
-            // d'identifiant système DOCTYPE (double quoted).
-            | Some('"') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-whitespace-after-doctype-system-keyword`.
+            // Définir l'identifiant système du jeton `doctype` actuel
+            // à une chaîne de caractères vide, passer à l'état
+            // `doctype-system-identifier-double-quoted`.
+            | Some('"') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_system_identifier(String::new());
-                }
-                self.state
-                    .switch_to(State::DOCTYPESystemIdentifierDoubleQuoted)
-                    .and_continue_with_error(
-                        HTMLParserError::MissingWhitespaceAfterDOCTYPESystemKeyword
-                    )
-            }
+                })
+                .switch_state_to("doctype-system-identifier-double-quoted")
+                .and_continue_with_error(
+                    "missing-whitespace-after-doctype-system-keyword",
+                ),
 
             // U+0027 APOSTROPHE (')
             //
             // Il s'agit d'une erreur d'analyse de type
             // missing-whitespace-after-doctype-system-keyword.
-            // Définir l'identifiant système du jeton DOCTYPE actuel
-            // à une chaîne vide (non manquante), passer à l'état
-            // d'identifiant système DOCTYPE (single quoted).
-            | Some('\'') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Définir l'identifiant système du jeton `doctype` actuel
+            // à une chaîne de caractères vide, passer à l'état
+            // `doctype-system-identifier-single-quoted`.
+            | Some('\'') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_system_identifier(String::new());
-                }
-                self.state
-                    .switch_to(State::DOCTYPESystemIdentifierSingleQuoted)
-                    .and_continue_with_error(
-                        HTMLParserError::MissingWhitespaceAfterDOCTYPESystemKeyword
-                    )
-            }
+                })
+                .switch_state_to("doctype-system-identifier-single-quoted")
+                .and_continue_with_error(
+                    "missing-whitespace-after-doctype-system-keyword",
+                ),
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-doctype-system-identifier. Définir le drapeau
-            // force-quirks du jeton DOCTYPE actuel sur vrai. Passer à
-            // l'état de données. Émettre le jeton DOCTYPE actuel.
-            | Some('>') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-doctype-system-identifier`. Définir le drapeau
+            // force-quirks du jeton `doctype` actuel sur vrai. Passer à
+            // l'état `data`. Émettre le jeton `doctype` actuel.
+            | Some('>') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-                self.state.switch_to(State::Data).and_break_with_error(
-                    HTMLParserError::MissingDOCTYPESystemIdentifier,
-                )
-            }
+                })
+                .switch_state_to("data")
+                .and_break_with_error("missing-doctype-system-identifier"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton `doctype` actuel
+            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // jeton `end of file`.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-quote-before-doctype-system-identifier. Définir le
-            // drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Reprendre dans l'état DOCTYPE fictif.
-            | Some(_) => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-quote-before-doctype-system-identifier`. Définir le
+            // drapeau force-quirks du jeton `doctype` actuel sur vrai.
+            // Reprendre dans l'état `bogus-doctype`.
+            | Some(_) => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .reconsume(State::BogusDOCTYPE)
-                    .and_continue_with_error(
-                        HTMLParserError::MissingQuoteBeforeDOCTYPESystemIdentifier
-                    )
-            }
+                })
+                .set_token(HTMLToken::EOF)
+                .reconsume("bogus-doctype")
+                .and_continue_with_error(
+                    "missing-quote-before-doctype-system-identifier",
+                ),
         }
     }
 
@@ -1972,87 +1847,73 @@ where
             // U+0020 SPACE
             //
             // Ignorer le caractère.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
-                self.ignore()
-            }
+            | Some(ch) if ch.is_html_whitespace() => self.ignore(),
 
             // U+0022 QUOTATION MARK (")
             //
-            // Définir l'identifiant système du jeton DOCTYPE actuel à
-            // la chaîne vide (non manquante), passer à l'état
-            // d'identifiant système DOCTYPE (double quoted).
-            | Some('"') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Définir l'identifiant système du jeton `doctype` actuel à la
+            // chaîne de caractères vide, passer à l'état
+            // `doctype-system-identifier-double-quoted`.
+            | Some('"') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_system_identifier(String::new());
-                }
-                self.state
-                    .switch_to(State::DOCTYPESystemIdentifierDoubleQuoted)
-                    .and_continue()
-            }
+                })
+                .switch_state_to("doctype-system-identifier-double-quoted")
+                .and_continue(),
 
             // U+0027 APOSTROPHE (')
             //
-            // Définir l'identifiant système du jeton DOCTYPE actuel à
-            // la chaîne vide (non manquante), passer à l'état
-            // d'identifiant système DOCTYPE (single quoted).
-            | Some('\'') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Définir l'identifiant système du jeton `doctype` actuel à la
+            // chaîne de caractères vide, passer à  l'état
+            // `doctype-system-identifier-single-quoted`
+            | Some('\'') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_system_identifier(String::new());
-                }
-                self.state
-                    .switch_to(State::DOCTYPESystemIdentifierSingleQuoted)
-                    .and_continue()
-            }
+                })
+                .switch_state_to("doctype-system-identifier-single-quoted")
+                .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-doctype-system-identifier. Définir le drapeau
-            // force-quirks du jeton DOCTYPE actuel sur vrai. Passer à
-            // l'état de données. Émettre le jeton DOCTYPE actuel.
-            | Some('>') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-doctype-system-identifier`. Définir le drapeau
+            // force-quirks du jeton `doctype` actuel sur vrai. Passer à
+            // l'état `data`. Émettre le jeton `doctype` actuel.
+            | Some('>') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-                self.state.switch_to(State::Data).and_break_with_error(
-                    HTMLParserError::MissingDOCTYPESystemIdentifier,
-                )
-            }
+                })
+                .switch_state_to("data")
+                .and_break_with_error("missing-doctype-system-identifier"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton `doctype` actuel
+            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // jeton `end of file`.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // missing-quote-before-doctype-system-identifier. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Reprendre dans l'état DOCTYPE fictif.
-            | Some(_) => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // `missing-quote-before-doctype-system-identifier`. Définir
+            // le drapeau force-quirks du jeton `doctype` actuel sur vrai.
+            // Reprendre dans l'état `bogus-doctype`.
+            | Some(_) => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                self.reconsume(State::BogusDOCTYPE).and_continue_with_error(
-                    HTMLParserError::MissingQuoteBeforeDOCTYPESystemIdentifier
-                )
-            }
+                })
+                .reconsume("bogus-doctype")
+                .and_continue_with_error(
+                    "missing-quote-before-doctype-system-identifier",
+                ),
         }
     }
 
@@ -2064,71 +1925,63 @@ where
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
             //
-            // Passez à l'état d'identifiant système après DOCTYPE.
+            // Passez à l'état `after-doctype-system-identifier`.
             | Some(ch) if ch == quote => self
                 .state
-                .switch_to(State::AfterDOCTYPESystemIdentifier)
+                .switch_to("after-doctype-system-identifier")
                 .and_continue(),
 
             // U+0000 NULL
             //
             // Il s'agit d'une erreur d'analyse de type
             // unexpected-null-character. Ajouter un caractère U+FFFD
-            // REPLACEMENT CHARACTER à l'identifiant système du jeton
+            // `REPLACEMENT_CHARACTER` à l'identifiant système du jeton
             // DOCTYPE actuel.
-            | Some('\0') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            | Some('\0') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.append_character_to_system_identifier(
                         char::REPLACEMENT_CHARACTER,
                     );
-                }
-                self.and_continue()
-            }
+                })
+                .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Il s'agit d'une erreur d'analyse
             // abrupt-doctype-system-identifier. Définir le drapeau
-            // force-quirks du jeton DOCTYPE actuel. Passer à l'état de
-            // données. Émettre le jeton DOCTYPE actuel.
-            | Some('>') => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // force-quirks du jeton `doctype` actuel. Passer à l'état de
+            // données. Émettre le jeton `doctype` actuel.
+            | Some('>') => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-                self.state.switch_to(State::Data).and_break_with_error(
-                    HTMLParserError::AbruptDOCTYPESystemIdentifier,
-                )
-            }
+                })
+                .switch_state_to("data")
+                .and_break_with_error("abrupt-doctype-system-identifier"),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émission d'un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton
+            // `doctype` actuel sur vrai. Émettre le jeton
+            // `doctype` actuel. Émission d'un jeton de
+            // fin de fichier.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
             // Ajouter le caractère actuel à l'identifiant système du jeton
             // DOCTYPE actuel.
-            | Some(ch) => {
-                if let Some(ref mut doctype_tok) = self.token {
+            | Some(ch) => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.append_character_to_system_identifier(ch);
-                }
-                self.and_continue()
-            }
+                })
+                .and_continue(),
         }
     }
 
@@ -2142,45 +1995,37 @@ where
             // U+0020 SPACE
             //
             // Ignorer le caractère.
-            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
-                self.ignore()
-            }
+            | Some(ch) if ch.is_html_whitespace() => self.ignore(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état de données. Émettre le jeton DOCTYPE actuel.
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
-            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
-            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
-            // de fichier.
-            | None => {
-                if let Some(ref mut doctype_tok) = self.token {
+            // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
+            // Définir le drapeau force-quirks du jeton `doctype` actuel
+            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // jeton `end of file`.
+            | None => self
+                .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
-                }
-
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-
-                self.set_token(HTMLToken::EOF)
-                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
-            }
+                })
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-doctype"),
 
             // Anything else
             //
             // Il s'agit d'une erreur de parse
-            // unexpected-character-after-doctype-system-identifier.
-            // Reprendre dans l'état DOCTYPE fictif. (Cela n'active pas
-            // le drapeau force-quirks du jeton DOCTYPE actuel).
+            // `unexpected-character-after-doctype-system-identifier`.
+            // Reprendre dans l'état `bogus-doctype` (cela n'active pas
+            // le drapeau force-quirks du jeton `doctype` actuel).
             | Some(_) => {
-                self.reconsume(State::BogusDOCTYPE)
-                    .and_continue_with_error(
-                        HTMLParserError::UnexpectedCharacterAfterDoctypeSystemIdentifier
-                    )
+                self.reconsume("bogus-doctype").and_continue_with_error(
+                    "unexpected-character-after-doctype-system-identifier",
+                )
             }
         }
     }
@@ -2189,27 +2034,27 @@ where
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état de données. Émettez le jeton DOCTYPE.
-            | Some('>') => self.state.switch_to(State::Data).and_break(),
+            // Passer à l'état `data`. Émettez le jeton `doctype`.
+            | Some('>') => self.state.switch_to("data").and_break(),
 
             // U+0000 NULL
             //
             // Il s'agit d'une erreur d'analyse de type
-            // unexpected-null-character. Ignorer le caractère.
-            | Some('\0') => self.and_continue_with_error(
-                HTMLParserError::UnexpectedNullCharacter,
-            ),
+            // `unexpected-null-character`.
+            //
+            // Ignorer le caractère.
+            | Some('\0') => {
+                self.and_continue_with_error("unexpected-null-character")
+            }
 
             // EOF
             //
-            // Émettre le jeton DOCTYPE. Émettre un jeton de fin de
-            // fichier.
-            | None => {
-                if let Some(doctype_tok) = self.current_token() {
-                    self.emit_token(doctype_tok);
-                }
-                self.set_token(HTMLToken::EOF).and_break()
-            }
+            // Émettre le jeton `doctype`. Émettre un jeton de `end of
+            // file`.
+            | None => self
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break(),
 
             // Anything else
             //
@@ -2229,6 +2074,12 @@ impl<C> HTMLStateIteratorInterface for Tokenizer<C> where
 }
 
 impl HTMLStateIteratorInterface for HTMLState {}
+
+impl HTMLCharacterInterface for char {
+    fn is_html_whitespace(&self) -> bool {
+        self.is_ascii_whitespace() && '\r'.ne(self)
+    }
+}
 
 impl<C> Iterator for Tokenizer<C>
 where
@@ -2343,6 +2194,77 @@ where
         }
 
         self.current_token()
+    }
+}
+
+impl FromStr for State {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            | "data" => Self::Data,
+            | "tag-open" => Self::TagOpen,
+            | "end-tag-open" => Self::EndTagOpen,
+            | "tag-name" => Self::TagName,
+            | "before-attribute-name" => Self::BeforeAttributeName,
+            | "attribute-name" => Self::AttributeName,
+            | "after-attribute-name" => Self::AfterAttributeName,
+            | "before-attribute-value" => Self::BeforeAttributeValue,
+            | "attribute-value-double-quoted" => {
+                Self::AttributeValueDoubleQuoted
+            }
+            | "attribute-value-simple-quoted" => {
+                Self::AttributeValueSimpleQuoted
+            }
+            | "attribute-value-unquoted" => Self::AttributeValueUnquoted,
+            | "after-attribute-value-quoted" => {
+                Self::AfterAttributeValueQuoted
+            }
+            | "self-closing-start-tag" => Self::SelfClosingStartTag,
+            | "bogus-comment" => Self::BogusComment,
+            | "markup-declaration-open" => Self::MarkupDeclarationOpen,
+            | "comment-start" => Self::CommentStart,
+            | "doctype" => Self::DOCTYPE,
+            | "before-doctype-name" => Self::BeforeDOCTYPEName,
+            | "doctype-name" => Self::DOCTYPEName,
+            | "after-doctype-name" => Self::AfterDOCTYPEName,
+            | "after-doctype-public-keyword" => {
+                Self::AfterDOCTYPEPublicKeyword
+            }
+            | "before-doctype-public-identifier" => {
+                Self::BeforeDOCTYPEPublicIdentifier
+            }
+            | "doctype-public-identifier-double-quoted" => {
+                Self::DOCTYPEPublicIdentifierDoubleQuoted
+            }
+            | "doctype-public-identifier-single-quoted" => {
+                Self::DOCTYPEPublicIdentifierSingleQuoted
+            }
+            | "after-doctype-public-identifier" => {
+                Self::AfterDOCTYPEPublicIdentifier
+            }
+            | "between-doctype-public-and-system-identifiers" => {
+                Self::BetweenDOCTYPEPublicAndSystemIdentifiers
+            }
+            | "after-doctype-system-keyword" => {
+                Self::AfterDOCTYPESystemKeyword
+            }
+            | "before-doctype-system-identifier" => {
+                Self::BeforeDOCTYPESystemIdentifier
+            }
+            | "doctype-system-identifier-double-quoted" => {
+                Self::DOCTYPESystemIdentifierDoubleQuoted
+            }
+            | "doctype-system-identifier-single-quoted" => {
+                Self::DOCTYPESystemIdentifierSingleQuoted
+            }
+            | "after-doctype-system-identifier" => {
+                Self::AfterDOCTYPESystemIdentifier
+            }
+            | "bogus-doctype" => Self::BogusDOCTYPE,
+            | "character-reference" => Self::CharacterReference,
+            | _ => return Err("!!!!! Nom d'état inconnu !!!!!"),
+        })
     }
 }
 
