@@ -519,4 +519,21 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_error_missing_doctype_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/missing_doctype_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: None,
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+    }
 }
