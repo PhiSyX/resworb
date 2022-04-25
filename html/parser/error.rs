@@ -728,4 +728,20 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_error_unexpected_character_in_unquoted_attribute_value() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/unexpected_character_in_unquoted_attribute_value.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![("foo".into(), "b'ar'".into())]
+            })
+        );
+    }
 }
