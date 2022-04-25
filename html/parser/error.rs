@@ -642,4 +642,23 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_error_missing_whitespace_before_doctype_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/missing_whitespace_before_doctype_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: Some(
+                    "-//W3C//DTD HTML 4.01//EN".into()
+                ),
+                system_identifier: None,
+                force_quirks_flag: false
+            })
+        );
+    }
 }
