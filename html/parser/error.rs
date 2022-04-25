@@ -87,7 +87,7 @@ pub enum HTMLParserError {
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée dans une balise de début ou une balise de fin
-    /// (par exemple, <div id=). Une telle balise est ignorée.
+    /// (par exemple, `<div id=`). Une telle balise est ignorée.
     EofInTag,
 
     /// Cette erreur se produit si l'analyseur rencontre la séquence de
@@ -439,5 +439,14 @@ mod tests {
                 force_quirks_flag: true
             })
         );
+    }
+
+    #[test]
+    fn test_error_eof_in_tag() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/eof_in_tag.html"
+        ));
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
     }
 }
