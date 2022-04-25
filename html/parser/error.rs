@@ -611,4 +611,35 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_error_missing_whitespace_after_doctype_keyword() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/missing_whitespace_after_doctype_keyword.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: Some(
+                    "-//W3C//DTD HTML 4.01//EN".into()
+                ),
+                system_identifier: None,
+                force_quirks_flag: false
+            })
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: Some("http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd".into()),
+                force_quirks_flag: false
+            })
+        );
+    }
 }
