@@ -764,4 +764,21 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    #[ignore = "bug: n'a pas le comportement attendu."]
+    fn test_error_unexpected_question_mark_instead_of_tag_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/unexpected_question_mark_instead_of_tag_name.html"
+        ));
+
+        // |- #comment: ?xml-stylesheet type="text/css" href="style.css"?
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment(
+                r#"?xml-stylesheet type="text/css" href="style.css"?"#
+                    .into()
+            ))
+        );
+    }
 }
