@@ -467,4 +467,21 @@ mod tests {
             Some(HTMLToken::Comment("ELEMENT br EMPTY".into()))
         );
     }
+
+    #[test]
+    fn test_error_invalid_character_sequence_after_doctype_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/doctype/invalid_character_sequence_after_doctype_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: None,
+                force_quirks_flag: true
+            })
+        );
+    }
 }
