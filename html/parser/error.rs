@@ -208,7 +208,7 @@ pub enum HTMLParserError {
 
     /// Cette erreur se produit si l'analyseur rencontre des attributs qui
     /// ne sont pas séparés par des espaces blancs ASCII (par exemple,
-    /// <div id="foo"class="bar">). Dans ce cas, l'analyseur se comporte
+    /// `<div id="foo"class="bar">`). Dans ce cas, l'analyseur se comporte
     /// comme si un espace blanc ASCII était présent.
     MissingWhitespaceBetweenAttributes,
 
@@ -658,6 +658,25 @@ mod tests {
                 ),
                 system_identifier: None,
                 force_quirks_flag: false
+            })
+        );
+    }
+
+    #[test]
+    fn test_error_missing_whitespace_between_attributes() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/missing_whitespace_between_attributes.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![
+                    ("id".into(), "foo".into()),
+                    ("class".into(), "bar".into())
+                ]
             })
         );
     }
