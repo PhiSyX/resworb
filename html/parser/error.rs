@@ -484,4 +484,23 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_error_invalid_first_character_of_tag_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/invalid_first_character_of_tag_name.html"
+        ));
+
+        // |- #text: <42>
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('<')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('4')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('2')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('>')));
+
+        // |- #comment: 42
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("42".into()))
+        );
+    }
 }
