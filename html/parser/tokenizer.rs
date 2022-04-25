@@ -130,6 +130,12 @@ enum State {
     /// 13.2.5.45 Comment state
     Comment,
 
+    /// 13.2.5.50 Comment end dash state
+    CommentEndDash,
+
+    /// 13.2.5.51 Comment end state
+    CommentEnd,
+
     /// 13.2.5.53 DOCTYPE state
     DOCTYPE,
 
@@ -1157,6 +1163,54 @@ where
             //
             // Reprendre dans l'état de commentaire.
             | _ => self.reconsume(State::Comment).and_continue(),
+        }
+    }
+
+    fn handle_comment_start_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passez à l'état final du commentaire.
+            | Some('-') => {
+                self.state.switch_to(State::CommentEnd).and_continue()
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse
+            // abrupt-closing-of-empty-comment. Passer à l'état de données.
+            // Émettre le jeton de commentaire actuel.
+            | Some('>') => {
+                self.state.switch_to(State::Data).and_break_with_error(
+                    HTMLParserError::AbruptClosingOfEmptyComment,
+                )
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-comment. Émettre le
+            // jeton de commentaire courant. Émettre un jeton de fin de
+            // fichier.
+            | None => {
+                if let Some(comment_tok) = self.current_token() {
+                    self.emit_token(comment_tok);
+                }
+                self.set_token(HTMLToken::EOF)
+                    .and_break_with_error(HTMLParserError::EofInComment)
+            }
+
+            // Anything else
+            //
+            // Ajouter un caractère U+002D HYPHEN-MINUS (-) aux données du
+            // jeton de commentaire. Reprendre l'état de commentaire.
+            | Some(_) => {
+                if let Some(ref mut comment_tok) = self.token {
+                    comment_tok.append_character('-');
+                }
+                self.reconsume(State::Comment).and_continue()
+            }
         }
     }
 
@@ -2313,6 +2367,7 @@ where
                 }
                 | State::BogusComment => self.handle_bogus_comment_state(),
                 | State::CommentStart => self.handle_comment_start_state(),
+                | State::CommentStartDash => self.handle_comment_start_dash_state(),
                 | State::DOCTYPE => self.handle_doctype_state(),
                 | State::BeforeDOCTYPEName => {
                     self.handle_before_doctype_name_state()

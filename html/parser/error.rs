@@ -86,6 +86,12 @@ pub enum HTMLParserError {
     EofBeforeTagName,
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
+    /// du flux d'entrée dans un commentaire. L'analyseur traite de tels
+    /// commentaires comme s'ils étaient fermés immédiatement avant la fin
+    /// du flux d'entrée.
+    EofInComment,
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée dans un DOCTYPE. Dans un tel cas, si le DOCTYPE
     /// est correctement placé comme préambule du document, l'analyseur
     /// syntaxique place le document en mode quirks.
@@ -341,6 +347,7 @@ impl fmt::Display for HTMLParserError {
                     "abrupt-doctype-system-identifier",
                 | Self::CDATAInHtmlContent => "cdata-in-html-content",
                 | Self::EofBeforeTagName => "eof-before-tag-name",
+                | Self::EofInComment => "oef-in-comment",
                 | Self::EofInDOCTYPE => "eof-in-doctype",
                 | Self::EofInTag => "eof-in-tag",
                 | Self::IncorrectlyOpenedComment =>
@@ -458,6 +465,18 @@ mod tests {
         ));
 
         assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+    }
+
+    #[test]
+    fn test_error_eof_in_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/eof_in_comment.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("----".into()))
+        );
     }
 
     #[test]
