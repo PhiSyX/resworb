@@ -1927,6 +1927,100 @@ where
         }
     }
 
+    fn handle_before_doctype_system_identifier_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Ignorer le caractère.
+            | Some(ch) if ch.is_ascii_whitespace() && ch != '\r' => {
+                self.ignore()
+            }
+
+            // U+0022 QUOTATION MARK (")
+            //
+            // Définir l'identifiant système du jeton DOCTYPE actuel à
+            // la chaîne vide (non manquante), passer à l'état
+            // d'identifiant système DOCTYPE (double quoted).
+            | Some('"') => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_system_identifier(String::new());
+                }
+                self.state
+                    .switch_to(State::DOCTYPESystemIdentifierDoubleQuoted)
+                    .and_continue()
+            }
+
+            // U+0027 APOSTROPHE (')
+            //
+            // Définir l'identifiant système du jeton DOCTYPE actuel à
+            // la chaîne vide (non manquante), passer à l'état
+            // d'identifiant système DOCTYPE (single quoted).
+            | Some('\'') => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_system_identifier(String::new());
+                }
+                self.state
+                    .switch_to(State::DOCTYPESystemIdentifierSingleQuoted)
+                    .and_continue()
+            }
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-doctype-system-identifier. Définir le drapeau
+            // force-quirks du jeton DOCTYPE actuel sur vrai. Passer à
+            // l'état de données. Émettre le jeton DOCTYPE actuel.
+            | Some('>') => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+                self.state.switch_to(State::Data).and_break_with_error(
+                    HTMLParserError::MissingDOCTYPESystemIdentifier,
+                )
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse eof-in-doctype. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Émettre le jeton DOCTYPE actuel. Émettre un jeton de fin
+            // de fichier.
+            | None => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                if let Some(doctype_tok) = self.current_token() {
+                    self.emit_token(doctype_tok);
+                }
+
+                self.set_token(HTMLToken::EOF)
+                    .and_break_with_error(HTMLParserError::EofInDOCTYPE)
+            }
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // missing-quote-before-doctype-system-identifier. Définir
+            // le drapeau force-quirks du jeton DOCTYPE actuel sur vrai.
+            // Reprendre dans l'état DOCTYPE fictif.
+            | Some(_) => {
+                if let Some(ref mut doctype_tok) = self.token {
+                    doctype_tok.set_force_quirks_flag(true);
+                }
+
+                self.reconsume(State::BogusDOCTYPE).and_continue_with_error(
+                    HTMLParserError::MissingQuoteBeforeDOCTYPESystemIdentifier
+                )
+            }
+        }
+    }
+
     fn handle_doctype_system_identifier_quoted_state(
         &mut self,
         quote: char,
@@ -2174,6 +2268,9 @@ where
                 }
                 | State::AfterDOCTYPESystemKeyword => {
                     self.handle_after_doctype_system_keyword_state()
+                }
+                | State::BeforeDOCTYPESystemIdentifier => {
+                    self.handle_before_doctype_system_identifier_state()
                 }
                 | State::DOCTYPESystemIdentifierDoubleQuoted => {
                     self.handle_doctype_system_identifier_quoted_state('"')
