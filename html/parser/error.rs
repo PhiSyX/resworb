@@ -565,4 +565,20 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_error_missing_end_tag_name() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/missing_end_tag_name.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::new_start_tag("div".into()))
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+    }
 }
