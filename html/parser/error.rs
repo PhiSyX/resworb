@@ -3,6 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use core::fmt;
+use std::str::FromStr;
 
 // ----- //
 // Macro //
@@ -332,6 +333,44 @@ pub enum HTMLParserError {
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
+
+impl FromStr for HTMLParserError {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            | "abrupt-doctype-public-identifier" => Self::AbruptDOCTYPEPublicIdentifier,
+            | "abrupt-doctype-system-identifier" => Self::AbruptDOCTYPESystemIdentifier,
+            | "cdata-in-html-content" => Self::CDATAInHtmlContent,
+            | "eof-before-tag-name" => Self::EofBeforeTagName,
+            | "eof-in-doctype" => Self::EofInDOCTYPE,
+            | "eof-in-tag" => Self::EofInTag,
+            | "incorrectly-opened-comment" => Self::IncorrectlyOpenedComment,
+            | "invalid-character-sequence-after-doctype-name" => Self::InvalidCharacterSequenceAfterDOCTYPEName,
+            | "invalid-first-character-of-tag-name" => Self::InvalidFirstCharacterOfTagName,
+            | "missing-attribute-value" => Self::MissingAttributeValue,
+            | "missing-doctype-name" => Self::MissingDOCTYPEName,
+            | "missing-quote-before-doctype-public-identifier" => Self::MissingQuoteBeforeDOCTYPEPublicIdentifier,
+            | "missing-quote-before-doctype-system-identifier" => Self::MissingQuoteBeforeDOCTYPESystemIdentifier,
+            | "missing-doctype-public-identifier" => Self::MissingDOCTYPEPublicIdentifier,
+            | "missing-doctype-system-identifier" => Self::MissingDOCTYPESystemIdentifier,
+            | "missing-end-tag-name" => Self::MissingEndTagName,
+            | "missing-whitespace-after-doctype-public-keyword" => Self::MissingWhitespaceAfterDOCTYPEPublicKeyword,
+            | "missing-whitespace-after-doctype-system-keyword" => Self::MissingWhitespaceAfterDOCTYPESystemKeyword,
+            | "missing-whitespace-before-doctype-name" => Self::MissingWhitespaceBeforeDOCTYPEName,
+            | "missing-whitespace-between-attributes" => Self::MissingWhitespaceBetweenAttributes,
+            | "missing-whitespace-between-doctype-public-and-system-identifiers" => Self::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers,
+            | "unexpected-character-after-doctype-system-identifier" => Self::UnexpectedCharacterAfterDoctypeSystemIdentifier,
+            | "unexpected-character-in-attribute-name" => Self::UnexpectedCharacterInAttributeName,
+            | "unexpected-character-in-unquoted-attribute-value" => Self::UnexpectedCharacterInUnquotedAttributeValue,
+            | "unexpected-equals-sign-before-attribute-name" => Self::UnexpectedEqualsSignBeforeAttributeName,
+            | "unexpected-null-character" => Self::UnexpectedNullCharacter,
+            | "unexpected-question-mark-instead-of-tag-name" => Self::UnexpectedQuestionMarkInsteadOfTagName,
+            | "unexpected-solidus-in-tag" => Self::UnexpectedSolidusInTag,
+            | _ => return Err("!!!!! Nom d'erreur syntaxique inconnu !!!!!"),
+        })
+    }
+}
 
 impl fmt::Display for HTMLParserError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
