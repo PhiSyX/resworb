@@ -124,6 +124,12 @@ enum State {
     /// 13.2.5.43 Comment start state
     CommentStart,
 
+    /// 13.2.5.44 Comment start dash state
+    CommentStartDash,
+
+    /// 13.2.5.45 Comment state
+    Comment,
+
     /// 13.2.5.53 DOCTYPE state
     DOCTYPE,
 
@@ -1123,6 +1129,34 @@ where
                 }
                 self.and_continue()
             }
+        }
+    }
+
+    fn handle_comment_start_state(&mut self) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état de tiret de début de commentaire.
+            | Some('-') => self
+                .state
+                .switch_to(State::CommentStartDash)
+                .and_continue(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse
+            // abrupt-closing-of-empty-comment. Passer à l'état de données.
+            // Émettre le jeton de commentaire actuel.
+            | Some('>') => {
+                self.state.switch_to(State::Data).and_break_with_error(
+                    HTMLParserError::AbruptClosingOfEmptyComment,
+                )
+            }
+
+            // Anything else
+            //
+            // Reprendre dans l'état de commentaire.
+            | _ => self.reconsume(State::Comment).and_continue(),
         }
     }
 
@@ -2278,6 +2312,7 @@ where
                     self.handle_markup_declaration_open_state()
                 }
                 | State::BogusComment => self.handle_bogus_comment_state(),
+                | State::CommentStart => self.handle_comment_start_state(),
                 | State::DOCTYPE => self.handle_doctype_state(),
                 | State::BeforeDOCTYPEName => {
                     self.handle_before_doctype_name_state()
@@ -2321,10 +2356,6 @@ where
                 }
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
 
-                // | State::AfterDOCTYPESystemKeyword
-                // | State::SelfClosingStartTag
-                // | State::CommentStart
-                // | State::CharacterReference => todo!(),
                 | _ => return None,
             };
 
@@ -2372,6 +2403,18 @@ mod tests {
     ) -> HTMLTokenizer<impl Iterator<Item = char>> {
         let stream = InputStreamPreprocessor::new(input.chars());
         HTMLTokenizer::new(stream)
+    }
+
+    #[test]
+    fn test_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/comment.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("-- Hello World --".into()))
+        );
     }
 
     #[test]

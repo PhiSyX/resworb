@@ -51,6 +51,12 @@ macro_rules! emit_html_error {
 /// tableau ci-dessous, qui doivent être utilisés par les vérificateurs de
 /// conformité dans les rapports.
 pub enum HTMLParserError {
+    /// Cette erreur se produit si l'analyseur rencontre un commentaire
+    /// vide qui est brusquement fermé par un point de code U+003E (>)
+    /// (c'est-à-dire `<!-->` ou `<!--->`). L'analyseur se comporte comme
+    /// si le commentaire était fermé correctement.
+    AbruptClosingOfEmptyComment,
+
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+003E (>) dans l'identifiant public DOCTYPE (par
     /// exemple, `<!DOCTYPE html PUBLIC "foo>`). Dans un tel cas, si le
@@ -327,6 +333,8 @@ impl fmt::Display for HTMLParserError {
             f,
             "{}",
             match self {
+                | Self::AbruptClosingOfEmptyComment =>
+                    "abrupt-closing-of-empty-comment",
                 | Self::AbruptDOCTYPEPublicIdentifier =>
                     "abrupt-doctype-public-identifier",
                 | Self::AbruptDOCTYPESystemIdentifier =>
@@ -360,8 +368,8 @@ impl fmt::Display for HTMLParserError {
                     "missing-whitespace-before-doctype-name",
                 | Self::MissingWhitespaceBetweenAttributes =>
                     "missing-whitespace-between-attributes",
-                | Self::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers =>
-                     "missing-whitespace-between-doctype-public-and-system-identifiers",
+                | Self::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers
+                    => "missing-whitespace-between-doctype-public-and-system-identifiers",
                 | Self::UnexpectedCharacterAfterDoctypeSystemIdentifier
                     => "unexpected-character-after-doctype-system-identifier",
                 | Self::UnexpectedCharacterInAttributeName =>
@@ -391,6 +399,25 @@ mod tests {
     ) -> HTMLTokenizer<impl Iterator<Item = char>> {
         let stream = InputStreamPreprocessor::new(input.chars());
         HTMLTokenizer::new(stream)
+    }
+
+    #[test]
+    fn test_error_abrupt_closing_of_empty_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/abrupt_closing_of_empty_comment.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("--".into()))
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("---".into()))
+        );
     }
 
     #[test]
