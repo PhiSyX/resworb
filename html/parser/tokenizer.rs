@@ -24,6 +24,7 @@ macro_rules! define_state {
     ),*
     ) => {
 #[derive(Debug)]
+#[derive(Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum State {
     $( #[$attr] $enum ),*
@@ -104,6 +105,7 @@ where
     token: Option<HTMLToken>,
     state: HTMLState,
     temp: VecDeque<HTMLToken>,
+    temporary_buffer: String,
 }
 
 pub struct HTMLState {
@@ -144,7 +146,7 @@ define_state! {
     AttributeValueDoubleQuoted = "attribute-value-double-quoted",
 
     /// 13.2.5.37 Attribute value (single-quoted) state
-    AttributeValueSimpleQuoted = "attribute-value-simple-quoted",
+    AttributeValueSingleQuoted = "attribute-value-single-quoted",
 
     /// 13.2.5.38 Attribute value (unquoted) state
     AttributeValueUnquoted = "attribute-value-unquoted",
@@ -241,6 +243,11 @@ define_state! {
 
     /// 13.2.5.72 Character reference state
     CharacterReference = "character-reference"
+    /// 13.2.5.73 Named character reference state
+    NamedCharacterReference = "named-character-reference",
+
+    /// 13.2.5.75 Numeric character reference state
+    NumericCharacterReference = "numeric-character-reference",
 }
 
 enum HTMLStateIterator {
@@ -263,6 +270,7 @@ where
             token: None,
             state: HTMLState::default(),
             temp: VecDeque::default(),
+            temporary_buffer: String::default(),
         }
     }
 }
@@ -324,10 +332,36 @@ where
         self
     }
 
-    // fn reset(&mut self) {
-    // self.token = None;
-    // self.state = HTMLState::default();
-    // }
+    fn set_temporary_buffer(
+        &mut self,
+        temporary_buffer: String,
+    ) -> &mut Self {
+        self.temporary_buffer = temporary_buffer;
+        self
+    }
+
+    fn append_character_to_temporary_buffer(
+        &mut self,
+        ch: char,
+    ) -> &mut Self {
+        self.temporary_buffer.push(ch);
+        self
+    }
+
+    fn flush_temporary_buffer(&mut self) -> &mut Self {
+        if self.state.is_character_of_attribute() {
+            self.temporary_buffer.clone().chars().for_each(|ch| {
+                self.change_current_token(|tok| {
+                    tok.append_character_to_attribute_value(ch);
+                });
+            });
+        } else {
+            self.temporary_buffer.chars().for_each(|c| {
+                self.temp.push_back(HTMLToken::Character(c))
+            });
+        }
+        self
+    }
 }
 
 impl HTMLState {
@@ -335,8 +369,17 @@ impl HTMLState {
     /// Terme `switch_to` venant de la spécification HTML "Switch to the
     /// ..."
     fn switch_to(&mut self, state: &str) -> &mut Self {
-        let state = state.parse().unwrap();
-        self.current = state;
+        let mut to: Cow<str> = Cow::default();
+
+        if state == "return-state" {
+            if let Some(return_state) = self.returns.clone() {
+                to = Cow::from(return_state.to_string());
+            }
+        } else {
+            to = Cow::from(state);
+        }
+
+        self.current = to.parse().unwrap();
         self
     }
 
@@ -347,6 +390,15 @@ impl HTMLState {
         let state = state.parse().unwrap();
         self.returns = Some(state);
         self
+    }
+
+    fn is_character_of_attribute(&self) -> bool {
+        matches!(
+            self.returns,
+            Some(State::AttributeValueDoubleQuoted)
+                | Some(State::AttributeValueSingleQuoted)
+                | Some(State::AttributeValueUnquoted)
+        )
     }
 }
 
@@ -794,10 +846,10 @@ where
 
             // U+0027 APOSTROPHE (')
             //
-            // Passer à l'état `attribute-value-simple-quoted`.
+            // Passer à l'état `attribute-value-single-quoted`.
             | Some('\'') => self
                 .state
-                .switch_to("attribute-value-simple-quoted")
+                .switch_to("attribute-value-single-quoted")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
@@ -2465,6 +2517,38 @@ where
             | Some(_) => self.ignore(),
         }
     }
+
+    fn handle_character_reference_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alphanumeric
+            //
+            // Reprendre dans l'état `named-character-reference`.
+            | Some(ch) if ch.is_ascii_alphanumeric() => {
+                self.reconsume("named-character-reference").and_continue()
+            }
+
+            // U+0023 NUMBER SIGN (#)
+            //
+            // Ajouter le caractère actuel au tampon temporaire.
+            // Passer à l'état `numeric-character-reference`.
+            | Some(ch @ '#') => self
+                .set_temporary_buffer(String::new())
+                .append_character_to_temporary_buffer(ch)
+                .switch_state_to("numeric-character-reference")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Flush code points consumed as a character reference.
+            // Reconsume in the return state.
+            | _ => self
+                .flush_temporary_buffer()
+                .reconsume("return-state")
+                .and_continue(),
+        }
+    }
 }
 
 // -------------- //
@@ -2516,7 +2600,7 @@ where
                 | State::AttributeValueDoubleQuoted => {
                     self.handle_attribute_value_quoted_state('"')
                 }
-                | State::AttributeValueSimpleQuoted => {
+                | State::AttributeValueSingleQuoted => {
                     self.handle_attribute_value_quoted_state('\'')
                 }
                 | State::AttributeValueUnquoted => {
@@ -2602,6 +2686,9 @@ where
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
 
                 | _ => return None,
+                | State::CharacterReference => {
+                    self.handle_character_reference_state()
+                }
             };
 
             match state {
