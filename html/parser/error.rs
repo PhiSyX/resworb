@@ -14,12 +14,12 @@ macro_rules! emit_html_error {
 }
 
 macro_rules! define_errors {
-	(
+    (
     $(
         $(#[$attr:meta])*
         $enum:ident = $str:literal
     ),*
-	) => {
+    ) => {
 /// ------------------------------------------------------------------- //
 ///                     HTMLParserError                                 //
 /// ------------------------------------------------------------------- //
@@ -52,27 +52,27 @@ macro_rules! define_errors {
 /// tableau ci-dessous, qui doivent être utilisés par les vérificateurs de
 /// conformité dans les rapports.
 pub enum HTMLParserError {
-	$( $(#[$attr])* $enum ),*
+    $( $(#[$attr])* $enum ),*
 }
 
 impl core::str::FromStr for HTMLParserError {
-	type Err = &'static str;
+    type Err = &'static str;
 
     #[allow(unreachable_patterns)]
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		Ok(match s {
-			$( | $str => Self::$enum, )*
-			| _ => return Err("Nom d'erreur de l'analyseur HTML inconnu."),
-		})
-	}
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            $( | $str => Self::$enum, )*
+            | _ => return Err("Nom d'erreur de l'analyseur HTML inconnu."),
+        })
+    }
 }
 
 impl core::fmt::Display for HTMLParserError {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!( f, "{}", match self { $( | Self::$enum => $str, )* } )
-	}
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!( f, "{}", match self { $( | Self::$enum => $str, )* } )
+    }
 }
-	};
+    };
 }
 
 // ----------- //
@@ -525,8 +525,8 @@ mod tests {
     #[test]
     fn test_error_invalid_character_sequence_after_doctype_name() {
         let mut html_tok = get_tokenizer_html(include_str!(
-			"crashtests/doctype/invalid_character_sequence_after_doctype_name.html"
-		));
+            "crashtests/doctype/invalid_character_sequence_after_doctype_name.html"
+        ));
 
         assert_eq!(
             html_tok.next_token(),
@@ -640,8 +640,8 @@ mod tests {
     #[ignore = "pas sûr du comportement."]
     fn test_error_missing_quote_before_doctype_identifier() {
         let mut html_tok = get_tokenizer_html(include_str!(
-			"crashtests/doctype/missing_quote_before_doctype_identifier.html"
-		));
+            "crashtests/doctype/missing_quote_before_doctype_identifier.html"
+        ));
 
         assert_eq!(
             html_tok.next_token(),
@@ -669,8 +669,8 @@ mod tests {
     #[test]
     fn test_error_missing_whitespace_after_doctype_keyword() {
         let mut html_tok = get_tokenizer_html(include_str!(
-			"crashtests/doctype/missing_whitespace_after_doctype_keyword.html"
-		));
+            "crashtests/doctype/missing_whitespace_after_doctype_keyword.html"
+        ));
 
         assert_eq!(
             html_tok.next_token(),
@@ -687,21 +687,21 @@ mod tests {
         html_tok.next_token();
 
         assert_eq!(
-			html_tok.next_token(),
-			Some(HTMLToken::DOCTYPE {
-				name: Some("html".into()),
-				public_identifier: None,
-				system_identifier: Some("http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd".into()),
-				force_quirks_flag: false
-			})
-		);
+            html_tok.next_token(),
+            Some(HTMLToken::DOCTYPE {
+                name: Some("html".into()),
+                public_identifier: None,
+                system_identifier: Some("http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd".into()),
+                force_quirks_flag: false
+            })
+        );
     }
 
     #[test]
     fn test_error_missing_whitespace_before_doctype_name() {
         let mut html_tok = get_tokenizer_html(include_str!(
-			"crashtests/doctype/missing_whitespace_before_doctype_name.html"
-		));
+            "crashtests/doctype/missing_whitespace_before_doctype_name.html"
+        ));
 
         assert_eq!(
             html_tok.next_token(),
@@ -739,8 +739,8 @@ mod tests {
     #[ignore = "pas sûr du contenu HTML du test."]
     fn test_error_missing_whitespace_between_doctype_identifiers() {
         let mut html_tok = get_tokenizer_html(include_str!(
-			"crashtests/doctype/missing_whitespace_between_doctype_identifiers.html"
-		));
+            "crashtests/doctype/missing_whitespace_between_doctype_identifiers.html"
+        ));
 
         assert_eq!(
             html_tok.next_token(),
@@ -803,8 +803,8 @@ mod tests {
     #[test]
     fn test_error_unexpected_character_in_unquoted_attribute_value() {
         let mut html_tok = get_tokenizer_html(include_str!(
-			"crashtests/tag/unexpected_character_in_unquoted_attribute_value.html"
-		));
+            "crashtests/tag/unexpected_character_in_unquoted_attribute_value.html"
+        ));
 
         assert_eq!(
             html_tok.next_token(),
@@ -820,8 +820,8 @@ mod tests {
     #[ignore = "bug: n'a pas le comportement attendu."]
     fn test_error_unexpected_equals_sign_before_attribute_name() {
         let mut html_tok = get_tokenizer_html(include_str!(
-			"crashtests/tag/unexpected_equals_sign_before_attribute_name.html"
-		));
+            "crashtests/tag/unexpected_equals_sign_before_attribute_name.html"
+        ));
 
         assert_eq!(
             html_tok.next_token(),
@@ -840,8 +840,8 @@ mod tests {
     #[ignore = "bug: n'a pas le comportement attendu."]
     fn test_error_unexpected_question_mark_instead_of_tag_name() {
         let mut html_tok = get_tokenizer_html(include_str!(
-			"crashtests/tag/unexpected_question_mark_instead_of_tag_name.html"
-		));
+            "crashtests/tag/unexpected_question_mark_instead_of_tag_name.html"
+        ));
 
         // |- #comment: ?xml-stylesheet type="text/css" href="style.css"?
         assert_eq!(

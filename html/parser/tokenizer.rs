@@ -41,9 +41,9 @@ impl core::str::FromStr for State {
 }
 
 impl core::fmt::Display for State {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!( f, "{}", match self { $( | Self::$enum => $str, )* } )
-	}
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!( f, "{}", match self { $( | Self::$enum => $str, )* } )
+    }
 }
     };
 }
