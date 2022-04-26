@@ -2601,6 +2601,45 @@ where
                 .and_continue(),
         }
     }
+
+    fn handle_ambiguous_ampersand_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alphanumeric
+            //
+            // Si la référence de caractère a été consommée dans le cadre
+            // d'un attribut, alors ajouter le caractère actuel à la valeur
+            // de l'attribut actuel. Sinon, émettre le caractère actuel
+            // comme un jeton `character`.
+            | Some(ch) if ch.is_ascii_alphanumeric() => {
+                if self.state.is_character_of_attribute() {
+                    self.change_current_token(|tok| {
+                        tok.append_character_to_attribute_value(ch);
+                    })
+                    .and_continue()
+                } else {
+                    self.and_break()
+                }
+            }
+
+            // U+003B SEMICOLON (;)
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unknown-named-character-reference`. Reprendre dans l'état
+            // `return-state`.
+            | Some(';') => {
+                self.reconsume("return-state").and_continue_with_error(
+                    "unknown-named-character-reference",
+                )
+            }
+
+            // Anything else
+            //
+            // Reprendre dans l'état `return-state`.
+            | _ => self.reconsume("return-state").and_continue(),
+        }
+    }
 }
 
 // -------------- //
@@ -2743,6 +2782,9 @@ where
                 }
                 | State::NamedCharacterReference => {
                     self.handle_named_character_reference_state()
+                }
+                | State::AmbiguousAmpersand => {
+                    self.handle_ambiguous_ampersand_state()
                 }
             };
 

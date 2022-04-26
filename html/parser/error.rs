@@ -367,7 +367,12 @@ define_errors! {
     /// dans une balise (par exemple, `<div / id="foo">`). Dans ce cas,
     /// l'analyseur se comporte comme s'il rencontrait un espace blanc
     /// ASCII.
-    UnexpectedSolidusInTag = "unexpected-solidus-in-tag"
+    UnexpectedSolidusInTag = "unexpected-solidus-in-tag",
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre une
+    /// esperluette ambiguë. Dans ce cas, l'analyseur syntaxique ne résout
+    /// pas la référence du caractère.
+    UnknownNamedCharacterReference = "unknown-named-character-reference"
 }
 
 // -------------- //
