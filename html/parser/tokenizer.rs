@@ -259,6 +259,12 @@ define_state! {
 
     /// 13.2.5.75 Numeric character reference state
     NumericCharacterReference = "numeric-character-reference",
+
+    /// 13.2.5.76 Hexadecimal character reference start state
+    HexadecimalCharacterReferenceStart = "hexadecimal-character-reference-start",
+
+    /// 13.2.5.77 Decimal character reference start state
+    DecimalCharacterReferenceStart = "decimal-character-reference-start",
 }
 
 enum HTMLStateIterator {
@@ -2640,6 +2646,30 @@ where
             | _ => self.reconsume("return-state").and_continue(),
         }
     }
+
+    fn handle_numeric_character_reference_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        // Définir le code de référence du caractère à zéro (0).
+        self.character_reference_code = 0;
+
+        match self.stream.next_input_char() {
+            // U+0078 LATIN SMALL LETTER X
+            // U+0058 LATIN CAPITAL LETTER X
+            //
+            // Ajouter le caractère actuel au tampon temporaire.
+            // Passer à l'état `hexadecimal-character-reference-start`.
+            | Some(ch @ ('x' | 'X')) => self
+                .append_character_to_temporary_buffer(ch)
+                .switch_state_to("hexadecimal-character-reference-start")
+                .and_continue(),
+
+            // Anything else
+            | _ => self
+                .reconsume("decimal-character-reference-start")
+                .and_continue(),
+        }
+    }
 }
 
 // -------------- //
@@ -2785,6 +2815,9 @@ where
                 }
                 | State::AmbiguousAmpersand => {
                     self.handle_ambiguous_ampersand_state()
+                }
+                | State::NumericCharacterReference => {
+                    self.handle_numeric_character_reference_state()
                 }
             };
 
