@@ -10,7 +10,13 @@ use super::{
     error::HTMLParserError,
     token::{HTMLTagAttribute, HTMLToken},
 };
-use crate::{emit_html_error, parser::token::HTMLTagAttributeName};
+use crate::{
+    emit_html_error,
+    named_characters::{
+        NamedCharacterReferences, NamedCharacterReferencesEntities,
+    },
+    parser::token::HTMLTagAttributeName,
+};
 
 // ----- //
 // Macro //
@@ -106,6 +112,7 @@ where
     state: HTMLState,
     temp: VecDeque<HTMLToken>,
     temporary_buffer: String,
+    named_character_reference_code: NamedCharacterReferencesEntities,
 }
 
 pub struct HTMLState {
@@ -242,9 +249,13 @@ define_state! {
     BogusDOCTYPE = "bogus-doctype",
 
     /// 13.2.5.72 Character reference state
-    CharacterReference = "character-reference"
+    CharacterReference = "character-reference",
+
     /// 13.2.5.73 Named character reference state
     NamedCharacterReference = "named-character-reference",
+
+    /// 13.2.5.74 Ambiguous ampersand state
+    AmbiguousAmpersand = "ambiguous-ampersand",
 
     /// 13.2.5.75 Numeric character reference state
     NumericCharacterReference = "numeric-character-reference",
@@ -271,6 +282,8 @@ where
             state: HTMLState::default(),
             temp: VecDeque::default(),
             temporary_buffer: String::default(),
+            named_character_reference_code:
+                NamedCharacterReferences::entities(),
         }
     }
 }
@@ -2549,6 +2562,45 @@ where
                 .and_continue(),
         }
     }
+
+    /// Consomme le nombre maximum de caractères possible, où les
+    /// caractères consommés sont l'un des identifiants de la première
+    /// colonne de la table des références de caractères nommés. Ajouter
+    /// chaque caractère au tampon temporaire lorsqu'il est consommé.
+    fn handle_named_character_reference_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        let current_ch = self.stream.current.expect("le caractère actuel");
+        let rest_of_chars = self.stream.peek_until_end::<String>();
+        let full_str = format!("{current_ch}{rest_of_chars}");
+
+        let entities = &self.named_character_reference_code;
+
+        let (maybe_result, max_size) = entities.iter().fold(
+            (None, 0),
+            |(mut maybe_result, mut max_size), item| {
+                let name = item.0;
+                let size_name = name.len();
+
+                if full_str.starts_with(name) && size_name > max_size {
+                    max_size = size_name;
+                    maybe_result = Some(item);
+                }
+
+                (maybe_result, max_size)
+            },
+        );
+
+        match maybe_result {
+            | Some(result) => {
+                todo!();
+            }
+            | None => self
+                .flush_temporary_buffer()
+                .switch_state_to("ambiguous-ampersand")
+                .and_continue(),
+        }
+    }
 }
 
 // -------------- //
@@ -2688,6 +2740,9 @@ where
                 | _ => return None,
                 | State::CharacterReference => {
                     self.handle_character_reference_state()
+                }
+                | State::NamedCharacterReference => {
+                    self.handle_named_character_reference_state()
                 }
             };
 
