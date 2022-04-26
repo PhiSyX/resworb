@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::{borrow::Cow, collections::VecDeque, str::FromStr};
+use std::{borrow::Cow, collections::VecDeque};
 
 use parser::preprocessor::InputStreamPreprocessor;
 
@@ -11,6 +11,42 @@ use super::{
     token::{HTMLTagAttribute, HTMLToken},
 };
 use crate::{emit_html_error, parser::token::HTMLTagAttributeName};
+
+// ----- //
+// Macro //
+// ----- //
+
+macro_rules! define_state {
+    (
+    $(
+        #[$attr:meta]
+        $enum:ident = $str:literal
+    ),*
+    ) => {
+#[derive(Debug)]
+#[allow(clippy::upper_case_acronyms)]
+pub enum State {
+    $( #[$attr] $enum ),*
+}
+
+impl core::str::FromStr for State {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            $( | $str => Self::$enum, )*
+            | _ => return Err("Nom de l'état inconnu."),
+        })
+    }
+}
+
+impl core::fmt::Display for State {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		write!( f, "{}", match self { $( | Self::$enum => $str, )* } )
+	}
+}
+    };
+}
 
 // --------- //
 // Interface //
@@ -53,6 +89,9 @@ trait HTMLCharacterInterface {
 
 pub(crate) type Tokenizer<C> = HTMLTokenizer<C>;
 
+type ResultHTMLStateIterator =
+    Result<HTMLStateIterator, (HTMLParserError, HTMLStateIterator)>;
+
 // --------- //
 // Structure //
 // --------- //
@@ -76,128 +115,126 @@ pub struct HTMLState {
 // Énumération //
 // ----------- //
 
-#[derive(Debug)]
-#[allow(clippy::upper_case_acronyms)]
-enum State {
+define_state! {
     /// 13.2.5.1 Data state
-    Data,
+    Data = "data",
 
     /// 13.2.5.6 Tag open state
-    TagOpen,
+    TagOpen = "tag-open",
 
     /// 13.2.5.7 End tag open state
-    EndTagOpen,
+    EndTagOpen = "end-tag-open",
 
     /// 13.2.5.8 Tag name state
-    TagName,
+    TagName = "tag-name",
 
     /// 13.2.5.32 Before attribute name state
-    BeforeAttributeName,
+    BeforeAttributeName = "before-attribute-name",
 
     /// 13.2.5.33 Attribute name state
-    AttributeName,
+    AttributeName = "attribute-name",
 
     /// 13.2.5.34 After attribute name state
-    AfterAttributeName,
+    AfterAttributeName = "after-attribute-name",
 
     /// 13.2.5.35 Before attribute value state
-    BeforeAttributeValue,
+    BeforeAttributeValue = "before-attribute-value",
 
     /// 13.2.5.36 Attribute value (double-quoted) state
-    AttributeValueDoubleQuoted,
+    AttributeValueDoubleQuoted = "attribute-value-double-quoted",
 
     /// 13.2.5.37 Attribute value (single-quoted) state
-    AttributeValueSimpleQuoted,
+    AttributeValueSimpleQuoted = "attribute-value-simple-quoted",
 
     /// 13.2.5.38 Attribute value (unquoted) state
-    AttributeValueUnquoted,
+    AttributeValueUnquoted = "attribute-value-unquoted",
 
     /// 13.2.5.39 After attribute value (quoted) state
-    AfterAttributeValueQuoted,
+    AfterAttributeValueQuoted = "after-attribute-value-quoted",
 
     /// 13.2.5.40 Self-closing start tag state
-    SelfClosingStartTag,
+    SelfClosingStartTag = "self-closing-start-tag",
 
     /// 13.2.5.41 Bogus comment state
-    BogusComment,
+    BogusComment = "bogus-comment",
 
     /// 13.2.5.42 Markup declaration open state
-    MarkupDeclarationOpen,
+    MarkupDeclarationOpen = "markup-declaration-open",
 
     /// 13.2.5.43 Comment start state
-    CommentStart,
+    CommentStart = "comment-start",
+
+    /// 13.2.5.46 Comment less-than sign state
+    CommentLessThanSign = "comment-less-than-sign",
 
     /// 13.2.5.44 Comment start dash state
-    CommentStartDash,
+    CommentStartDash = "comment-start-dash",
 
     /// 13.2.5.45 Comment state
-    Comment,
+    Comment = "comment",
 
     /// 13.2.5.50 Comment end dash state
-    CommentEndDash,
+    CommentEndDash = "comment-end-dash",
 
     /// 13.2.5.51 Comment end state
-    CommentEnd,
+    CommentEnd = "comment-end",
 
     /// 13.2.5.53 DOCTYPE state
-    DOCTYPE,
+    DOCTYPE = "doctype",
 
     /// 13.2.5.54 Before DOCTYPE name state
-    BeforeDOCTYPEName,
+    BeforeDOCTYPEName = "before-doctype-name",
 
     /// 13.2.5.55 DOCTYPE name state
-    DOCTYPEName,
+    DOCTYPEName = "doctype-name",
 
     /// 13.2.5.56 After DOCTYPE name state
-    AfterDOCTYPEName,
+    AfterDOCTYPEName = "after-doctype-name",
 
     /// 13.2.5.57 After DOCTYPE public keyword state
-    AfterDOCTYPEPublicKeyword,
+    AfterDOCTYPEPublicKeyword = "after-doctype-public-keyword",
 
     /// 13.2.5.58 Before DOCTYPE public identifier state
-    BeforeDOCTYPEPublicIdentifier,
+    BeforeDOCTYPEPublicIdentifier = "before-doctype-public-identifier",
 
     /// 13.2.5.59 DOCTYPE public identifier (double-quoted) state
-    DOCTYPEPublicIdentifierDoubleQuoted,
+    DOCTYPEPublicIdentifierDoubleQuoted = "doctype-public-identifier-double-quoted",
 
     /// 13.2.5.60 DOCTYPE public identifier (single-quoted) state
-    DOCTYPEPublicIdentifierSingleQuoted,
+    DOCTYPEPublicIdentifierSingleQuoted = "doctype-public-identifier-single-quoted",
 
     /// 13.2.5.61 After DOCTYPE public identifier state
-    AfterDOCTYPEPublicIdentifier,
+    AfterDOCTYPEPublicIdentifier = "after-doctype-public-identifier",
 
     /// 13.2.5.62 Between DOCTYPE public and system identifiers state
-    BetweenDOCTYPEPublicAndSystemIdentifiers,
+    BetweenDOCTYPEPublicAndSystemIdentifiers = "between-doctype-public-and-system-identifiers",
 
     /// 13.2.5.63 After DOCTYPE system keyword state
-    AfterDOCTYPESystemKeyword,
+    AfterDOCTYPESystemKeyword = "after-doctype-system-keyword",
 
     /// 13.2.5.64 Before DOCTYPE system identifier state
-    BeforeDOCTYPESystemIdentifier,
+    BeforeDOCTYPESystemIdentifier = "before-doctype-system-identifier",
 
     /// 13.2.5.65 DOCTYPE system identifier (double-quoted) state
-    DOCTYPESystemIdentifierDoubleQuoted,
+    DOCTYPESystemIdentifierDoubleQuoted = "doctype-system-identifier-double-quoted",
 
     /// 13.2.5.66 DOCTYPE system identifier (single-quoted) state
-    DOCTYPESystemIdentifierSingleQuoted,
+    DOCTYPESystemIdentifierSingleQuoted = "doctype-system-identifier-single-quoted",
 
     /// 13.2.5.67 After DOCTYPE system identifier state
-    AfterDOCTYPESystemIdentifier,
+    AfterDOCTYPESystemIdentifier = "after-doctype-system-identifier",
 
     /// 13.2.5.68 Bogus DOCTYPE state
-    BogusDOCTYPE,
+    BogusDOCTYPE = "bogus-doctype",
 
     /// 13.2.5.72 Character reference state
-    CharacterReference,
+    CharacterReference = "character-reference"
 }
 
 enum HTMLStateIterator {
     Continue,
     Break,
 }
-
-type ResultHTMLStateIterator =
-    Result<HTMLStateIterator, (HTMLParserError, HTMLStateIterator)>;
 
 // -------------- //
 // Implémentation //
@@ -2274,77 +2311,6 @@ where
         }
 
         self.current_token()
-    }
-}
-
-impl FromStr for State {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            | "data" => Self::Data,
-            | "tag-open" => Self::TagOpen,
-            | "end-tag-open" => Self::EndTagOpen,
-            | "tag-name" => Self::TagName,
-            | "before-attribute-name" => Self::BeforeAttributeName,
-            | "attribute-name" => Self::AttributeName,
-            | "after-attribute-name" => Self::AfterAttributeName,
-            | "before-attribute-value" => Self::BeforeAttributeValue,
-            | "attribute-value-double-quoted" => {
-                Self::AttributeValueDoubleQuoted
-            }
-            | "attribute-value-simple-quoted" => {
-                Self::AttributeValueSimpleQuoted
-            }
-            | "attribute-value-unquoted" => Self::AttributeValueUnquoted,
-            | "after-attribute-value-quoted" => {
-                Self::AfterAttributeValueQuoted
-            }
-            | "self-closing-start-tag" => Self::SelfClosingStartTag,
-            | "bogus-comment" => Self::BogusComment,
-            | "markup-declaration-open" => Self::MarkupDeclarationOpen,
-            | "comment-start" => Self::CommentStart,
-            | "doctype" => Self::DOCTYPE,
-            | "before-doctype-name" => Self::BeforeDOCTYPEName,
-            | "doctype-name" => Self::DOCTYPEName,
-            | "after-doctype-name" => Self::AfterDOCTYPEName,
-            | "after-doctype-public-keyword" => {
-                Self::AfterDOCTYPEPublicKeyword
-            }
-            | "before-doctype-public-identifier" => {
-                Self::BeforeDOCTYPEPublicIdentifier
-            }
-            | "doctype-public-identifier-double-quoted" => {
-                Self::DOCTYPEPublicIdentifierDoubleQuoted
-            }
-            | "doctype-public-identifier-single-quoted" => {
-                Self::DOCTYPEPublicIdentifierSingleQuoted
-            }
-            | "after-doctype-public-identifier" => {
-                Self::AfterDOCTYPEPublicIdentifier
-            }
-            | "between-doctype-public-and-system-identifiers" => {
-                Self::BetweenDOCTYPEPublicAndSystemIdentifiers
-            }
-            | "after-doctype-system-keyword" => {
-                Self::AfterDOCTYPESystemKeyword
-            }
-            | "before-doctype-system-identifier" => {
-                Self::BeforeDOCTYPESystemIdentifier
-            }
-            | "doctype-system-identifier-double-quoted" => {
-                Self::DOCTYPESystemIdentifierDoubleQuoted
-            }
-            | "doctype-system-identifier-single-quoted" => {
-                Self::DOCTYPESystemIdentifierSingleQuoted
-            }
-            | "after-doctype-system-identifier" => {
-                Self::AfterDOCTYPESystemIdentifier
-            }
-            | "bogus-doctype" => Self::BogusDOCTYPE,
-            | "character-reference" => Self::CharacterReference,
-            | _ => return Err("!!!!! Nom d'état inconnu !!!!!"),
-        })
     }
 }
 
