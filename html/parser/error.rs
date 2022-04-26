@@ -2,9 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use core::fmt;
-use std::str::FromStr;
-
 // ----- //
 // Macro //
 // ----- //
@@ -16,10 +13,13 @@ macro_rules! emit_html_error {
     };
 }
 
-// ----------- //
-// Énumération //
-// ----------- //
-
+macro_rules! define_errors {
+    (
+    $(
+        $(#[$attr:meta])*
+        $enum:ident = $str:literal
+    ),*
+    ) => {
 /// ------------------------------------------------------------------- //
 ///                     HTMLParserError                                 //
 /// ------------------------------------------------------------------- //
@@ -52,12 +52,46 @@ macro_rules! emit_html_error {
 /// tableau ci-dessous, qui doivent être utilisés par les vérificateurs de
 /// conformité dans les rapports.
 pub enum HTMLParserError {
+    $( $(#[$attr])* $enum ),*
+}
+
+impl core::str::FromStr for HTMLParserError {
+    type Err = &'static str;
+
+    #[allow(unreachable_patterns)]
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            $( | $str => Self::$enum, )*
+            | _ => return Err("Nom d'erreur de l'analyseur HTML inconnu."),
+        })
+    }
+}
+
+impl core::fmt::Display for HTMLParserError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!( f, "{}", match self { $( | Self::$enum => $str, )* } )
+    }
+}
+    };
+}
+
+// ----------- //
+// Énumération //
+// ----------- //
+
+define_errors! {
+    /// Cette erreur se produit si l'analyseur rencontre un commentaire
+    /// vide qui est brusquement fermé par un point de code U+003E (>)
+    /// (c'est-à-dire `<!-->` ou `<!--->`). L'analyseur se comporte comme
+    /// si le commentaire était fermé correctement.
+    AbruptClosingOfEmptyComment = "abrupt-closing-of-empty-comment",
+
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+003E (>) dans l'identifiant public DOCTYPE (par
     /// exemple, `<!DOCTYPE html PUBLIC "foo>`). Dans un tel cas, si le
     /// DOCTYPE est correctement placé comme préambule du document,
     /// l'analyseur syntaxique place le document en mode quirks.
-    AbruptDOCTYPEPublicIdentifier,
+    AbruptDOCTYPEPublicIdentifier = "abrupt-doctype-public-identifier",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+003E (>) dans l'identifiant système DOCTYPE (par
@@ -65,31 +99,37 @@ pub enum HTMLParserError {
     /// "foo>`). Dans ce cas, si le DOCTYPE est correctement placé
     /// comme préambule du document, l'analyseur syntaxique place le
     /// document en mode quirks.
-    AbruptDOCTYPESystemIdentifier,
+    AbruptDOCTYPESystemIdentifier = "abrupt-doctype-system-identifier",
 
     /// Cette erreur se produit si l'analyseur rencontre une section CDATA
     /// en dehors d'un contenu étranger (SVG ou MathML). L'analyseur
     /// syntaxique traite ces sections CDATA (y compris les chaînes de
     /// tête "[CDATA[" et de fin "]]") comme des commentaires.
-    CDATAInHtmlContent,
+    CDATAInHtmlContent = "cdata-in-html-content",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée où un nom de balise est attendu. Dans ce cas,
     /// l'analyseur syntaxique traite le début d'une balise de début
     /// (c.-à-d. <) ou d'une balise de fin (c.-à-d. </) comme du contenu
     /// textuel.
-    EofBeforeTagName,
+    EofBeforeTagName = "cdata-in-html-content",
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
+    /// du flux d'entrée dans un commentaire. L'analyseur traite de tels
+    /// commentaires comme s'ils étaient fermés immédiatement avant la fin
+    /// du flux d'entrée.
+    EofInComment = "eof-in-comment",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée dans un DOCTYPE. Dans un tel cas, si le DOCTYPE
     /// est correctement placé comme préambule du document, l'analyseur
     /// syntaxique place le document en mode quirks.
-    EofInDOCTYPE,
+    EofInDOCTYPE = "eof-in-doctype",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée dans une balise de début ou une balise de fin
     /// (par exemple, `<div id=`). Une telle balise est ignorée.
-    EofInTag,
+    EofInTag = "eof-in-tag",
 
     /// Cette erreur se produit si l'analyseur rencontre la séquence de
     /// points de code "< !" qui n'est pas immédiatement suivie de deux
@@ -102,7 +142,13 @@ pub enum HTMLParserError {
     /// Note: une cause possible de cette erreur est l'utilisation d'une
     /// déclaration de balisage XML (par exemple, `<!ELEMENT br EMPTY>`)
     /// dans l'HTML.
-    IncorrectlyOpenedComment,
+    IncorrectlyOpenedComment = "incorrectly-opened-comment",
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// commentaire qui est fermé par la séquence de points de code "--!>".
+    /// L'analyseur traite de tels commentaires comme s'ils étaient
+    /// correctement fermés par la séquence de points de code "-->".
+    IncorrectlyClosedComment = "incorrectly-closed-comment",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre une
     /// séquence de points de code autre que les mots-clés "PUBLIC" et
@@ -111,7 +157,7 @@ pub enum HTMLParserError {
     /// est correctement placé en tant que préambule du document, et si
     /// l'analyseur ne peut pas changer le drapeau de mode est faux, il
     /// place le document en mode quirks.
-    InvalidCharacterSequenceAfterDOCTYPEName,
+    InvalidCharacterSequenceAfterDOCTYPEName = "invalid-character-sequence-after-doctype-name",
 
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// qui n'est pas un alpha ASCII où le premier point de code d'une
@@ -136,20 +182,20 @@ pub enum HTMLParserError {
     /// limité à un alpha ASCII, un large éventail de points de code (y
     /// compris des chiffres ASCII) est autorisé dans les positions
     /// suivantes.
-    InvalidFirstCharacterOfTagName,
+    InvalidFirstCharacterOfTagName = "invalid-first-character-of-tag-name",
 
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// U+003E (>) là où une valeur d'attribut est attendue (par exemple,
     /// `<div id=>`). L'analyseur syntaxique traite l'attribut comme ayant
     /// une valeur vide.
-    MissingAttributeValue,
+    MissingAttributeValue = "missing-attribute-value",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// DOCTYPE auquel il manque un nom (par exemple, `<!DOCTYPE>`). Dans
     /// un tel cas, si le DOCTYPE est correctement placé comme préambule
     /// du document, l'analyseur syntaxique place le document en mode
     /// quirks.
-    MissingDOCTYPEName,
+    MissingDOCTYPEName = "missing-doctype-name",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+003E (>) où le début de l'identifiant public
@@ -157,20 +203,20 @@ pub enum HTMLParserError {
     /// un tel cas, si le DOCTYPE est correctement placé comme préambule
     /// du document, l'analyseur syntaxique place le document en mode
     /// quirks.
-    MissingDOCTYPEPublicIdentifier,
+    MissingDOCTYPEPublicIdentifier = "missing-doctype-public-identifier",
 
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// U+003E (>) où le début de l'identificateur de système DOCTYPE est
     /// attendu (par exemple, `<!DOCTYPE html SYSTEM >`). Dans un tel cas,
     /// si le DOCTYPE est correctement placé comme préambule du document,
     /// l'analyseur syntaxique place le document en mode quirks.
-    MissingDOCTYPESystemIdentifier,
+    MissingDOCTYPESystemIdentifier = "missing-doctype-system-identifier",
 
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// U+003E (>) là où un nom de balise de fin est attendu, c'est-à-dire
     /// </>. L'analyseur syntaxique ignore l'ensemble de la séquence de
     /// points de code "</>".
-    MissingEndTagName,
+    MissingEndTagName = "missing-end-tag-name",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre
     /// l'identificateur public DOCTYPE qui n'est pas précédé d'une
@@ -179,7 +225,7 @@ pub enum HTMLParserError {
     /// l'identificateur public et, si le DOCTYPE est correctement placé
     /// en tant que préambule du document, place le document en mode
     /// quirks.
-    MissingQuoteBeforeDOCTYPEPublicIdentifier,
+    MissingQuoteBeforeDOCTYPEPublicIdentifier = "missing-quote-before-doctype-public-identifier",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre
     /// l'identifiant système DOCTYPE qui n'est pas précédé d'un guillemet
@@ -187,43 +233,49 @@ pub enum HTMLParserError {
     /// Dans un tel cas, l'analyseur syntaxique ignore l'identificateur de
     /// système et, si le DOCTYPE est correctement placé en tant que
     /// préambule du document, place le document en mode quirks.
-    MissingQuoteBeforeDOCTYPESystemIdentifier,
+    MissingQuoteBeforeDOCTYPESystemIdentifier = "missing-quote-before-doctype-system-identifier",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// DOCTYPE dont le mot clé "PUBLIC" et l'identifiant public ne sont
     /// pas séparés par un espace ASCII. Dans ce cas, l'analyseur se
     /// comporte comme si un espace ASCII était présent.
-    MissingWhitespaceAfterDOCTYPEPublicKeyword,
+    MissingWhitespaceAfterDOCTYPEPublicKeyword = "missing-whitespace-after-doctype-public-keyword",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// DOCTYPE dont le mot-clé "SYSTEM" et l'identificateur de système ne
     /// sont pas séparés par un espace ASCII. Dans ce cas, l'analyseur se
     /// comporte comme si un espace ASCII était présent.
-    MissingWhitespaceAfterDOCTYPESystemKeyword,
+    MissingWhitespaceAfterDOCTYPESystemKeyword = "missing-whitespace-after-doctype-system-keyword",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// DOCTYPE dont le mot clé "DOCTYPE" et le nom ne sont pas séparés
     /// par un espace ASCII. Dans ce cas, l'analyseur se comporte comme si
     /// un espace ASCII était présent.
-    MissingWhitespaceBeforeDOCTYPEName,
+    MissingWhitespaceBeforeDOCTYPEName = "missing-whitespace-before-doctype-name",
 
     /// Cette erreur se produit si l'analyseur rencontre des attributs qui
     /// ne sont pas séparés par des espaces blancs ASCII (par exemple,
     /// `<div id="foo"class="bar">`). Dans ce cas, l'analyseur se comporte
     /// comme si un espace blanc ASCII était présent.
-    MissingWhitespaceBetweenAttributes,
+    MissingWhitespaceBetweenAttributes = "missing-whitespace-between-attributes",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// DOCTYPE dont les identifiants public et système ne sont pas
     /// séparés par un espace ASCII. Dans ce cas, l'analyseur se comporte
     /// comme si un espace ASCII était présent.
-    MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers,
+    MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers = "missing-whitespace-between-doctype-public-and-system-identifiers",
+
+    /// Cette erreur se produit si l'analyseur rencontre un commentaire
+    /// imbriqué (par exemple, `<!-- <!-- imbriqué --> -->`). Un tel
+    /// commentaire sera fermé par la première séquence de points de
+    /// code "-->" et tout ce qui suit sera traité comme du balisage.
+    NestedComment = "nested-comment",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre des
     /// points de code autres que des espaces blancs ASCII ou la fermeture
     /// U+003E (>) après l'identificateur de système DOCTYPE. L'analyseur
     /// syntaxique ignore ces points de code.
-    UnexpectedCharacterAfterDoctypeSystemIdentifier,
+    UnexpectedCharacterAfterDoctypeSystemIdentifier = "unexpected-character-after-doctype-system-identifier",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+0022 ("), U+0027 (') ou U+003C (<) dans un nom
@@ -244,7 +296,7 @@ pub enum HTMLParserError {
     /// d'attribut et une valeur, l'analyseur syntaxique traite ce
     /// balisage comme un élément div dont l'attribut "id'bar'" a une
     /// valeur vide.
-    UnexpectedCharacterInAttributeName,
+    UnexpectedCharacterInAttributeName = "unexpected-character-in-attribute-name",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+0022 ("), U+0027 ('), U+003C (<), U+003D (=) ou
@@ -263,7 +315,7 @@ pub enum HTMLParserError {
     /// Exemple: `<div foo=b'ar'>`
     /// En raison d'un point de code U+0027 (') mal placé, l'analyseur
     /// définit la valeur de l'attribut "foo" à "b'ar'".
-    UnexpectedCharacterInUnquotedAttributeValue,
+    UnexpectedCharacterInUnquotedAttributeValue = "unexpected-character-in-unquoted-attribute-value",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+003D (=) avant un nom d'attribut. Dans ce cas,
@@ -278,14 +330,14 @@ pub enum HTMLParserError {
     /// traite ce balisage comme un élément div avec deux attributs : un
     /// attribut "foo" avec une valeur "bar" et un attribut "="baz"" avec
     /// une valeur vide.
-    UnexpectedEqualsSignBeforeAttributeName,
+    UnexpectedEqualsSignBeforeAttributeName = "unexpected-equals-sign-before-attribute-name",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// point de code U+0000 NULL dans le flux d'entrée à certaines
     /// positions. En général, ces points de code sont soit ignorés, soit,
     /// pour des raisons de sécurité, remplacés par un CHARACTER DE
     /// REMPLACEMENT U+FFFD.
-    UnexpectedNullCharacter,
+    UnexpectedNullCharacter = "unexpected-null-character",
 
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// U+003F (?) alors que le premier point de code d'un nom de balise
@@ -307,7 +359,7 @@ pub enum HTMLParserError {
     /// traitement XML (par exemple, `<?xml-stylesheet type="text/css"
     /// href="style.css"?>`) ou une déclaration XML (par exemple, `<?xml
     /// version="1.0" encoding="UTF-8"?>`) utilisée dans HTML.
-    UnexpectedQuestionMarkInsteadOfTagName,
+    UnexpectedQuestionMarkInsteadOfTagName = "unexpected-question-mark-instead-of-tag-name",
 
     /// Cette erreur se produit si l'analyseur rencontre un point de code
     /// U+002F (/) qui ne fait pas partie d'une valeur d'attribut citée et
@@ -315,109 +367,12 @@ pub enum HTMLParserError {
     /// dans une balise (par exemple, `<div / id="foo">`). Dans ce cas,
     /// l'analyseur se comporte comme s'il rencontrait un espace blanc
     /// ASCII.
-    UnexpectedSolidusInTag,
+    UnexpectedSolidusInTag = "unexpected-solidus-in-tag"
 }
 
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
-
-impl FromStr for HTMLParserError {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            | "abrupt-doctype-public-identifier" => Self::AbruptDOCTYPEPublicIdentifier,
-            | "abrupt-doctype-system-identifier" => Self::AbruptDOCTYPESystemIdentifier,
-            | "cdata-in-html-content" => Self::CDATAInHtmlContent,
-            | "eof-before-tag-name" => Self::EofBeforeTagName,
-            | "eof-in-doctype" => Self::EofInDOCTYPE,
-            | "eof-in-tag" => Self::EofInTag,
-            | "incorrectly-opened-comment" => Self::IncorrectlyOpenedComment,
-            | "invalid-character-sequence-after-doctype-name" => Self::InvalidCharacterSequenceAfterDOCTYPEName,
-            | "invalid-first-character-of-tag-name" => Self::InvalidFirstCharacterOfTagName,
-            | "missing-attribute-value" => Self::MissingAttributeValue,
-            | "missing-doctype-name" => Self::MissingDOCTYPEName,
-            | "missing-quote-before-doctype-public-identifier" => Self::MissingQuoteBeforeDOCTYPEPublicIdentifier,
-            | "missing-quote-before-doctype-system-identifier" => Self::MissingQuoteBeforeDOCTYPESystemIdentifier,
-            | "missing-doctype-public-identifier" => Self::MissingDOCTYPEPublicIdentifier,
-            | "missing-doctype-system-identifier" => Self::MissingDOCTYPESystemIdentifier,
-            | "missing-end-tag-name" => Self::MissingEndTagName,
-            | "missing-whitespace-after-doctype-public-keyword" => Self::MissingWhitespaceAfterDOCTYPEPublicKeyword,
-            | "missing-whitespace-after-doctype-system-keyword" => Self::MissingWhitespaceAfterDOCTYPESystemKeyword,
-            | "missing-whitespace-before-doctype-name" => Self::MissingWhitespaceBeforeDOCTYPEName,
-            | "missing-whitespace-between-attributes" => Self::MissingWhitespaceBetweenAttributes,
-            | "missing-whitespace-between-doctype-public-and-system-identifiers" => Self::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers,
-            | "unexpected-character-after-doctype-system-identifier" => Self::UnexpectedCharacterAfterDoctypeSystemIdentifier,
-            | "unexpected-character-in-attribute-name" => Self::UnexpectedCharacterInAttributeName,
-            | "unexpected-character-in-unquoted-attribute-value" => Self::UnexpectedCharacterInUnquotedAttributeValue,
-            | "unexpected-equals-sign-before-attribute-name" => Self::UnexpectedEqualsSignBeforeAttributeName,
-            | "unexpected-null-character" => Self::UnexpectedNullCharacter,
-            | "unexpected-question-mark-instead-of-tag-name" => Self::UnexpectedQuestionMarkInsteadOfTagName,
-            | "unexpected-solidus-in-tag" => Self::UnexpectedSolidusInTag,
-            | _ => return Err("!!!!! Nom d'erreur syntaxique inconnu !!!!!"),
-        })
-    }
-}
-
-impl fmt::Display for HTMLParserError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                | Self::AbruptDOCTYPEPublicIdentifier =>
-                    "abrupt-doctype-public-identifier",
-                | Self::AbruptDOCTYPESystemIdentifier =>
-                    "abrupt-doctype-system-identifier",
-                | Self::CDATAInHtmlContent => "cdata-in-html-content",
-                | Self::EofBeforeTagName => "eof-before-tag-name",
-                | Self::EofInDOCTYPE => "eof-in-doctype",
-                | Self::EofInTag => "eof-in-tag",
-                | Self::IncorrectlyOpenedComment =>
-                    "incorrectly-opened-comment",
-                | Self::InvalidCharacterSequenceAfterDOCTYPEName =>
-                    "invalid-character-sequence-after-doctype-name",
-                | Self::InvalidFirstCharacterOfTagName =>
-                    "invalid-first-character-of-tag-name",
-                | Self::MissingAttributeValue => "missing-attribute-value",
-                | Self::MissingDOCTYPEName => "missing-doctype-name",
-                | Self::MissingQuoteBeforeDOCTYPEPublicIdentifier =>
-                    "missing-quote-before-doctype-public-identifier",
-                | Self::MissingQuoteBeforeDOCTYPESystemIdentifier =>
-                    "missing-quote-before-doctype-system-identifier",
-                | Self::MissingDOCTYPEPublicIdentifier =>
-                    "missing-doctype-public-identifier",
-                | Self::MissingDOCTYPESystemIdentifier =>
-                    "missing-doctype-system-identifier",
-                | Self::MissingEndTagName => "missing-end-tag-name",
-                | Self::MissingWhitespaceAfterDOCTYPEPublicKeyword =>
-                    "missing-whitespace-after-doctype-public-keyword",
-                | Self::MissingWhitespaceAfterDOCTYPESystemKeyword =>
-                    "missing-whitespace-after-doctype-system-keyword",
-                | Self::MissingWhitespaceBeforeDOCTYPEName =>
-                    "missing-whitespace-before-doctype-name",
-                | Self::MissingWhitespaceBetweenAttributes =>
-                    "missing-whitespace-between-attributes",
-                | Self::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers =>
-                     "missing-whitespace-between-doctype-public-and-system-identifiers",
-                | Self::UnexpectedCharacterAfterDoctypeSystemIdentifier
-                    => "unexpected-character-after-doctype-system-identifier",
-                | Self::UnexpectedCharacterInAttributeName =>
-                    "unexpected-character-in-attribute-name",
-                | Self::UnexpectedCharacterInUnquotedAttributeValue =>
-                    "unexpected-character-in-unquoted-attribute-value",
-                | Self::UnexpectedEqualsSignBeforeAttributeName =>
-                    "unexpected-equals-sign-before-attribute-name",
-                | Self::UnexpectedNullCharacter =>
-                    "unexpected-null-character",
-                | Self::UnexpectedQuestionMarkInsteadOfTagName =>
-                    "unexpected-question-mark-instead-of-tag-name",
-                | Self::UnexpectedSolidusInTag => "unexpected-solidus-in-tag",
-            }
-        )
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -430,6 +385,25 @@ mod tests {
     ) -> HTMLTokenizer<impl Iterator<Item = char>> {
         let stream = InputStreamPreprocessor::new(input.chars());
         HTMLTokenizer::new(stream)
+    }
+
+    #[test]
+    fn test_error_abrupt_closing_of_empty_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/abrupt_closing_of_empty_comment.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("".into()))
+        );
+
+        html_tok.next_token();
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("".into()))
+        );
     }
 
     #[test]
@@ -473,6 +447,18 @@ mod tests {
     }
 
     #[test]
+    fn test_error_eof_in_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/eof_in_comment.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment("".into()))
+        );
+    }
+
+    #[test]
     fn test_error_eof_in_doctype() {
         let mut html_tok = get_tokenizer_html(include_str!(
             "crashtests/doctype/eof_in_doctype.html"
@@ -495,6 +481,26 @@ mod tests {
             "crashtests/tag/eof_in_tag.html"
         ));
 
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+    }
+
+    #[test]
+    fn test_error_incorrectly_closed_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/incorrectly_closed_comment.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment(
+                " incorrectly closed comment ".into()
+            ))
+        );
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Character('\n'))
+        );
         assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
     }
 
@@ -747,6 +753,23 @@ mod tests {
                 force_quirks_flag: false
             })
         );
+    }
+
+    #[test]
+    fn test_error_nested_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/nested_comment.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment(" <!-- nested ".into()))
+        );
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character(' ')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('-')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('-')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('>')));
     }
 
     #[test]
