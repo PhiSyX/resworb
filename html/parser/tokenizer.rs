@@ -1219,6 +1219,25 @@ where
         }
     }
 
+    fn handle_comment_less_than_sign_bang_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passez à l'état `comment-less-than-sign-bang-dash-dash`.
+            | Some('-') => self
+                .state
+                .switch_to("comment-less-than-sign-bang-dash-dash")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `comment-end-dash`.
+            | _ => self.reconsume("comment-end-dash").and_continue(),
+        }
+    }
+
     fn handle_comment_start_dash_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
@@ -2358,9 +2377,18 @@ where
                 }
                 | State::BogusComment => self.handle_bogus_comment_state(),
                 | State::CommentStart => self.handle_comment_start_state(),
-                | State::CommentLessThanSign => self.handle_comment_less_than_sign_state(),
-                | State::CommentLessThanSignBang => self.handle_comment_less_than_sign_bang_state(),
-                | State::CommentStartDash => self.handle_comment_start_dash_state(),
+                | State::CommentLessThanSign => {
+                    self.handle_comment_less_than_sign_state()
+                }
+                | State::CommentLessThanSignBang => {
+                    self.handle_comment_less_than_sign_bang_state()
+                }
+                | State::CommentLessThanSignBangDash => {
+                    self.handle_comment_less_than_sign_bang_dash_state()
+                }
+                | State::CommentStartDash => {
+                    self.handle_comment_start_dash_state()
+                }
                 | State::Comment => self.handle_comment_state(),
                 | State::DOCTYPE => self.handle_doctype_state(),
                 | State::BeforeDOCTYPEName => {
