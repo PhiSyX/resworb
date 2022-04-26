@@ -101,6 +101,12 @@ define_errors! {
     /// document en mode quirks.
     AbruptDOCTYPESystemIdentifier = "abrupt-doctype-system-identifier",
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre une
+    /// référence de caractère numérique qui ne contient aucun chiffre
+    /// (par exemple, &#qux;). Dans ce cas, l'analyseur syntaxique ne
+    /// résout pas la référence de caractère.
+    AbsenceOfDigitsInNumericCharacterReference = "absence-of-digits-in-numeric-character-reference",
+
     /// Cette erreur se produit si l'analyseur rencontre une section CDATA
     /// en dehors d'un contenu étranger (SVG ou MathML). L'analyseur
     /// syntaxique traite ces sections CDATA (y compris les chaînes de
