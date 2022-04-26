@@ -1207,6 +1207,59 @@ where
         }
     }
 
+    fn handle_comment_state(&mut self) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Ajouter le caractère actuel aux données du jeton `comment`.
+            // Passer à l'état `comment-less-than-sign`.
+            | Some(ch @ '<') => self
+                .change_current_token(|comment_tok| {
+                    comment_tok.append_character(ch)
+                })
+                .switch_state_to("comment-less-than-sign")
+                .and_continue(),
+
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `comment-end-dash`.
+            | Some('-') => {
+                self.state.switch_to("comment-end-dash").and_continue()
+            }
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Ajouter un caractère U+FFFD
+            // `REPLACEMENT_CHARACTER` aux données du jeton `comment`.
+            | Some('\0') => self
+                .change_current_token(|comment_tok| {
+                    comment_tok
+                        .append_character(char::REPLACEMENT_CHARACTER);
+                })
+                .and_continue_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type `eof-in-comment`.
+            // Émettre le jeton `comment` actuel. Émettre un jeton `end of
+            // file`.
+            | None => self
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-comment"),
+
+            // Anything else
+            //
+            // Ajouter le caractère actuel aux données du jeton `comment`.
+            | Some(ch) => self
+                .change_current_token(|comment_tok| {
+                    comment_tok.append_character(ch);
+                })
+                .and_continue(),
+        }
+    }
+
     fn handle_doctype_state(&mut self) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
@@ -2250,6 +2303,7 @@ where
                 | State::BogusComment => self.handle_bogus_comment_state(),
                 | State::CommentStart => self.handle_comment_start_state(),
                 | State::CommentStartDash => self.handle_comment_start_dash_state(),
+                | State::Comment => self.handle_comment_state(),
                 | State::DOCTYPE => self.handle_doctype_state(),
                 | State::BeforeDOCTYPEName => {
                     self.handle_before_doctype_name_state()
