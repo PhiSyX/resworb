@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::collections::VecDeque;
+use std::{borrow::Cow, collections::VecDeque};
 
 use parser::preprocessor::InputStreamPreprocessor;
 
@@ -10,7 +10,13 @@ use super::{
     error::HTMLParserError,
     token::{HTMLTagAttribute, HTMLToken},
 };
-use crate::{emit_html_error, parser::token::HTMLTagAttributeName};
+use crate::{
+    emit_html_error,
+    named_characters::{
+        NamedCharacterReferences, NamedCharacterReferencesEntities,
+    },
+    parser::token::HTMLTagAttributeName,
+};
 
 // ----- //
 // Macro //
@@ -24,6 +30,7 @@ macro_rules! define_state {
     ),*
     ) => {
 #[derive(Debug)]
+#[derive(Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum State {
     $( #[$attr] $enum ),*
@@ -81,6 +88,8 @@ trait HTMLStateIteratorInterface {
 
 trait HTMLCharacterInterface {
     fn is_html_whitespace(&self) -> bool;
+    fn is_noncharacter(&self) -> bool;
+    fn is_surrogate(&self) -> bool;
 }
 
 // ---- //
@@ -104,8 +113,12 @@ where
     token: Option<HTMLToken>,
     state: HTMLState,
     temp: VecDeque<HTMLToken>,
+    temporary_buffer: String,
+    named_character_reference_code: NamedCharacterReferencesEntities,
+    character_reference_code: u32,
 }
 
+#[derive(Clone)]
 pub struct HTMLState {
     current: State,
     returns: Option<State>,
@@ -144,7 +157,7 @@ define_state! {
     AttributeValueDoubleQuoted = "attribute-value-double-quoted",
 
     /// 13.2.5.37 Attribute value (single-quoted) state
-    AttributeValueSimpleQuoted = "attribute-value-simple-quoted",
+    AttributeValueSingleQuoted = "attribute-value-single-quoted",
 
     /// 13.2.5.38 Attribute value (unquoted) state
     AttributeValueUnquoted = "attribute-value-unquoted",
@@ -240,7 +253,31 @@ define_state! {
     BogusDOCTYPE = "bogus-doctype",
 
     /// 13.2.5.72 Character reference state
-    CharacterReference = "character-reference"
+    CharacterReference = "character-reference",
+
+    /// 13.2.5.73 Named character reference state
+    NamedCharacterReference = "named-character-reference",
+
+    /// 13.2.5.74 Ambiguous ampersand state
+    AmbiguousAmpersand = "ambiguous-ampersand",
+
+    /// 13.2.5.75 Numeric character reference state
+    NumericCharacterReference = "numeric-character-reference",
+
+    /// 13.2.5.76 Hexadecimal character reference start state
+    HexadecimalCharacterReferenceStart = "hexadecimal-character-reference-start",
+
+    /// 13.2.5.77 Decimal character reference start state
+    DecimalCharacterReferenceStart = "decimal-character-reference-start",
+
+    /// 13.2.5.78 Hexadecimal character reference state
+    HexadecimalCharacterReference = "hexadecimal-character-reference",
+
+    /// 13.2.5.79 Decimal character reference state
+    DecimalCharacterReference = "decimal-character-reference",
+
+    /// 13.2.5.80 Numeric character reference end state
+    NumericCharacterReferenceEnd = "numeric-character-reference-end"
 }
 
 enum HTMLStateIterator {
@@ -263,6 +300,10 @@ where
             token: None,
             state: HTMLState::default(),
             temp: VecDeque::default(),
+            temporary_buffer: String::default(),
+            named_character_reference_code:
+                NamedCharacterReferences::entities(),
+            character_reference_code: 0,
         }
     }
 }
@@ -324,10 +365,36 @@ where
         self
     }
 
-    // fn reset(&mut self) {
-    // self.token = None;
-    // self.state = HTMLState::default();
-    // }
+    fn set_temporary_buffer(
+        &mut self,
+        temporary_buffer: String,
+    ) -> &mut Self {
+        self.temporary_buffer = temporary_buffer;
+        self
+    }
+
+    fn append_character_to_temporary_buffer(
+        &mut self,
+        ch: char,
+    ) -> &mut Self {
+        self.temporary_buffer.push(ch);
+        self
+    }
+
+    fn flush_temporary_buffer(&mut self) -> &mut Self {
+        if self.state.is_character_of_attribute() {
+            self.temporary_buffer.clone().chars().for_each(|ch| {
+                self.change_current_token(|tok| {
+                    tok.append_character_to_attribute_value(ch);
+                });
+            });
+        } else {
+            self.temporary_buffer.chars().for_each(|c| {
+                self.temp.push_back(HTMLToken::Character(c))
+            });
+        }
+        self
+    }
 }
 
 impl HTMLState {
@@ -335,8 +402,17 @@ impl HTMLState {
     /// Terme `switch_to` venant de la spécification HTML "Switch to the
     /// ..."
     fn switch_to(&mut self, state: &str) -> &mut Self {
-        let state = state.parse().unwrap();
-        self.current = state;
+        let mut to: Cow<str> = Cow::default();
+
+        if state == "return-state" {
+            if let Some(return_state) = self.returns.clone() {
+                to = Cow::from(return_state.to_string());
+            }
+        } else {
+            to = Cow::from(state);
+        }
+
+        self.current = to.parse().unwrap();
         self
     }
 
@@ -347,6 +423,15 @@ impl HTMLState {
         let state = state.parse().unwrap();
         self.returns = Some(state);
         self
+    }
+
+    fn is_character_of_attribute(&self) -> bool {
+        matches!(
+            self.returns,
+            Some(State::AttributeValueDoubleQuoted)
+                | Some(State::AttributeValueSingleQuoted)
+                | Some(State::AttributeValueUnquoted)
+        )
     }
 }
 
@@ -794,10 +879,10 @@ where
 
             // U+0027 APOSTROPHE (')
             //
-            // Passer à l'état `attribute-value-simple-quoted`.
+            // Passer à l'état `attribute-value-single-quoted`.
             | Some('\'') => self
                 .state
-                .switch_to("attribute-value-simple-quoted")
+                .switch_to("attribute-value-single-quoted")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
@@ -2465,6 +2550,361 @@ where
             | Some(_) => self.ignore(),
         }
     }
+
+    fn handle_character_reference_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alphanumeric
+            //
+            // Reprendre dans l'état `named-character-reference`.
+            | Some(ch) if ch.is_ascii_alphanumeric() => {
+                self.reconsume("named-character-reference").and_continue()
+            }
+
+            // U+0023 NUMBER SIGN (#)
+            //
+            // Ajouter le caractère actuel au tampon temporaire.
+            // Passer à l'état `numeric-character-reference`.
+            | Some(ch @ '#') => self
+                .set_temporary_buffer(String::new())
+                .append_character_to_temporary_buffer(ch)
+                .switch_state_to("numeric-character-reference")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Flush code points consumed as a character reference.
+            // Reconsume in the return state.
+            | _ => self
+                .flush_temporary_buffer()
+                .reconsume("return-state")
+                .and_continue(),
+        }
+    }
+
+    /// Consomme le nombre maximum de caractères possible, où les
+    /// caractères consommés sont l'un des identifiants de la première
+    /// colonne de la table des références de caractères nommés. Ajouter
+    /// chaque caractère au tampon temporaire lorsqu'il est consommé.
+    fn handle_named_character_reference_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        let current_ch = self.stream.current.expect("le caractère actuel");
+        let rest_of_chars = self.stream.peek_until_end::<String>();
+        let full_str = format!("{current_ch}{rest_of_chars}");
+
+        let entities = &self.named_character_reference_code;
+
+        let (maybe_result, max_size) = entities.iter().fold(
+            (None, 0),
+            |(mut maybe_result, mut max_size), item| {
+                let name = item.0;
+                let size_name = name.len();
+
+                if full_str.starts_with(name) && size_name > max_size {
+                    max_size = size_name;
+                    maybe_result = Some(item);
+                }
+
+                (maybe_result, max_size)
+            },
+        );
+
+        match maybe_result {
+            | Some(result) => {
+                todo!();
+            }
+            | None => self
+                .flush_temporary_buffer()
+                .switch_state_to("ambiguous-ampersand")
+                .and_continue(),
+        }
+    }
+
+    fn handle_ambiguous_ampersand_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alphanumeric
+            //
+            // Si la référence de caractère a été consommée dans le cadre
+            // d'un attribut, alors ajouter le caractère actuel à la valeur
+            // de l'attribut actuel. Sinon, émettre le caractère actuel
+            // comme un jeton `character`.
+            | Some(ch) if ch.is_ascii_alphanumeric() => {
+                if self.state.is_character_of_attribute() {
+                    self.change_current_token(|tok| {
+                        tok.append_character_to_attribute_value(ch);
+                    })
+                    .and_continue()
+                } else {
+                    self.and_break()
+                }
+            }
+
+            // U+003B SEMICOLON (;)
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unknown-named-character-reference`. Reprendre dans l'état
+            // `return-state`.
+            | Some(';') => {
+                self.reconsume("return-state").and_continue_with_error(
+                    "unknown-named-character-reference",
+                )
+            }
+
+            // Anything else
+            //
+            // Reprendre dans l'état `return-state`.
+            | _ => self.reconsume("return-state").and_continue(),
+        }
+    }
+
+    fn handle_numeric_character_reference_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        // Définir le code de référence du caractère à zéro (0).
+        self.character_reference_code = 0;
+
+        match self.stream.next_input_char() {
+            // U+0078 LATIN SMALL LETTER X
+            // U+0058 LATIN CAPITAL LETTER X
+            //
+            // Ajouter le caractère actuel au tampon temporaire.
+            // Passer à l'état `hexadecimal-character-reference-start`.
+            | Some(ch @ ('x' | 'X')) => self
+                .append_character_to_temporary_buffer(ch)
+                .switch_state_to("hexadecimal-character-reference-start")
+                .and_continue(),
+
+            // Anything else
+            | _ => self
+                .reconsume("decimal-character-reference-start")
+                .and_continue(),
+        }
+    }
+
+    fn handle_hexadecimal_character_reference_start_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII hex digit
+            //
+            // Reprendre dans l'état `hexadecimal-character-reference`.
+            | Some(ch) if ch.is_ascii_hexdigit() => self
+                .reconsume("hexadecimal-character-reference")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `absence-of-digits-in-numeric-character-reference`. Videz
+            // les points de code consommés comme référence de caractère.
+            // Reprendre dans l'état `return-state`.
+            | _ => self
+                .flush_temporary_buffer()
+                .reconsume("return-state")
+                .and_continue_with_error(
+                    "absence-of-digits-in-numeric-character-reference",
+                ),
+        }
+    }
+
+    fn handle_decimal_character_reference_start_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII digit
+            //
+            // Reprendre dans l'état `decimal-character-reference`.
+            | Some(ch) if ch.is_ascii_digit() => self
+                .reconsume("decimal-character-reference")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `absence-of-digits-in-numeric-character-reference`. Videz
+            // les points de code consommés comme référence de caractère.
+            // Reprendre dans l'état `return-state`.
+            | _ => self
+                .flush_temporary_buffer()
+                .reconsume("return-state")
+                .and_continue_with_error(
+                    "absence-of-digits-in-numeric-character-reference",
+                ),
+        }
+    }
+
+    fn handle_hexadecimal_character_reference_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII digit
+            //
+            // Multiplier le code de référence du caractère par 16. Ajouter
+            // une version numérique du caractère actuel
+            // (soustraire 0x0030 du point de code du caractère) au code de
+            // référence du caractère.
+            | Some(ch) if ch.is_ascii_digit() => {
+                self.character_reference_code *= 16;
+                self.character_reference_code +=
+                    ((ch as u8) - 0x0030) as u32;
+                self.and_continue()
+            }
+
+            // ASCII upper hex digit
+            //
+            // Multiplier le code de référence du caractère par 16. Ajouter
+            // une version numérique du caractère actuel sous
+            // forme de chiffre hexadécimal (soustraire 0x0037 du point de
+            // code du caractère) au code de référence du caractère.
+            | Some(ch)
+                if ch.is_ascii_hexdigit() && ch.is_ascii_uppercase() =>
+            {
+                self.character_reference_code *= 16;
+                self.character_reference_code +=
+                    ((ch as u8) - 0x0037) as u32;
+                self.and_continue()
+            }
+
+            // ASCII lower hex digit
+            //
+            // Multiplier le code de référence du caractère par 16. Ajouter
+            // une version numérique du caractère actuel sous
+            // forme de chiffre hexadécimal (soustraire 0x0057 du point de
+            // code du caractère) au code de référence du caractère.
+            | Some(ch)
+                if ch.is_ascii_hexdigit() && ch.is_ascii_lowercase() =>
+            {
+                self.character_reference_code *= 16;
+                self.character_reference_code +=
+                    ((ch as u8) - 0x0057) as u32;
+                self.and_continue()
+            }
+
+            // U+003B SEMICOLON
+            //
+            // Passer à l'état `numeric-character-reference-end`.
+            | Some(';') => self
+                .switch_state_to("numeric-character-reference-end")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `missing-semicolon-after-character-reference`. Reprendre
+            // dans l'état `numeric-character-reference-end`.
+            | _ => self
+                .reconsume("numeric-character-reference-end")
+                .and_continue_with_error(
+                    "missing-semicolon-after-character-reference",
+                ),
+        }
+    }
+
+    fn handle_decimal_character_reference_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII digit
+            //
+            // Multiplier le code de référence du caractère par 10. Ajouter
+            // une version numérique du caractère actuel (soustraire 0x0030
+            // du point de code du caractère) au code de référence du
+            // caractère.
+            | Some(ch) if ch.is_ascii_digit() => {
+                self.character_reference_code *= 10;
+                self.character_reference_code +=
+                    ((ch as u8) - 0x0030) as u32;
+                self.and_continue()
+            }
+
+            // U+003B SEMICOLON
+            | Some(';') => self
+                .switch_state_to("numeric-character-reference-end")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `missing-semicolon-after-character-reference`. Reprendre
+            // dans l'état `numeric-character-reference-end`.
+            | _ => self
+                .reconsume("numeric-character-reference-end")
+                .and_continue_with_error(
+                    "missing-semicolon-after-character-reference",
+                ),
+        }
+    }
+
+    fn handle_numeric_character_reference_end_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        let mut err: Option<&str> = None;
+
+        match self.character_reference_code {
+            // Si le nombre est 0x00, il s'agit d'une erreur d'analyse de
+            // type `null-character-reference`. Définir le code de
+            // référence du caractère à 0xFFFD.
+            | 0x00 => {
+                err = "null-character-reference".into();
+                self.character_reference_code = 0xFFFD;
+            }
+
+            // Si le nombre est supérieur à 0x10FFFF, il s'agit d'une
+            // erreur d'analyse de référence de caractère hors
+            // de la plage unicode. Définissez le code de
+            // référence du caractère à 0xFFFD.
+            | crc if crc > 0x10FFFF => {
+                err = "character-reference-outside-unicode-range".into();
+                self.character_reference_code = 0xFFFD;
+            }
+
+            // Si le nombre est un substitut, il s'agit d'une erreur
+            // d'analyse de type `surrogate-character-reference`.
+            // Définir le code de référence du caractère à 0xFFFD.
+            | crc if (crc as u8 as char).is_surrogate() => {
+                err = "surrogate-character-reference".into();
+                self.character_reference_code = 0xFFFD;
+            }
+
+            // Si le nombre n'est pas un caractère, il s'agit d'une erreur
+            // d'analyse de type `noncharacter-character-reference`.
+            | crc if (crc as u8 as char).is_noncharacter() => {
+                err = "noncharacter-character-reference".into();
+            }
+
+            // Si le nombre est 0x0D, ou un contrôle qui n'est pas un
+            // espace ASCII, il s'agit d'une erreur d'analyse de référence
+            // de caractère de contrôle. Si le nombre est l'un des nombres
+            // de la première colonne du tableau suivant, trouvez la ligne
+            // avec ce nombre dans la première colonne, et définissez le
+            // code de référence de caractère au nombre de la deuxième
+            // colonne de cette ligne.
+            | crc if crc == 0x0D
+                || ((crc as u8 as char).is_control()
+                    && !(crc as u8 as char).is_whitespace()) =>
+            {
+                err = "control-character-reference".into();
+            }
+            | _ => {}
+        }
+
+        let ch = std::char::from_u32(self.character_reference_code)
+            .unwrap_or(char::REPLACEMENT_CHARACTER);
+        self.temporary_buffer.clear();
+        self.append_character_to_temporary_buffer(ch)
+            .flush_temporary_buffer()
+            .switch_state_to("return-state");
+
+        if let Some(err) = err {
+            self.and_continue_with_error(err)
+        } else {
+            self.and_continue()
+        }
+    }
 }
 
 // -------------- //
@@ -2481,6 +2921,33 @@ impl HTMLStateIteratorInterface for HTMLState {}
 impl HTMLCharacterInterface for char {
     fn is_html_whitespace(&self) -> bool {
         self.is_ascii_whitespace() && '\r'.ne(self)
+    }
+
+    /// https://infra.spec.whatwg.org/#noncharacter
+    fn is_noncharacter(&self) -> bool {
+        matches!(self,
+            | '\u{FDD0}'..='\u{FDEF}'
+            | '\u{FFFE}'..='\u{FFFF}'
+            | '\u{1_FFFE}'..='\u{1_FFFF}'
+            | '\u{2_FFFE}'..='\u{2_FFFF}'
+            | '\u{3_FFFE}'..='\u{3_FFFF}'
+            | '\u{4_FFFE}'..='\u{4_FFFF}'
+            | '\u{5_FFFE}'..='\u{5_FFFF}'
+            | '\u{6_FFFE}'..='\u{6_FFFF}'
+            | '\u{7_FFFE}'..='\u{7_FFFF}'
+            | '\u{8_FFFE}'..='\u{8_FFFF}'
+            | '\u{9_FFFE}'..='\u{9_FFFF}'
+            | '\u{A_FFFE}'..='\u{A_FFFF}'
+            | '\u{B_FFFE}'..='\u{B_FFFF}'
+            | '\u{C_FFFE}'..='\u{C_FFFF}'
+            | '\u{D_FFFE}'..='\u{D_FFFF}'
+            | '\u{E_FFFE}'..='\u{E_FFFF}'
+            | '\u{F_FFFE}'..='\u{F_FFFF}'
+            | '\u{10_FFFE}'..='\u{10_FFFF}')
+    }
+
+    fn is_surrogate(&self) -> bool {
+        matches!(self, '\u{D_8000}'..='\u{D_FFFF}')
     }
 }
 
@@ -2516,7 +2983,7 @@ where
                 | State::AttributeValueDoubleQuoted => {
                     self.handle_attribute_value_quoted_state('"')
                 }
-                | State::AttributeValueSimpleQuoted => {
+                | State::AttributeValueSingleQuoted => {
                     self.handle_attribute_value_quoted_state('\'')
                 }
                 | State::AttributeValueUnquoted => {
@@ -2600,8 +3067,34 @@ where
                     self.handle_after_doctype_system_identifier_state()
                 }
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
-
-                | _ => return None,
+                | State::CharacterReference => {
+                    self.handle_character_reference_state()
+                }
+                | State::NamedCharacterReference => {
+                    self.handle_named_character_reference_state()
+                }
+                | State::AmbiguousAmpersand => {
+                    self.handle_ambiguous_ampersand_state()
+                }
+                | State::NumericCharacterReference => {
+                    self.handle_numeric_character_reference_state()
+                }
+                | State::HexadecimalCharacterReferenceStart => {
+                    self.handle_hexadecimal_character_reference_start_state()
+                }
+                | State::DecimalCharacterReferenceStart => {
+                    self.handle_decimal_character_reference_start_state()
+                }
+                | State::HexadecimalCharacterReference => {
+                    self.handle_hexadecimal_character_reference_state()
+                }
+                | State::DecimalCharacterReference => {
+                    self.handle_decimal_character_reference_state()
+                }
+                | State::NumericCharacterReferenceEnd => {
+                    self.handle_numeric_character_reference_end_state()
+                }
+                // | _ => return None,
             };
 
             match state {

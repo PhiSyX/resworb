@@ -86,6 +86,18 @@ where
         )
     }
 
+    /// Récupère les prochains éléments du flux jusqu'à la fin de
+    /// l'itération, sans avancer dans l'itération.
+    ///
+    /// Le type générique est obligatoire.
+    pub fn peek_until_end<R: FromIterator<I>>(&mut self) -> R {
+        self.fill_all_in_queue();
+        self.queue.as_slice()[0..]
+            .iter()
+            .filter_map(|mch| mch.clone())
+            .collect::<R>()
+    }
+
     /// Permet de revenir en arrière dans le flux.
     pub fn rollback(&mut self) {
         self.is_replayed = true;
@@ -112,6 +124,11 @@ where
             (stored_elements..=required_elements)
                 .for_each(|_| self.push_next_to_queue());
         }
+    }
+
+    fn fill_all_in_queue(&mut self) {
+        let stored_elements = self.queue.len();
+        (0..=stored_elements).for_each(|_| self.push_next_to_queue());
     }
 
     fn peek_range(&mut self, range: Range<usize>) -> &[Option<I>] {
