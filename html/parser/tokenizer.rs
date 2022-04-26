@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::collections::VecDeque;
+use std::{borrow::Cow, collections::VecDeque};
 
 use parser::preprocessor::InputStreamPreprocessor;
 
@@ -88,6 +88,8 @@ trait HTMLStateIteratorInterface {
 
 trait HTMLCharacterInterface {
     fn is_html_whitespace(&self) -> bool;
+    fn is_noncharacter(&self) -> bool;
+    fn is_surrogate(&self) -> bool;
 }
 
 // ---- //
@@ -116,6 +118,7 @@ where
     character_reference_code: u32,
 }
 
+#[derive(Clone)]
 pub struct HTMLState {
     current: State,
     returns: Option<State>,
@@ -2835,6 +2838,73 @@ where
                 ),
         }
     }
+
+    fn handle_numeric_character_reference_end_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        let mut err: Option<&str> = None;
+
+        match self.character_reference_code {
+            // Si le nombre est 0x00, il s'agit d'une erreur d'analyse de
+            // type `null-character-reference`. Définir le code de
+            // référence du caractère à 0xFFFD.
+            | 0x00 => {
+                err = "null-character-reference".into();
+                self.character_reference_code = 0xFFFD;
+            }
+
+            // Si le nombre est supérieur à 0x10FFFF, il s'agit d'une
+            // erreur d'analyse de référence de caractère hors
+            // de la plage unicode. Définissez le code de
+            // référence du caractère à 0xFFFD.
+            | crc if crc > 0x10FFFF => {
+                err = "character-reference-outside-unicode-range".into();
+                self.character_reference_code = 0xFFFD;
+            }
+
+            // Si le nombre est un substitut, il s'agit d'une erreur
+            // d'analyse de type `surrogate-character-reference`.
+            // Définir le code de référence du caractère à 0xFFFD.
+            | crc if (crc as u8 as char).is_surrogate() => {
+                err = "surrogate-character-reference".into();
+                self.character_reference_code = 0xFFFD;
+            }
+
+            // Si le nombre n'est pas un caractère, il s'agit d'une erreur
+            // d'analyse de type `noncharacter-character-reference`.
+            | crc if (crc as u8 as char).is_noncharacter() => {
+                err = "noncharacter-character-reference".into();
+            }
+
+            // Si le nombre est 0x0D, ou un contrôle qui n'est pas un
+            // espace ASCII, il s'agit d'une erreur d'analyse de référence
+            // de caractère de contrôle. Si le nombre est l'un des nombres
+            // de la première colonne du tableau suivant, trouvez la ligne
+            // avec ce nombre dans la première colonne, et définissez le
+            // code de référence de caractère au nombre de la deuxième
+            // colonne de cette ligne.
+            | crc if crc == 0x0D
+                || ((crc as u8 as char).is_control()
+                    && !(crc as u8 as char).is_whitespace()) =>
+            {
+                err = "control-character-reference".into();
+            }
+            | _ => {}
+        }
+
+        let ch = std::char::from_u32(self.character_reference_code)
+            .unwrap_or(char::REPLACEMENT_CHARACTER);
+        self.temporary_buffer.clear();
+        self.append_character_to_temporary_buffer(ch)
+            .flush_temporary_buffer()
+            .switch_state_to("return-state");
+
+        if let Some(err) = err {
+            self.and_continue_with_error(err)
+        } else {
+            self.and_continue()
+        }
+    }
 }
 
 // -------------- //
@@ -2851,6 +2921,33 @@ impl HTMLStateIteratorInterface for HTMLState {}
 impl HTMLCharacterInterface for char {
     fn is_html_whitespace(&self) -> bool {
         self.is_ascii_whitespace() && '\r'.ne(self)
+    }
+
+    /// https://infra.spec.whatwg.org/#noncharacter
+    fn is_noncharacter(&self) -> bool {
+        matches!(self,
+            | '\u{FDD0}'..='\u{FDEF}'
+            | '\u{FFFE}'..='\u{FFFF}'
+            | '\u{1_FFFE}'..='\u{1_FFFF}'
+            | '\u{2_FFFE}'..='\u{2_FFFF}'
+            | '\u{3_FFFE}'..='\u{3_FFFF}'
+            | '\u{4_FFFE}'..='\u{4_FFFF}'
+            | '\u{5_FFFE}'..='\u{5_FFFF}'
+            | '\u{6_FFFE}'..='\u{6_FFFF}'
+            | '\u{7_FFFE}'..='\u{7_FFFF}'
+            | '\u{8_FFFE}'..='\u{8_FFFF}'
+            | '\u{9_FFFE}'..='\u{9_FFFF}'
+            | '\u{A_FFFE}'..='\u{A_FFFF}'
+            | '\u{B_FFFE}'..='\u{B_FFFF}'
+            | '\u{C_FFFE}'..='\u{C_FFFF}'
+            | '\u{D_FFFE}'..='\u{D_FFFF}'
+            | '\u{E_FFFE}'..='\u{E_FFFF}'
+            | '\u{F_FFFE}'..='\u{F_FFFF}'
+            | '\u{10_FFFE}'..='\u{10_FFFF}')
+    }
+
+    fn is_surrogate(&self) -> bool {
+        matches!(self, '\u{D_8000}'..='\u{D_FFFF}')
     }
 }
 
@@ -2970,8 +3067,6 @@ where
                     self.handle_after_doctype_system_identifier_state()
                 }
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
-
-                | _ => return None,
                 | State::CharacterReference => {
                     self.handle_character_reference_state()
                 }
@@ -2996,6 +3091,10 @@ where
                 | State::DecimalCharacterReference => {
                     self.handle_decimal_character_reference_state()
                 }
+                | State::NumericCharacterReferenceEnd => {
+                    self.handle_numeric_character_reference_end_state()
+                }
+                // | _ => return None,
             };
 
             match state {

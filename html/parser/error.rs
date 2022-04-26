@@ -107,11 +107,27 @@ define_errors! {
     /// résout pas la référence de caractère.
     AbsenceOfDigitsInNumericCharacterReference = "absence-of-digits-in-numeric-character-reference",
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre une
+    /// référence de caractère numérique qui fait référence à un point de
+    /// code supérieur à la plage Unicode valide. L'analyseur syntaxique
+    /// résout une telle référence de caractère en un REMPLACEMENT CHARACTER
+    /// U+FFFD.
+    CharacterReferenceOutsideUnicodeRange = "character-reference-outside-unicode-range",
+
     /// Cette erreur se produit si l'analyseur rencontre une section CDATA
     /// en dehors d'un contenu étranger (SVG ou MathML). L'analyseur
     /// syntaxique traite ces sections CDATA (y compris les chaînes de
     /// tête "[CDATA[" et de fin "]]") comme des commentaires.
     CDATAInHtmlContent = "cdata-in-html-content",
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre une
+    /// référence de caractère numérique qui fait référence à un point de
+    /// code de contrôle qui n'est pas un espace ASCII ou qui est un
+    /// CARRIAGE RETURN U+000D. L'analyseur syntaxique résout ces références
+    /// de caractères telles quelles, à l'exception des références de
+    /// contrôle C1 qui sont remplacées conformément à l'état final de
+    /// la référence de caractère numérique.
+    ControlCharacterReference = "control-character-reference",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée où un nom de balise est attendu. Dans ce cas,
@@ -284,6 +300,24 @@ define_errors! {
     /// commentaire sera fermé par la première séquence de points de
     /// code "-->" et tout ce qui suit sera traité comme du balisage.
     NestedComment = "nested-comment",
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre une
+    /// référence de caractère numérique qui fait référence à un point
+    /// de code U+0000 NULL. L'analyseur syntaxique résout de telles
+    /// références de caractères en un REMPLACEMENT CHARACTER U+FFFD.
+    NullCharacterReference = "null-character-reference",
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre une
+    /// référence de caractère numérique qui fait référence à un
+    /// non-caractère. L'analyseur syntaxique résout ces références de
+    /// caractères telles quelles.
+    NoncharacterCharacterReference = "noncharacter-character-reference",
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre une
+    /// référence de caractère numérique qui fait référence à un substitut.
+    /// L'analyseur syntaxique résout de telles références de caractères
+    /// en un REMPLACEMENT CHARACTER U+FFFD.
+    SurrogateCharacterReference = "surrogate-character-reference",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre des
     /// points de code autres que des espaces blancs ASCII ou la fermeture
