@@ -164,17 +164,20 @@ define_state! {
     /// 13.2.5.43 Comment start state
     CommentStart = "comment-start",
 
+    /// 13.2.5.44 Comment start dash state
+    CommentStartDash = "comment-start-dash",
+
+    /// 13.2.5.45 Comment state
+    Comment = "comment",
+
     /// 13.2.5.46 Comment less-than sign state
     CommentLessThanSign = "comment-less-than-sign",
 
     /// 13.2.5.47 Comment less-than sign bang state
     CommentLessThanSignBang = "comment-less-than-sign-bang",
 
-    /// 13.2.5.44 Comment start dash state
-    CommentStartDash = "comment-start-dash",
-
-    /// 13.2.5.45 Comment state
-    Comment = "comment",
+    /// 13.2.5.48 Comment less-than sign bang dash state
+    CommentLessThanSignBangDash = "comment-less-than-sign-bang-dash",
 
     /// 13.2.5.50 Comment end dash state
     CommentEndDash = "comment-end-dash",
@@ -1188,6 +1191,25 @@ where
                 .change_current_token(|comment_tok| {
                     comment_tok.append_character(ch)
                 })
+                .and_continue(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `comment`.
+            | _ => self.reconsume("comment").and_continue(),
+        }
+    }
+
+    fn handle_comment_less_than_sign_bang_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passez à l'état `comment-less-than-sign-bang-dash`.
+            | Some('-') => self
+                .state
+                .switch_to("comment-less-than-sign-bang-dash")
                 .and_continue(),
 
             // Anything else
@@ -2337,6 +2359,7 @@ where
                 | State::BogusComment => self.handle_bogus_comment_state(),
                 | State::CommentStart => self.handle_comment_start_state(),
                 | State::CommentLessThanSign => self.handle_comment_less_than_sign_state(),
+                | State::CommentLessThanSignBang => self.handle_comment_less_than_sign_bang_state(),
                 | State::CommentStartDash => self.handle_comment_start_dash_state(),
                 | State::Comment => self.handle_comment_state(),
                 | State::DOCTYPE => self.handle_doctype_state(),
