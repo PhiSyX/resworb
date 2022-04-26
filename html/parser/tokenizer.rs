@@ -167,6 +167,9 @@ define_state! {
     /// 13.2.5.46 Comment less-than sign state
     CommentLessThanSign = "comment-less-than-sign",
 
+    /// 13.2.5.47 Comment less-than sign bang state
+    CommentLessThanSignBang = "comment-less-than-sign-bang",
+
     /// 13.2.5.44 Comment start dash state
     CommentStartDash = "comment-start-dash",
 
@@ -1159,6 +1162,37 @@ where
             // Anything else
             //
             // Reprendre dans l'état de commentaire.
+            | _ => self.reconsume("comment").and_continue(),
+        }
+    }
+
+    fn handle_comment_less_than_sign_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0021 EXCLAMATION MARK (!)
+            //
+            // Ajouter le caractère actuel aux données du jeton `comment`.
+            // Passer à l'état `comment-less-than-sign-bang`.
+            | Some(ch @ '!') => self
+                .change_current_token(|comment_tok| {
+                    comment_tok.append_character(ch)
+                })
+                .switch_state_to("comment-less-than-sign-bang")
+                .and_continue(),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Ajoute le caractère actuel aux données du jeton `comment`.
+            | Some(ch @ '<') => self
+                .change_current_token(|comment_tok| {
+                    comment_tok.append_character(ch)
+                })
+                .and_continue(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `comment`.
             | _ => self.reconsume("comment").and_continue(),
         }
     }
@@ -2302,6 +2336,7 @@ where
                 }
                 | State::BogusComment => self.handle_bogus_comment_state(),
                 | State::CommentStart => self.handle_comment_start_state(),
+                | State::CommentLessThanSign => self.handle_comment_less_than_sign_state(),
                 | State::CommentStartDash => self.handle_comment_start_dash_state(),
                 | State::Comment => self.handle_comment_state(),
                 | State::DOCTYPE => self.handle_doctype_state(),
