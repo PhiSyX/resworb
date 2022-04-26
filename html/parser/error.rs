@@ -259,6 +259,12 @@ define_errors! {
     /// comme si un espace ASCII était présent.
     MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers = "missing-whitespace-between-doctype-public-and-system-identifiers",
 
+    /// Cette erreur se produit si l'analyseur rencontre un commentaire
+    /// imbriqué (par exemple, `<!-- <!-- imbriqué --> -->`). Un tel
+    /// commentaire sera fermé par la première séquence de points de
+    /// code "-->" et tout ce qui suit sera traité comme du balisage.
+    NestedComment = "nested-comment",
+
     /// Cette erreur se produit si l'analyseur syntaxique rencontre des
     /// points de code autres que des espaces blancs ASCII ou la fermeture
     /// U+003E (>) après l'identificateur de système DOCTYPE. L'analyseur
@@ -383,14 +389,14 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Comment("--".into()))
+            Some(HTMLToken::Comment("".into()))
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Comment("---".into()))
+            Some(HTMLToken::Comment("".into()))
         );
     }
 
@@ -442,7 +448,7 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Comment("----".into()))
+            Some(HTMLToken::Comment("".into()))
         );
     }
 
@@ -721,6 +727,23 @@ mod tests {
                 force_quirks_flag: false
             })
         );
+    }
+
+    #[test]
+    fn test_error_nested_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/nested_comment.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment(" <!-- nested ".into()))
+        );
+
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character(' ')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('-')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('-')));
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('>')));
     }
 
     #[test]

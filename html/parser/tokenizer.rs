@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::{borrow::Cow, collections::VecDeque};
+use std::collections::VecDeque;
 
 use parser::preprocessor::InputStreamPreprocessor;
 
@@ -178,6 +178,9 @@ define_state! {
 
     /// 13.2.5.48 Comment less-than sign bang dash state
     CommentLessThanSignBangDash = "comment-less-than-sign-bang-dash",
+
+    /// 13.2.5.48 Comment less-than sign bang dash dash state
+    CommentLessThanSignBangDashDash = "comment-less-than-sign-bang-dash-dash",
 
     /// 13.2.5.50 Comment end dash state
     CommentEndDash = "comment-end-dash",
@@ -1045,31 +1048,14 @@ where
     fn handle_markup_declaration_open_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
-        let mut f = false;
-
-        // Two U+002D HYPHEN-MINUS characters (-)
-        //
-        // Consommer ces deux caractères, créer un jeton `comment`
-        // dont les données sont une chaîne de caractères vide, passer à
-        // l'état `comment-start`.
-        if let Cow::Borrowed("--") = self.stream.slice_until(2) {
-            f = true;
-
-            self.stream.advance(2);
-            self.set_token(HTMLToken::new_comment(String::new()))
-                .switch_state_to("comment-start");
-        } else if let Cow::Owned(word) = self.stream.slice_until(7) {
-            f = false;
-
+        if let Some(word) = self.stream.peek_until::<String>(7) {
             // Correspondance ASCII insensible à la casse pour le mot
             // "DOCTYPE".
             //
             // Consommer ces caractères et passer à l'état `doctype`.
             if word.to_ascii_lowercase() == "doctype" {
-                f = true;
-
-                self.switch_state_to("doctype");
                 self.stream.advance(7);
+                return self.switch_state_to("doctype").and_continue();
             }
             // La chaîne "[CDATA[" (les cinq lettres majuscules "CDATA"
             // avec un caractère U+005B LEFT SQUARE BRACKET avant et après)
@@ -1081,13 +1067,27 @@ where
             // un jeton `comment` dont les données sont une chaîne de
             // caractères "[CDATA[". Passer à l'état `bogus-comment`.
             else if word == "[CDATA[" {
-                f = true;
-
                 // todo: adjusted current node
-                // HTMLParserError::CDATAInHtmlContent;
-                self.set_token(HTMLToken::new_comment(word))
-                    .switch_state_to("bogus-comment");
                 self.stream.advance(7);
+                return self
+                    .set_token(HTMLToken::new_comment(word))
+                    .switch_state_to("bogus-comment")
+                    .and_continue_with_error("cdata-in-html-content");
+            }
+        }
+
+        // Two U+002D HYPHEN-MINUS characters (-)
+        //
+        // Consommer ces deux caractères, créer un jeton `comment`
+        // dont les données sont une chaîne de caractères vide, passer à
+        // l'état `comment-start`.
+        if let Some(word) = self.stream.peek_until::<String>(2) {
+            if word == "--" {
+                self.stream.advance(2);
+                return self
+                    .set_token(HTMLToken::new_comment(String::new()))
+                    .switch_state_to("comment-start")
+                    .and_continue();
             }
         }
 
@@ -1097,13 +1097,9 @@ where
         // `incorrectly-opened-comment`. Créer un jeton `comment` dont les
         // données sont une chaîne de caractères vide. Passer à l'état
         // `bogus-comment` (ne pas consommer dans l'état actuel).
-        if !f {
-            self.set_token(HTMLToken::new_comment(String::new()))
-                .switch_state_to("bogus-comment")
-                .and_continue_with_error("incorrectly-opened-comment")
-        } else {
-            self.and_continue()
-        }
+        self.set_token(HTMLToken::new_comment(String::new()))
+            .switch_state_to("bogus-comment")
+            .and_continue_with_error("incorrectly-opened-comment")
     }
 
     fn handle_bogus_comment_state(&mut self) -> ResultHTMLStateIterator {
@@ -1238,6 +1234,28 @@ where
         }
     }
 
+    fn handle_comment_less_than_sign_bang_dash_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+003E GREATER-THAN SIGN (>)
+            // EOF
+            //
+            // Reprendre à l'état `comment-end`.
+            | Some('-') | None => {
+                self.reconsume("comment-end").and_continue()
+            }
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type `nested-comment`.
+            // Reprenez à l'état `comment-end`.
+            | Some(_) => self
+                .reconsume("comment-end")
+                .and_continue_with_error("nested-comment"),
+        }
+    }
+
     fn handle_comment_start_dash_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
@@ -1331,6 +1349,88 @@ where
                 .change_current_token(|comment_tok| {
                     comment_tok.append_character(ch);
                 })
+                .and_continue(),
+        }
+    }
+
+    fn handle_comment_end_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `comment-end`.
+            | Some('-') => {
+                self.state.switch_to("comment-end").and_continue()
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type `eof-in-comment`.
+            // Émettre le jeton `comment` actuel. Émettre un jeton ` end of
+            // file`.
+            | None => self
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-comment"),
+
+            // Anything else
+            //
+            // Ajouter un caractère U+002D HYPHEN-MINUS (-) aux données du
+            // jeton `comment`. Reprendre l'état `comment`.
+            | Some(_) => self
+                .change_current_token(|comment_tok| {
+                    comment_tok.append_character('-');
+                })
+                .reconsume("comment")
+                .and_continue(),
+        }
+    }
+
+    fn handle_comment_end_state(&mut self) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état `data`. Émettre le jeton `comment` actuel.
+            | Some('>') => self.state.switch_to("data").and_break(),
+
+            // U+0021 EXCLAMATION MARK (!)
+            //
+            // Passez à l'état `comment-end-bang`.
+            | Some('!') => {
+                self.state.switch_to("comment-end-bang").and_continue()
+            }
+
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Ajouter un caractère U+002D HYPHEN-MINUS (-) aux données du
+            // jeton `comment` actuel.
+            | Some(ch @ '-') => self
+                .change_current_token(|comment_tok| {
+                    comment_tok.append_character(ch);
+                })
+                .and_continue(),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type `eof-in-comment`.
+            // Émettre le jeton `comment` actuel. Émettre un jeton `end of
+            // file`.
+            | None => self
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-comment"),
+
+            // Anything else
+            //
+            // Ajouter deux caractères U+002D HYPHEN-MINUS (-) aux données
+            // du jeton `comment`. Reprendre l'état `comment`.
+            | Some(_) => self
+                .change_current_token(|comment_tok| {
+                    comment_tok.append_character('-');
+                    comment_tok.append_character('-');
+                })
+                .reconsume("comment")
                 .and_continue(),
         }
     }
@@ -1574,7 +1674,7 @@ where
             | Some(ch) => {
                 let mut f = false;
 
-                if let Cow::Owned(word) = self.stream.slice_until(5) {
+                if let Some(word) = self.stream.peek_until::<String>(5) {
                     f = false;
 
                     let word =
@@ -2386,10 +2486,19 @@ where
                 | State::CommentLessThanSignBangDash => {
                     self.handle_comment_less_than_sign_bang_dash_state()
                 }
+                | State::CommentLessThanSignBangDashDash => {
+                    self.handle_comment_less_than_sign_bang_dash_dash_state()
+                }
                 | State::CommentStartDash => {
                     self.handle_comment_start_dash_state()
                 }
                 | State::Comment => self.handle_comment_state(),
+                | State::CommentEndDash => {
+                    self.handle_comment_end_dash_state()
+                },
+                | State::CommentEnd => {
+                    self.handle_comment_end_state()
+                },
                 | State::DOCTYPE => self.handle_doctype_state(),
                 | State::BeforeDOCTYPEName => {
                     self.handle_before_doctype_name_state()
@@ -2490,7 +2599,7 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Comment("-- Hello World --".into()))
+            Some(HTMLToken::Comment(" Hello World ".into()))
         );
     }
 
