@@ -241,6 +241,14 @@ define_errors! {
     /// préambule du document, place le document en mode quirks.
     MissingQuoteBeforeDOCTYPESystemIdentifier = "missing-quote-before-doctype-system-identifier",
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre une
+    /// référence de caractère qui n'est pas terminée par un point de code
+    /// U+003B (;). En général, l'analyseur se comporte comme si la
+    /// référence de caractère se terminait par le point de code U+003B (;);
+    /// cependant, il existe certains cas ambigus dans lesquels l'analyseur
+    /// inclut des points de code ultérieurs dans la référence de caractère.
+    MissingSemicolonAfterCharacterReference = "missing-semicolon-after-character-reference",
+
     /// Cette erreur se produit si l'analyseur syntaxique rencontre un
     /// DOCTYPE dont le mot clé "PUBLIC" et l'identifiant public ne sont
     /// pas séparés par un espace ASCII. Dans ce cas, l'analyseur se

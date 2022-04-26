@@ -113,6 +113,7 @@ where
     temp: VecDeque<HTMLToken>,
     temporary_buffer: String,
     named_character_reference_code: NamedCharacterReferencesEntities,
+    character_reference_code: u32,
 }
 
 pub struct HTMLState {
@@ -271,6 +272,9 @@ define_state! {
 
     /// 13.2.5.79 Decimal character reference state
     DecimalCharacterReference = "decimal-character-reference",
+
+    /// 13.2.5.80 Numeric character reference end state
+    NumericCharacterReferenceEnd = "numeric-character-reference-end"
 }
 
 enum HTMLStateIterator {
@@ -296,6 +300,7 @@ where
             temporary_buffer: String::default(),
             named_character_reference_code:
                 NamedCharacterReferences::entities(),
+            character_reference_code: 0,
         }
     }
 }
@@ -2728,6 +2733,108 @@ where
                 ),
         }
     }
+
+    fn handle_hexadecimal_character_reference_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII digit
+            //
+            // Multiplier le code de référence du caractère par 16. Ajouter
+            // une version numérique du caractère actuel
+            // (soustraire 0x0030 du point de code du caractère) au code de
+            // référence du caractère.
+            | Some(ch) if ch.is_ascii_digit() => {
+                self.character_reference_code *= 16;
+                self.character_reference_code +=
+                    ((ch as u8) - 0x0030) as u32;
+                self.and_continue()
+            }
+
+            // ASCII upper hex digit
+            //
+            // Multiplier le code de référence du caractère par 16. Ajouter
+            // une version numérique du caractère actuel sous
+            // forme de chiffre hexadécimal (soustraire 0x0037 du point de
+            // code du caractère) au code de référence du caractère.
+            | Some(ch)
+                if ch.is_ascii_hexdigit() && ch.is_ascii_uppercase() =>
+            {
+                self.character_reference_code *= 16;
+                self.character_reference_code +=
+                    ((ch as u8) - 0x0037) as u32;
+                self.and_continue()
+            }
+
+            // ASCII lower hex digit
+            //
+            // Multiplier le code de référence du caractère par 16. Ajouter
+            // une version numérique du caractère actuel sous
+            // forme de chiffre hexadécimal (soustraire 0x0057 du point de
+            // code du caractère) au code de référence du caractère.
+            | Some(ch)
+                if ch.is_ascii_hexdigit() && ch.is_ascii_lowercase() =>
+            {
+                self.character_reference_code *= 16;
+                self.character_reference_code +=
+                    ((ch as u8) - 0x0057) as u32;
+                self.and_continue()
+            }
+
+            // U+003B SEMICOLON
+            //
+            // Passer à l'état `numeric-character-reference-end`.
+            | Some(';') => self
+                .switch_state_to("numeric-character-reference-end")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `missing-semicolon-after-character-reference`. Reprendre
+            // dans l'état `numeric-character-reference-end`.
+            | _ => self
+                .reconsume("numeric-character-reference-end")
+                .and_continue_with_error(
+                    "missing-semicolon-after-character-reference",
+                ),
+        }
+    }
+
+    fn handle_decimal_character_reference_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII digit
+            //
+            // Multiplier le code de référence du caractère par 10. Ajouter
+            // une version numérique du caractère actuel (soustraire 0x0030
+            // du point de code du caractère) au code de référence du
+            // caractère.
+            | Some(ch) if ch.is_ascii_digit() => {
+                self.character_reference_code *= 10;
+                self.character_reference_code +=
+                    ((ch as u8) - 0x0030) as u32;
+                self.and_continue()
+            }
+
+            // U+003B SEMICOLON
+            | Some(';') => self
+                .switch_state_to("numeric-character-reference-end")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `missing-semicolon-after-character-reference`. Reprendre
+            // dans l'état `numeric-character-reference-end`.
+            | _ => self
+                .reconsume("numeric-character-reference-end")
+                .and_continue_with_error(
+                    "missing-semicolon-after-character-reference",
+                ),
+        }
+    }
 }
 
 // -------------- //
@@ -2882,6 +2989,12 @@ where
                 }
                 | State::DecimalCharacterReferenceStart => {
                     self.handle_decimal_character_reference_start_state()
+                }
+                | State::HexadecimalCharacterReference => {
+                    self.handle_hexadecimal_character_reference_state()
+                }
+                | State::DecimalCharacterReference => {
+                    self.handle_decimal_character_reference_state()
                 }
             };
 
