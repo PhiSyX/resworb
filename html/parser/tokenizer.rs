@@ -268,6 +268,9 @@ define_state! {
 
     /// 13.2.5.78 Hexadecimal character reference state
     HexadecimalCharacterReference = "hexadecimal-character-reference",
+
+    /// 13.2.5.79 Decimal character reference state
+    DecimalCharacterReference = "decimal-character-reference",
 }
 
 enum HTMLStateIterator {
@@ -2699,6 +2702,32 @@ where
                 ),
         }
     }
+
+    fn handle_decimal_character_reference_start_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII digit
+            //
+            // Reprendre dans l'état `decimal-character-reference`.
+            | Some(ch) if ch.is_ascii_digit() => self
+                .reconsume("decimal-character-reference")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `absence-of-digits-in-numeric-character-reference`. Videz
+            // les points de code consommés comme référence de caractère.
+            // Reprendre dans l'état `return-state`.
+            | _ => self
+                .flush_temporary_buffer()
+                .reconsume("return-state")
+                .and_continue_with_error(
+                    "absence-of-digits-in-numeric-character-reference",
+                ),
+        }
+    }
 }
 
 // -------------- //
@@ -2847,6 +2876,12 @@ where
                 }
                 | State::NumericCharacterReference => {
                     self.handle_numeric_character_reference_state()
+                }
+                | State::HexadecimalCharacterReferenceStart => {
+                    self.handle_hexadecimal_character_reference_start_state()
+                }
+                | State::DecimalCharacterReferenceStart => {
+                    self.handle_decimal_character_reference_start_state()
                 }
             };
 
