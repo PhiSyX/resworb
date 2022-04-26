@@ -144,6 +144,12 @@ define_errors! {
     /// dans l'HTML.
     IncorrectlyOpenedComment = "incorrectly-opened-comment",
 
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre un
+    /// commentaire qui est fermé par la séquence de points de code "--!>".
+    /// L'analyseur traite de tels commentaires comme s'ils étaient
+    /// correctement fermés par la séquence de points de code "-->".
+    IncorrectlyClosedComment = "incorrectly-closed-comment",
+
     /// Cette erreur se produit si l'analyseur syntaxique rencontre une
     /// séquence de points de code autre que les mots-clés "PUBLIC" et
     /// "SYSTEM" après un nom de DOCTYPE. Dans ce cas, l'analyseur ignore
@@ -475,6 +481,26 @@ mod tests {
             "crashtests/tag/eof_in_tag.html"
         ));
 
+        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+    }
+
+    #[test]
+    fn test_error_incorrectly_closed_comment() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/comment/incorrectly_closed_comment.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Comment(
+                " incorrectly closed comment ".into()
+            ))
+        );
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::Character('\n'))
+        );
         assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
     }
 

@@ -179,7 +179,7 @@ define_state! {
     /// 13.2.5.48 Comment less-than sign bang dash state
     CommentLessThanSignBangDash = "comment-less-than-sign-bang-dash",
 
-    /// 13.2.5.48 Comment less-than sign bang dash dash state
+    /// 13.2.5.49 Comment less-than sign bang dash dash state
     CommentLessThanSignBangDashDash = "comment-less-than-sign-bang-dash-dash",
 
     /// 13.2.5.50 Comment end dash state
@@ -187,6 +187,9 @@ define_state! {
 
     /// 13.2.5.51 Comment end state
     CommentEnd = "comment-end",
+
+    /// 13.2.5.52 Comment end bang state
+    CommentEndBang = "comment-end-bang",
 
     /// 13.2.5.53 DOCTYPE state
     DOCTYPE = "doctype",
@@ -1435,6 +1438,59 @@ where
         }
     }
 
+    fn handle_comment_end_bang_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Ajouter deux caractères U+002D HYPHEN-MINUS (-) et un
+            // caractère U+0021 EXCLAMATION MARK (!) aux données du jeton
+            // `comment`. Passer à l'état `comment-end-dash`.
+            | Some('-') => self
+                .change_current_token(|comment_tok| {
+                    comment_tok.append_character('-');
+                    comment_tok.append_character('-');
+                    comment_tok.append_character('!');
+                })
+                .switch_state_to("comment-end-dash")
+                .and_continue(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `incorrectly-closed-comment`. Passez à l'état `data`.
+            // Émettre le jeton `comment` actuel.
+            | Some('>') => self
+                .switch_state_to("data")
+                .and_break_with_error("incorrectly-closed-comment"),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type `eof-in-comment`.
+            // Émettre le jeton `comment` actuel. Émettre un jeton `end of
+            // file`.
+            | None => self
+                .and_emit_current_token()
+                .set_token(HTMLToken::EOF)
+                .and_break_with_error("eof-in-comment"),
+
+            // Anything else
+            //
+            // Ajouter deux caractères U+002D HYPHEN-MINUS (-) et un
+            // caractère U+0021 EXCLAMATION MARK (!) aux données du jeton
+            // de commentaire. Reprendre dans l'état `comment`.
+            | Some(_) => self
+                .change_current_token(|comment_tok| {
+                    comment_tok.append_character('-');
+                    comment_tok.append_character('-');
+                    comment_tok.append_character('!');
+                })
+                .reconsume("comment")
+                .and_continue(),
+        }
+    }
+
     fn handle_doctype_state(&mut self) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
@@ -2495,10 +2551,13 @@ where
                 | State::Comment => self.handle_comment_state(),
                 | State::CommentEndDash => {
                     self.handle_comment_end_dash_state()
-                },
+                }
                 | State::CommentEnd => {
                     self.handle_comment_end_state()
-                },
+                }
+                | State::CommentEndBang => {
+                    self.handle_comment_end_bang_state()
+                }
                 | State::DOCTYPE => self.handle_doctype_state(),
                 | State::BeforeDOCTYPEName => {
                     self.handle_before_doctype_name_state()
