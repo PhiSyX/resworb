@@ -11,7 +11,6 @@ use super::{
     token::{HTMLTagAttribute, HTMLToken},
 };
 use crate::{
-    emit_html_error,
     named_characters::{
         NamedCharacterReferences, NamedCharacterReferencesEntities,
     },
@@ -110,17 +109,33 @@ where
     Chars: Iterator<Item = char>,
 {
     stream: InputStreamPreprocessor<Chars, Chars::Item>,
+
+    /// Le jeton courant.
     token: Option<HTMLToken>,
+
     state: HTMLState,
-    temp: VecDeque<HTMLToken>,
-    temporary_buffer: String,
+
+    /// La sortie de l'étape de tokenisation est une série de zéro ou plus
+    /// des jetons.
+    output_tokens: VecDeque<HTMLToken>,
+
     named_character_reference_code: NamedCharacterReferencesEntities,
+
+    /// Certains états utilisent un tampon temporaire pour suivre leur
+    /// progression.
+    temporary_buffer: String,
+
+    /// [L'état de référence du caractère](State::CharacterReference)
+    /// utilise un [état de retour](HTMLState::returns) pour revenir à
+    /// un état à partir duquel il a été invoqué.
     character_reference_code: u32,
 }
 
 #[derive(Clone)]
 pub struct HTMLState {
+    /// L'état courant.
     current: State,
+    /// L'état de retour.
     returns: Option<State>,
 }
 
@@ -299,7 +314,7 @@ where
             stream,
             token: None,
             state: HTMLState::default(),
-            temp: VecDeque::default(),
+            output_tokens: VecDeque::default(),
             temporary_buffer: String::default(),
             named_character_reference_code:
                 NamedCharacterReferences::entities(),
@@ -314,7 +329,7 @@ where
 {
     pub fn current_token(&mut self) -> Option<HTMLToken> {
         if let Some(token) = self.token.clone() {
-            self.temp.push_back(token);
+            self.output_tokens.push_back(token);
         }
         self.pop_token()
     }
@@ -324,7 +339,7 @@ where
     }
 
     fn pop_token(&mut self) -> Option<HTMLToken> {
-        self.temp.pop_front()
+        self.output_tokens.pop_front()
     }
 
     fn change_current_token<F: FnOnce(&mut HTMLToken)>(
@@ -345,7 +360,7 @@ where
     }
 
     fn emit_token(&mut self, token: HTMLToken) -> &mut Self {
-        self.temp.push_front(token);
+        self.output_tokens.push_front(token);
         self
     }
 
@@ -354,6 +369,10 @@ where
         self
     }
 
+    /// Lorsqu'un état indique de reprendre (re-consommer) un caractère
+    /// correspondant dans un état spécifié, cela signifie de passer à
+    /// cet état, mais lorsqu'il tente de consommer le prochain caractère,
+    /// de lui fournir le caractère actuel à la place.
     fn reconsume(&mut self, state: &str) -> &mut Self {
         self.stream.rollback();
         self.state.switch_to(state);
@@ -390,7 +409,7 @@ where
             });
         } else {
             self.temporary_buffer.chars().for_each(|c| {
-                self.temp.push_back(HTMLToken::Character(c))
+                self.output_tokens.push_back(HTMLToken::Character(c))
             });
         }
         self
@@ -2966,7 +2985,7 @@ where
     type Item = HTMLToken;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.temp.is_empty() {
+        if !self.output_tokens.is_empty() {
             return self.pop_token();
         }
 
@@ -3108,9 +3127,8 @@ where
             match state {
                 | Ok(HTMLStateIterator::Continue) => continue,
                 | Ok(HTMLStateIterator::Break) => break,
-                | Err((x, state)) => {
-                    emit_html_error!(x);
-
+                | Err((err, state)) => {
+                    log::error!("[HTMLParserError]: {err}");
                     match state {
                         | HTMLStateIterator::Continue => continue,
                         | HTMLStateIterator::Break => break,

@@ -17,11 +17,11 @@ pub type NamedCharacterReferencesEntities =
 // Structure //
 // --------- //
 
+/// Répertorie les noms de référence des caractères pris en charge par
+/// HTML, ainsi que les points de code auxquels ils font référence.
 #[derive(Debug)]
 #[derive(Deserialize)]
-pub struct NamedCharacterReferences(
-    HashMap<String, NamedCharacterReferenceEntity>,
-);
+pub struct NamedCharacterReferences(NamedCharacterReferencesEntities);
 
 #[derive(Debug)]
 #[derive(Deserialize)]
@@ -35,11 +35,16 @@ pub struct NamedCharacterReferenceEntity {
 // -------------- //
 
 impl NamedCharacterReferences {
+    /// Dé-sérialise les entités références des caractères nommés vers
+    /// [NamedCharacterReferencesEntities] et nous le retourne.
     pub fn entities() -> NamedCharacterReferencesEntities {
-        let json = include_str!("entities.json");
-        let named_character_references =
-            serde_json::from_str::<NamedCharacterReferences>(json)
+        // Ce JSON provient de `https://html.spec.whatwg.org/entities.json`
+        let json_entities: &'static str = include_str!("entities.json");
+
+        let named_character_references: NamedCharacterReferences =
+            serde_json::from_str(json_entities)
                 .expect("Les entités références des caractères nommés");
+
         named_character_references.0
     }
 }
