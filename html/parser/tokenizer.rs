@@ -129,6 +129,8 @@ where
     /// utilise un [état de retour](HTMLState::returns) pour revenir à
     /// un état à partir duquel il a été invoqué.
     character_reference_code: u32,
+
+    last_start_tag_token: Option<HTMLToken>,
 }
 
 #[derive(Clone)]
@@ -147,6 +149,9 @@ define_state! {
     /// 13.2.5.1 Data state
     Data = "data",
 
+    /// 13.2.5.2 RCDATA state
+    RCDATA = "rcdata",
+
     /// 13.2.5.6 Tag open state
     TagOpen = "tag-open",
 
@@ -155,6 +160,15 @@ define_state! {
 
     /// 13.2.5.8 Tag name state
     TagName = "tag-name",
+
+    /// 13.2.5.9 RCDATA less-than sign state
+    RCDATALessThanSign = "rcdata-less-than-sign",
+
+    /// 13.2.5.10 RCDATA end tag open state
+    RCDATAEndTagOpen = "rcdata-end-tag-open",
+
+    /// 13.2.5.11 RCDATA end tag name state
+    RCDATAEndTagName = "rcdata-end-tag-name",
 
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
@@ -319,6 +333,7 @@ where
             named_character_reference_code:
                 NamedCharacterReferences::entities(),
             character_reference_code: 0,
+            last_start_tag_token: None,
         }
     }
 }
@@ -356,6 +371,13 @@ where
         if let Some(token) = self.current_token() {
             self.emit_token(token);
         }
+        self
+    }
+
+    fn emit_each_characters_of_temporary_buffer(&mut self) -> &mut Self {
+        self.temporary_buffer.chars().for_each(|ch| {
+            self.output_tokens.push_back(HTMLToken::Character(ch));
+        });
         self
     }
 
@@ -413,6 +435,29 @@ where
             });
         }
         self
+    }
+
+    /// Un jeton `end-tag` approprié est un jeton de `end-tag` dont le nom
+    /// de balise correspond au nom de balise de la dernière balise de
+    /// début qui a été émise par ce tokenizer, le cas échéant.
+    /// Si aucune balise de début n'a été émise par ce tokenizer, alors
+    /// aucune balise de fin n'est appropriée.
+    fn is_appropriate_end_tag(&self) -> bool {
+        if let (
+            Some(HTMLToken::EndTag {
+                name: current_tag_name,
+                ..
+            }),
+            Some(HTMLToken::EndTag {
+                name: last_tag_name,
+                ..
+            }),
+        ) = (self.token.as_ref(), self.last_start_tag_token.as_ref())
+        {
+            current_tag_name == last_tag_name
+        } else {
+            false
+        }
     }
 }
 
@@ -491,6 +536,49 @@ where
             // EOF
             //
             // Émettre un jeton `end of file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit(),
+
+            // Anything else
+            //
+            // Émettre le caractère actuel comme un jeton `character`.
+            | Some(ch) => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+        }
+    }
+
+    fn handle_rcdata_state(&mut self) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0026 AMPERSAND (&)
+            // Définir l'état de retour à l'état `rcdata`. Passez à l'état
+            // `character-reference`.
+            | Some('&') => self
+                .state
+                .set_return("rcdata")
+                .switch_to("character-reference")
+                .and_continue(),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `rcdata-less-than-sign`.
+            | Some('<') => self
+                .switch_state_to("rcdata-less-than-sign")
+                .and_continue(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Émettre un token `end of file`.
             | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
@@ -683,6 +771,142 @@ where
                 .change_current_token(|tag_tok| {
                     tag_tok.append_character(ch);
                 })
+                .and_continue(),
+        }
+    }
+
+    fn handle_rcdata_less_than_sign_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002F SOLIDUS (/)
+            //
+            // Définir le tampon temporaire à une chaîne de caractères
+            // vide. Passer à l'état `rcdata-end-tag-open`.
+            | Some('/') => self
+                .set_temporary_buffer(String::new())
+                .switch_state_to("rcdata-end-tag-open")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton de caractère U+003C LESS-THAN SIGN.
+            // Reprendre dans l'état `rcdata`.
+            | _ => self
+                .set_token(HTMLToken::Character('<'))
+                .and_emit_current_token()
+                .reconsume("rcdata")
+                .and_continue(),
+        }
+    }
+
+    fn handle_rcdata_end_tag_open_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alpha
+            //
+            // Créer un nouveau jeton `end-tag`, définir son nom comme une
+            // chaîne de caractères vide. Reprendre l'état
+            // `rcdata-end-tag-name`.
+            | Some(ch) if ch.is_ascii_alphabetic() => self
+                .set_token(HTMLToken::new_end_tag(String::new()))
+                .reconsume("rcdata-end-tag-name")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN et un
+            // jeton de `character` U+002F SOLIDUS. Reprendre
+            // dans l'état `rcdata`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
+                .reconsume("rcdata")
+                .and_continue(),
+        }
+    }
+
+    fn handle_rcdata_end_tag_name_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Si le jeton `end tag` actuel est un jeton `end tag`
+            // approprié, alors passer à l'état `before-attribute-name`.
+            // Sinon, traitez-le comme indiqué dans l'entrée
+            // "Anything else" ci-dessous.
+            | Some(ch)
+                if ch.is_html_whitespace()
+                    && self.is_appropriate_end_tag() =>
+            {
+                self.state
+                    .switch_to("before-attribute-name")
+                    .and_continue()
+            }
+
+            // U+002F SOLIDUS (/)
+            //
+            // Si le jeton `end tag` actuel est un jeton `end tag`
+            // approprié, alors passer à l'état `self-closing-start-tag`.
+            // Sinon, traitez-le comme indiqué dans l'entrée
+            // "Anything else" ci-dessous.
+            | Some('/') if self.is_appropriate_end_tag() => self
+                .state
+                .switch_to("self-closing-start-tag")
+                .and_continue(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Si le jeton `end tag` actuel est un jeton `end tag`
+            // approprié, alors passer à l'état `data` et émettre le jeton
+            // courant. Sinon, traitez-le comme indiqué dans l'entrée
+            // "Anything else" ci-dessous.
+            | Some('>') if self.is_appropriate_end_tag() => {
+                self.state.switch_to("data").and_emit()
+            }
+
+            // ASCII upper alpha
+            //
+            // Ajouter la version en minuscules du caractère actuel
+            // (ajouter 0x0020 au point de code du caractère) au nom
+            // de balise du jeton `tag` actuel. Ajouter le caractère
+            // actuel au tampon temporaire.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch.to_ascii_lowercase());
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // ASCII lower alpha
+            //
+            // Ajouter le caractère actuel au nom de balise du jeton de
+            // `tag` actuel. Ajoute le caractère d'entrée actuel au tampon
+            // temporaire.
+            | Some(ch) if ch.is_ascii_lowercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch);
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN, un jeton
+            // `character` U+002F SOLIDUS et un jeton `character` pour
+            // chacun des caractères du tampon temporaire (dans l'ordre où
+            // ils ont été ajoutés au tampon). Reprendre dans l'état
+            // `RCDATA`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
+                .emit_each_characters_of_temporary_buffer()
+                .reconsume("rcdata")
                 .and_continue(),
         }
     }
@@ -2634,6 +2858,7 @@ where
 
         match maybe_result {
             | Some((entity_name, entity)) => {
+                // Consomme tous les caractères trouvés
                 entity_name.chars().for_each(|ch| {
                     self.stream.next();
                     self.temporary_buffer.push(ch);
@@ -2951,7 +3176,7 @@ where
             | _ => {}
         }
 
-        let ch = std::char::from_u32(self.character_reference_code)
+        let ch = char::from_u32(self.character_reference_code)
             .unwrap_or(char::REPLACEMENT_CHARACTER);
         self.temporary_buffer.clear();
         self.append_character_to_temporary_buffer(ch)
@@ -3024,9 +3249,19 @@ where
         loop {
             let state = match self.state.current {
                 | State::Data => self.handle_data_state(),
+                | State::RCDATA => self.handle_rcdata_state(),
                 | State::TagOpen => self.handle_tag_open_state(),
                 | State::EndTagOpen => self.handle_end_tag_open_state(),
                 | State::TagName => self.handle_tag_name_state(),
+                | State::RCDATALessThanSign => {
+                    self.handle_rcdata_less_than_sign_state()
+                }
+                | State::RCDATAEndTagOpen => {
+                    self.handle_rcdata_end_tag_open_state()
+                }
+                | State::RCDATAEndTagName => {
+                    self.handle_rcdata_end_tag_name_state()
+                }
                 | State::BeforeAttributeName => {
                     self.handle_before_attribute_name_state()
                 }
