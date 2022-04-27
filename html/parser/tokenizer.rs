@@ -132,6 +132,9 @@ define_state! {
     /// 13.2.5.1 Data state
     Data = "data",
 
+    /// 13.2.5.2 RCDATA state
+    RCDATA = "rcdata",
+
     /// 13.2.5.6 Tag open state
     TagOpen = "tag-open",
 
@@ -140,6 +143,9 @@ define_state! {
 
     /// 13.2.5.8 Tag name state
     TagName = "tag-name",
+
+    /// 13.2.5.9 RCDATA less-than sign state
+    RCDATALessThanSign = "rcdata-less-than-sign",
 
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
@@ -482,6 +488,40 @@ where
             }
         }
     }
+
+    fn handle_rcdata_state(&mut self) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0026 AMPERSAND (&)
+            // Définir l'état de retour à l'état `rcdata`. Passez à l'état
+            // `character-reference`.
+            | Some('&') => self
+                .state
+                .set_return("rcdata")
+                .switch_to("character-reference")
+                .and_continue(),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `rcdata-less-than-sign`.
+            | Some('<') => self
+                .switch_state_to("rcdata-less-than-sign")
+                .and_continue(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Émettre un token `end of file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
             //
@@ -2973,9 +3013,11 @@ where
         loop {
             let state = match self.state.current {
                 | State::Data => self.handle_data_state(),
+                | State::RCDATA => self.handle_rcdata_state(),
                 | State::TagOpen => self.handle_tag_open_state(),
                 | State::EndTagOpen => self.handle_end_tag_open_state(),
                 | State::TagName => self.handle_tag_name_state(),
+                | State::RCDATALessThanSign => todo!(),
                 | State::BeforeAttributeName => {
                     self.handle_before_attribute_name_state()
                 }
