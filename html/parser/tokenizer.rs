@@ -147,6 +147,9 @@ define_state! {
     /// 13.2.5.9 RCDATA less-than sign state
     RCDATALessThanSign = "rcdata-less-than-sign",
 
+    /// 13.2.5.10 RCDATA end tag open state
+    RCDATAEndTagOpen = "rcdata-end-tag-open",
+
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
 
@@ -713,6 +716,31 @@ where
                 .change_current_token(|tag_tok| {
                     tag_tok.append_character(ch);
                 })
+                .and_continue(),
+        }
+    }
+
+    fn handle_rcdata_less_than_sign_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002F SOLIDUS (/)
+            //
+            // Définir le tampon temporaire à une chaîne de caractères
+            // vide. Passer à l'état `rcdata-end-tag-open`.
+            | Some('/') => self
+                .set_temporary_buffer(String::new())
+                .switch_state_to("rcdata-end-tag-open")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton de caractère U+003C LESS-THAN SIGN.
+            // Reprendre dans l'état `rcdata`.
+            | _ => self
+                .set_token(HTMLToken::Character('<'))
+                .and_emit_current_token()
+                .reconsume("rcdata")
                 .and_continue(),
         }
     }
@@ -2940,7 +2968,7 @@ where
             | _ => {}
         }
 
-        let ch = std::char::from_u32(self.character_reference_code)
+        let ch = char::from_u32(self.character_reference_code)
             .unwrap_or(char::REPLACEMENT_CHARACTER);
         self.temporary_buffer.clear();
         self.append_character_to_temporary_buffer(ch)
@@ -3017,7 +3045,10 @@ where
                 | State::TagOpen => self.handle_tag_open_state(),
                 | State::EndTagOpen => self.handle_end_tag_open_state(),
                 | State::TagName => self.handle_tag_name_state(),
-                | State::RCDATALessThanSign => todo!(),
+                | State::RCDATALessThanSign => {
+                    self.handle_rcdata_less_than_sign_state()
+                }
+                | State::RCDATAEndTagOpen => todo!(),
                 | State::BeforeAttributeName => {
                     self.handle_before_attribute_name_state()
                 }
