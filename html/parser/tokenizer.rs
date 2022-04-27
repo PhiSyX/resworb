@@ -11,7 +11,6 @@ use super::{
     token::{HTMLTagAttribute, HTMLToken},
 };
 use crate::{
-    emit_html_error,
     named_characters::{
         NamedCharacterReferences, NamedCharacterReferencesEntities,
     },
@@ -110,17 +109,35 @@ where
     Chars: Iterator<Item = char>,
 {
     stream: InputStreamPreprocessor<Chars, Chars::Item>,
+
+    /// Le jeton courant.
     token: Option<HTMLToken>,
+
     state: HTMLState,
-    temp: VecDeque<HTMLToken>,
-    temporary_buffer: String,
+
+    /// La sortie de l'étape de tokenisation est une série de zéro ou plus
+    /// des jetons.
+    output_tokens: VecDeque<HTMLToken>,
+
     named_character_reference_code: NamedCharacterReferencesEntities,
+
+    /// Certains états utilisent un tampon temporaire pour suivre leur
+    /// progression.
+    temporary_buffer: String,
+
+    /// [L'état de référence du caractère](State::CharacterReference)
+    /// utilise un [état de retour](HTMLState::returns) pour revenir à
+    /// un état à partir duquel il a été invoqué.
     character_reference_code: u32,
+
+    last_start_tag_token: Option<HTMLToken>,
 }
 
 #[derive(Clone)]
 pub struct HTMLState {
+    /// L'état courant.
     current: State,
+    /// L'état de retour.
     returns: Option<State>,
 }
 
@@ -311,11 +328,12 @@ where
             stream,
             token: None,
             state: HTMLState::default(),
-            temp: VecDeque::default(),
+            output_tokens: VecDeque::default(),
             temporary_buffer: String::default(),
             named_character_reference_code:
                 NamedCharacterReferences::entities(),
             character_reference_code: 0,
+            last_start_tag_token: None,
         }
     }
 }
@@ -326,7 +344,7 @@ where
 {
     pub fn current_token(&mut self) -> Option<HTMLToken> {
         if let Some(token) = self.token.clone() {
-            self.temp.push_back(token);
+            self.output_tokens.push_back(token);
         }
         self.pop_token()
     }
@@ -336,7 +354,7 @@ where
     }
 
     fn pop_token(&mut self) -> Option<HTMLToken> {
-        self.temp.pop_front()
+        self.output_tokens.pop_front()
     }
 
     fn change_current_token<F: FnOnce(&mut HTMLToken)>(
@@ -356,8 +374,15 @@ where
         self
     }
 
+    fn emit_each_characters_of_temporary_buffer(&mut self) -> &mut Self {
+        self.temporary_buffer.chars().for_each(|ch| {
+            self.output_tokens.push_back(HTMLToken::Character(ch));
+        });
+        self
+    }
+
     fn emit_token(&mut self, token: HTMLToken) -> &mut Self {
-        self.temp.push_front(token);
+        self.output_tokens.push_front(token);
         self
     }
 
@@ -366,6 +391,10 @@ where
         self
     }
 
+    /// Lorsqu'un état indique de reprendre (re-consommer) un caractère
+    /// correspondant dans un état spécifié, cela signifie de passer à
+    /// cet état, mais lorsqu'il tente de consommer le prochain caractère,
+    /// de lui fournir le caractère actuel à la place.
     fn reconsume(&mut self, state: &str) -> &mut Self {
         self.stream.rollback();
         self.state.switch_to(state);
@@ -402,10 +431,33 @@ where
             });
         } else {
             self.temporary_buffer.chars().for_each(|c| {
-                self.temp.push_back(HTMLToken::Character(c))
+                self.output_tokens.push_back(HTMLToken::Character(c))
             });
         }
         self
+    }
+
+    /// Un jeton `end-tag` approprié est un jeton de `end-tag` dont le nom
+    /// de balise correspond au nom de balise de la dernière balise de
+    /// début qui a été émise par ce tokenizer, le cas échéant.
+    /// Si aucune balise de début n'a été émise par ce tokenizer, alors
+    /// aucune balise de fin n'est appropriée.
+    fn is_appropriate_end_tag(&self) -> bool {
+        if let (
+            Some(HTMLToken::EndTag {
+                name: current_tag_name,
+                ..
+            }),
+            Some(HTMLToken::EndTag {
+                name: last_tag_name,
+                ..
+            }),
+        ) = (self.token.as_ref(), self.last_start_tag_token.as_ref())
+        {
+            current_tag_name == last_tag_name
+        } else {
+            false
+        }
     }
 }
 
@@ -770,6 +822,90 @@ where
             | _ => self
                 .emit_token(HTMLToken::Character('<'))
                 .emit_token(HTMLToken::Character('/'))
+                .reconsume("rcdata")
+                .and_continue(),
+        }
+    }
+
+    fn handle_rcdata_end_tag_name_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Si le jeton `end tag` actuel est un jeton `end tag`
+            // approprié, alors passer à l'état `before-attribute-name`.
+            // Sinon, traitez-le comme indiqué dans l'entrée
+            // "Anything else" ci-dessous.
+            | Some(ch)
+                if ch.is_html_whitespace()
+                    && self.is_appropriate_end_tag() =>
+            {
+                self.state
+                    .switch_to("before-attribute-name")
+                    .and_continue()
+            }
+
+            // U+002F SOLIDUS (/)
+            //
+            // Si le jeton `end tag` actuel est un jeton `end tag`
+            // approprié, alors passer à l'état `self-closing-start-tag`.
+            // Sinon, traitez-le comme indiqué dans l'entrée
+            // "Anything else" ci-dessous.
+            | Some('/') if self.is_appropriate_end_tag() => self
+                .state
+                .switch_to("self-closing-start-tag")
+                .and_continue(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Si le jeton `end tag` actuel est un jeton `end tag`
+            // approprié, alors passer à l'état `data` et émettre le jeton
+            // courant. Sinon, traitez-le comme indiqué dans l'entrée
+            // "Anything else" ci-dessous.
+            | Some('>') if self.is_appropriate_end_tag() => {
+                self.state.switch_to("data").and_emit()
+            }
+
+            // ASCII upper alpha
+            //
+            // Ajouter la version en minuscules du caractère actuel
+            // (ajouter 0x0020 au point de code du caractère) au nom
+            // de balise du jeton `tag` actuel. Ajouter le caractère
+            // actuel au tampon temporaire.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch.to_ascii_lowercase());
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // ASCII lower alpha
+            //
+            // Ajouter le caractère actuel au nom de balise du jeton de
+            // `tag` actuel. Ajoute le caractère d'entrée actuel au tampon
+            // temporaire.
+            | Some(ch) if ch.is_ascii_lowercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch);
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN, un jeton
+            // `character` U+002F SOLIDUS et un jeton `character` pour
+            // chacun des caractères du tampon temporaire (dans l'ordre où
+            // ils ont été ajoutés au tampon). Reprendre dans l'état
+            // `RCDATA`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
+                .emit_each_characters_of_temporary_buffer()
                 .reconsume("rcdata")
                 .and_continue(),
         }
@@ -2661,6 +2797,9 @@ where
     fn handle_character_reference_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
+        self.set_temporary_buffer(String::new())
+            .append_character_to_temporary_buffer('&');
+
         match self.stream.next_input_char() {
             // ASCII alphanumeric
             //
@@ -2702,7 +2841,7 @@ where
 
         let entities = &self.named_character_reference_code;
 
-        let (maybe_result, _max_size) = entities.iter().fold(
+        let (maybe_result, max_size) = entities.iter().fold(
             (None, 0),
             |(mut maybe_result, mut max_size), item| {
                 let name = item.0;
@@ -2718,8 +2857,47 @@ where
         );
 
         match maybe_result {
-            | Some(_result) => {
-                todo!();
+            | Some((entity_name, entity)) => {
+                // Consomme tous les caractères trouvés
+                entity_name.chars().for_each(|ch| {
+                    self.stream.next();
+                    self.temporary_buffer.push(ch);
+                });
+
+                let mut maybe_err = None;
+                if ch != ';' {
+                    maybe_err =
+                        "missing-semicolon-after-character-reference"
+                            .into();
+
+                    if let Some(ch) = full_str.chars().nth(max_size - 1) {
+                        if (ch == '=' || ch.is_ascii_alphanumeric())
+                            && self.state.is_character_of_attribute()
+                        {
+                            {
+                                return self
+                                    .flush_temporary_buffer()
+                                    .switch_state_to("return-state")
+                                    .and_continue();
+                            }
+                        }
+                    }
+                }
+
+                self.temporary_buffer.clear();
+
+                entity.codepoints.iter().for_each(|&cp| {
+                    let ch = char::from_u32(cp).expect("un caractère");
+                    self.temporary_buffer.push(ch);
+                });
+
+                self.flush_temporary_buffer()
+                    .switch_state_to("return-state");
+                if let Some(err) = maybe_err {
+                    self.and_continue_with_error(err)
+                } else {
+                    self.and_continue()
+                }
             }
             | None => self
                 .flush_temporary_buffer()
@@ -3064,7 +3242,7 @@ where
     type Item = HTMLToken;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.temp.is_empty() {
+        if !self.output_tokens.is_empty() {
             return self.pop_token();
         }
 
@@ -3081,7 +3259,9 @@ where
                 | State::RCDATAEndTagOpen => {
                     self.handle_rcdata_end_tag_open_state()
                 }
-                | State::RCDATAEndTagName => todo!(),
+                | State::RCDATAEndTagName => {
+                    self.handle_rcdata_end_tag_name_state()
+                }
                 | State::BeforeAttributeName => {
                     self.handle_before_attribute_name_state()
                 }
@@ -3214,9 +3394,8 @@ where
             match state {
                 | Ok(HTMLStateIterator::Continue) => continue,
                 | Ok(HTMLStateIterator::Break) => break,
-                | Err((x, state)) => {
-                    emit_html_error!(x);
-
+                | Err((err, state)) => {
+                    log::error!("[HTMLParserError]: {err}");
                     match state {
                         | HTMLStateIterator::Continue => continue,
                         | HTMLStateIterator::Break => break,

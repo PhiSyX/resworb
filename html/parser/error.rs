@@ -6,13 +6,6 @@
 // Macro //
 // ----- //
 
-#[macro_export]
-macro_rules! emit_html_error {
-    ($err:expr) => {
-        log::error!("[HTMLParserError]: {}", $err);
-    };
-}
-
 macro_rules! define_errors {
     (
     $(
