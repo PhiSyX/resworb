@@ -76,11 +76,11 @@ trait HTMLStateIteratorInterface {
         Err((err, HTMLStateIterator::Continue))
     }
 
-    fn and_break(&self) -> ResultHTMLStateIterator {
+    fn and_emit(&self) -> ResultHTMLStateIterator {
         Ok(HTMLStateIterator::Break)
     }
 
-    fn and_break_with_error(&self, err: &str) -> ResultHTMLStateIterator {
+    fn and_emit_with_error(&self, err: &str) -> ResultHTMLStateIterator {
         let err = err.parse().unwrap();
         Err((err, HTMLStateIterator::Break))
     }
@@ -466,19 +466,28 @@ where
             // `unexpected-null-character. Émettre le caractère
             // actuel comme un jeton de caractère.
             | Some('\0') => {
-                self.and_break_with_error("unexpected-null-character")
+                self.and_emit_with_error("unexpected-null-character")
             }
 
             // EOF
             //
             // Émettre un jeton `end of file`.
-            | None => self.set_token(HTMLToken::EOF).and_break(),
+            | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
             //
             // Émettre le caractère actuel comme un jeton `character`.
             | Some(ch) => {
-                self.set_token(HTMLToken::Character(ch)).and_break()
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+        }
+    }
+
+            // Anything else
+            //
+            // Émettre le caractère actuel comme un jeton `character`.
+            | Some(ch) => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
             }
         }
     }
@@ -518,7 +527,7 @@ where
             | Some('?') => self
                 .set_token(HTMLToken::new_comment(String::new()))
                 .reconsume("bogus-comment")
-                .and_break_with_error(
+                .and_emit_with_error(
                     "unexpected-question-mark-instead-of-tag-name",
                 ),
 
@@ -531,7 +540,7 @@ where
             | None => self
                 .emit_token(HTMLToken::Character('<'))
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-before-tag-name"),
+                .and_emit_with_error("eof-before-tag-name"),
 
             // Anything else
             //
@@ -578,7 +587,7 @@ where
             | None => self
                 .emit_token(HTMLToken::Character('<'))
                 .emit_token(HTMLToken::Character('/'))
-                .and_break_with_error("eof-before-tag-name"),
+                .and_emit_with_error("eof-before-tag-name"),
 
             // Anything else
             //
@@ -625,7 +634,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `tag` actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // ASCII upper alpha
             //
@@ -655,7 +664,7 @@ where
             // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-tag"),
+                .and_emit_with_error("eof-in-tag"),
 
             // Anything else
             //
@@ -703,7 +712,7 @@ where
                     tag_tok.define_tag_attributes(attribute);
                 })
                 .switch_state_to("attribute-name")
-                .and_break_with_error(
+                .and_emit_with_error(
                     "unexpected-equals-sign-before-attribute-name",
                 ),
 
@@ -832,7 +841,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // EOF
             //
@@ -840,7 +849,7 @@ where
             // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-tag"),
+                .and_emit_with_error("eof-in-tag"),
 
             // Anything else
             //
@@ -891,7 +900,7 @@ where
             // `missing-attribute-value`. Passer à l'état `data`. Émettre
             // le jeton `tag` actuel.
             | Some('>') => {
-                self.and_break_with_error("missing-attribute-value")
+                self.and_emit_with_error("missing-attribute-value")
             }
 
             // Anything else
@@ -954,7 +963,7 @@ where
             // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-tag"),
+                .and_emit_with_error("eof-in-tag"),
 
             // Anything else
             //
@@ -996,7 +1005,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `tag` actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // U+0000 NULL
             //
@@ -1018,7 +1027,7 @@ where
             // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("unexpected-null-character"),
+                .and_emit_with_error("unexpected-null-character"),
 
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
@@ -1076,7 +1085,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettez le jeton `tag` actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // EOF
             //
@@ -1084,7 +1093,7 @@ where
             // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-tag"),
+                .and_emit_with_error("eof-in-tag"),
 
             // Anything else
             //
@@ -1112,7 +1121,7 @@ where
                     tag_tok.set_self_closing_tag(true);
                 })
                 .switch_state_to("data")
-                .and_break(),
+                .and_emit(),
 
             // EOF
             //
@@ -1120,7 +1129,7 @@ where
             // Émettre un jeton `end of file`.
             | None => self
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-tag"),
+                .and_emit_with_error("eof-in-tag"),
 
             // Anything else
             //
@@ -1195,7 +1204,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `comment` actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // EOF
             //
@@ -1203,7 +1212,7 @@ where
             | None => self
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break(),
+                .and_emit(),
 
             // U+0000 NULL
             //
@@ -1244,7 +1253,7 @@ where
             | Some('>') => self
                 .state
                 .switch_to("data")
-                .and_break_with_error("abrupt-closing-of-empty-comment"),
+                .and_emit_with_error("abrupt-closing-of-empty-comment"),
 
             // Anything else
             //
@@ -1363,7 +1372,7 @@ where
             | Some('>') => self
                 .state
                 .switch_to("data")
-                .and_break_with_error("abrupt-closing-of-empty-comment"),
+                .and_emit_with_error("abrupt-closing-of-empty-comment"),
 
             // EOF
             //
@@ -1373,7 +1382,7 @@ where
             | None => self
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-comment"),
+                .and_emit_with_error("eof-in-comment"),
 
             // Anything else
             //
@@ -1428,7 +1437,7 @@ where
             | None => self
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-comment"),
+                .and_emit_with_error("eof-in-comment"),
 
             // Anything else
             //
@@ -1460,7 +1469,7 @@ where
             | None => self
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-comment"),
+                .and_emit_with_error("eof-in-comment"),
 
             // Anything else
             //
@@ -1480,7 +1489,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `comment` actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // U+0021 EXCLAMATION MARK (!)
             //
@@ -1507,7 +1516,7 @@ where
             | None => self
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-comment"),
+                .and_emit_with_error("eof-in-comment"),
 
             // Anything else
             //
@@ -1548,7 +1557,7 @@ where
             // Émettre le jeton `comment` actuel.
             | Some('>') => self
                 .switch_state_to("data")
-                .and_break_with_error("incorrectly-closed-comment"),
+                .and_emit_with_error("incorrectly-closed-comment"),
 
             // EOF
             //
@@ -1558,7 +1567,7 @@ where
             | None => self
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-comment"),
+                .and_emit_with_error("eof-in-comment"),
 
             // Anything else
             //
@@ -1604,7 +1613,7 @@ where
                     HTMLToken::new_doctype().define_force_quirks_flag(),
                 )
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -1670,7 +1679,7 @@ where
                     HTMLToken::new_doctype().define_force_quirks_flag(),
                 )
                 .switch_state_to("data")
-                .and_break_with_error("missing-doctype-name"),
+                .and_emit_with_error("missing-doctype-name"),
 
             // EOF
             //
@@ -1683,7 +1692,7 @@ where
                     HTMLToken::new_doctype().define_force_quirks_flag(),
                 )
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -1713,7 +1722,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // ASCII upper alpha
             //
@@ -1751,7 +1760,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -1780,7 +1789,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // EOF
             //
@@ -1794,7 +1803,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -1909,7 +1918,7 @@ where
                     doctype_tok.set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
-                .and_break_with_error("missing-doctype-public-identifier"),
+                .and_emit_with_error("missing-doctype-public-identifier"),
 
             // EOF
             //
@@ -1923,7 +1932,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -1989,7 +1998,7 @@ where
                     doctype_tok.set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
-                .and_break_with_error("missing-doctype-public-identifier"),
+                .and_emit_with_error("missing-doctype-public-identifier"),
 
             // EOF
             //
@@ -2003,7 +2012,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -2068,7 +2077,7 @@ where
                     doctype_tok.set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
-                .and_break_with_error("abrupt-doctype-public-identifier"),
+                .and_emit_with_error("abrupt-doctype-public-identifier"),
 
             // EOF
             //
@@ -2082,7 +2091,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -2115,7 +2124,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `DOCTYPE` actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
@@ -2151,7 +2160,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -2182,7 +2191,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
@@ -2214,7 +2223,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -2291,7 +2300,7 @@ where
                     doctype_tok.set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
-                .and_break_with_error("missing-doctype-system-identifier"),
+                .and_emit_with_error("missing-doctype-system-identifier"),
 
             // EOF
             //
@@ -2305,7 +2314,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -2372,7 +2381,7 @@ where
                     doctype_tok.set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
-                .and_break_with_error("missing-doctype-system-identifier"),
+                .and_emit_with_error("missing-doctype-system-identifier"),
 
             // EOF
             //
@@ -2386,7 +2395,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -2444,7 +2453,7 @@ where
                     doctype_tok.set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
-                .and_break_with_error("abrupt-doctype-system-identifier"),
+                .and_emit_with_error("abrupt-doctype-system-identifier"),
 
             // EOF
             //
@@ -2459,7 +2468,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -2488,7 +2497,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // EOF
             //
@@ -2502,7 +2511,7 @@ where
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break_with_error("eof-in-doctype"),
+                .and_emit_with_error("eof-in-doctype"),
 
             // Anything else
             //
@@ -2523,7 +2532,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettez le jeton `doctype`.
-            | Some('>') => self.state.switch_to("data").and_break(),
+            | Some('>') => self.state.switch_to("data").and_emit(),
 
             // U+0000 NULL
             //
@@ -2542,7 +2551,7 @@ where
             | None => self
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
-                .and_break(),
+                .and_emit(),
 
             // Anything else
             //
@@ -2638,7 +2647,7 @@ where
                     })
                     .and_continue()
                 } else {
-                    self.set_token(HTMLToken::Character(ch)).and_break()
+                    self.set_token(HTMLToken::Character(ch)).and_emit()
                 }
             }
 
