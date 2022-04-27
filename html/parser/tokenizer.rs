@@ -176,6 +176,9 @@ define_state! {
     /// 13.2.5.12 RAWTEXT less-than sign state
     RAWTEXTLessThanSign = "rawtext-less-than-sign",
 
+    /// 13.2.5.13 RAWTEXT end tag open state
+    RAWTEXTEndTagOpen = "rawtext-end-tag-open",
+
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
 
@@ -947,6 +950,30 @@ where
                 .emit_token(HTMLToken::Character('/'))
                 .emit_each_characters_of_temporary_buffer()
                 .reconsume("rcdata")
+                .and_continue(),
+        }
+    }
+
+    fn handle_rawtext_less_than_sign_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002F SOLIDUS (/)
+            //
+            // Définir le tampon temporaire à une chaîne de caractères
+            // vide. Passer à l'état `rawtext-end-tag-open`.
+            | Some('/') => self
+                .set_temporary_buffer(String::new())
+                .switch_state_to("rawtext-end-tag-open")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            // Reprendre dans l'état `rawtext`
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .reconsume("rawtext")
                 .and_continue(),
         }
     }
@@ -3303,7 +3330,10 @@ where
                 | State::RCDATAEndTagName => {
                     self.handle_rcdata_end_tag_name_state()
                 }
-                | State::RAWTEXTLessThanSign => todo!(),
+                | State::RAWTEXTLessThanSign => {
+                    self.handle_rawtext_less_than_sign_state()
+                }
+                | State::RAWTEXTEndTagOpen => todo!(),
                 | State::BeforeAttributeName => {
                     self.handle_before_attribute_name_state()
                 }
