@@ -1008,6 +1008,88 @@ where
         }
     }
 
+    fn handle_rawtext_end_tag_name_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, alors passer à l'état `before-attribute-name`.
+            // Sinon, traitez-le comme indiqué dans l'entrée "Anything
+            // else" ci-dessous.
+            | Some(ch)
+                if ch.is_html_whitespace()
+                    && self.is_appropriate_end_tag() =>
+            {
+                self.state
+                    .switch_to("before-attribute-name")
+                    .and_continue()
+            }
+
+            // U+002F SOLIDUS (/)
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, passer à l'état à `self-closing-start-tag`.
+            // Sinon, traitez-le comme indiqué dans l'entrée
+            // "Anything else" ci-dessous.
+            | Some('/') if self.is_appropriate_end_tag() => self
+                .state
+                .switch_to("self-closing-start-tag")
+                .and_continue(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, passer à l'état `data` et émettez
+            // le jeton `end-tag` actuel. Sinon, traitez-le comme
+            // indiqué dans l'entrée "Anything else" ci-dessous.
+            | Some('>') if self.is_appropriate_end_tag() => {
+                self.state.switch_to("data").and_emit()
+            }
+
+            // ASCII upper alpha
+            //
+            // Ajouter la version en minuscules du caractère actuel
+            // (ajouter 0x0020 au point de code du caractère) au nom
+            // de la balise du jeton `*-tag` actuel. Ajouter le caractère
+            // actuel au tampon temporaire.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .change_current_token(|tok| {
+                    tok.append_character(ch.to_ascii_lowercase())
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // ASCII lower alpha
+            //
+            // Ajouter le caractère actuel au nom de la balise du jeton
+            // `*-tag` actuel. Ajouter le caractère actuel au tampon
+            // temporaire.
+            | Some(ch) if ch.is_ascii_lowercase() => self
+                .change_current_token(|tok| tok.append_character(ch))
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN, un jeton
+            // `character` U+002F SOLIDUS et un jeton `character` pour
+            // chacun des caractères du tampon temporaire (dans l'ordre où
+            // ils ont été ajoutés au tampon). Reprendre dans l'état
+            // `rawtext`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
+                .emit_each_characters_of_temporary_buffer()
+                .reconsume("rawtext")
+                .and_continue(),
+        }
+    }
+
     fn handle_before_attribute_name_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
@@ -3366,7 +3448,9 @@ where
                 | State::RAWTEXTEndTagOpen => {
                     self.handle_rawtext_end_tag_open_state()
                 }
-                | State::RAWTEXTEndTagName => todo!(),
+                | State::RAWTEXTEndTagName => {
+                    self.handle_rawtext_end_tag_name_state()
+                },
                 | State::BeforeAttributeName => {
                     self.handle_before_attribute_name_state()
                 }
