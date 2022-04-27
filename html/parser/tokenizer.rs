@@ -502,15 +502,6 @@ where
         }
     }
 
-            // Anything else
-            //
-            // Émettre le caractère actuel comme un jeton `character`.
-            | Some(ch) => {
-                self.set_token(HTMLToken::Character(ch)).and_emit()
-            }
-        }
-    }
-
     fn handle_tag_open_state(&mut self) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+0021 EXCLAMATION MARK (!)
@@ -2582,6 +2573,9 @@ where
     fn handle_character_reference_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
+        self.set_temporary_buffer(String::new())
+            .append_character_to_temporary_buffer('&');
+
         match self.stream.next_input_char() {
             // ASCII alphanumeric
             //
@@ -2623,7 +2617,7 @@ where
 
         let entities = &self.named_character_reference_code;
 
-        let (maybe_result, _max_size) = entities.iter().fold(
+        let (maybe_result, max_size) = entities.iter().fold(
             (None, 0),
             |(mut maybe_result, mut max_size), item| {
                 let name = item.0;
@@ -2639,8 +2633,46 @@ where
         );
 
         match maybe_result {
-            | Some(_result) => {
-                todo!();
+            | Some((entity_name, entity)) => {
+                entity_name.chars().for_each(|ch| {
+                    self.stream.next();
+                    self.temporary_buffer.push(ch);
+                });
+
+                let mut maybe_err = None;
+                if ch != ';' {
+                    maybe_err =
+                        "missing-semicolon-after-character-reference"
+                            .into();
+
+                    if let Some(ch) = full_str.chars().nth(max_size - 1) {
+                        if (ch == '=' || ch.is_ascii_alphanumeric())
+                            && self.state.is_character_of_attribute()
+                        {
+                            {
+                                return self
+                                    .flush_temporary_buffer()
+                                    .switch_state_to("return-state")
+                                    .and_continue();
+                            }
+                        }
+                    }
+                }
+
+                self.temporary_buffer.clear();
+
+                entity.codepoints.iter().for_each(|&cp| {
+                    let ch = char::from_u32(cp).expect("un caractère");
+                    self.temporary_buffer.push(ch);
+                });
+
+                self.flush_temporary_buffer()
+                    .switch_state_to("return-state");
+                if let Some(err) = maybe_err {
+                    self.and_continue_with_error(err)
+                } else {
+                    self.and_continue()
+                }
             }
             | None => self
                 .flush_temporary_buffer()

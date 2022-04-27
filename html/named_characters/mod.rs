@@ -26,7 +26,7 @@ pub struct NamedCharacterReferences(NamedCharacterReferencesEntities);
 #[derive(Debug)]
 #[derive(Deserialize)]
 pub struct NamedCharacterReferenceEntity {
-    pub codepoints: Vec<usize>,
+    pub codepoints: Vec<u32>,
     pub characters: String,
 }
 
