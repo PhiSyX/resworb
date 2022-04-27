@@ -179,6 +179,9 @@ define_state! {
     /// 13.2.5.13 RAWTEXT end tag open state
     RAWTEXTEndTagOpen = "rawtext-end-tag-open",
 
+    /// 13.2.5.14 RAWTEXT end tag name state
+    RAWTEXTEndTagName = "rawtext-end-tag-name",
+
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
 
@@ -973,6 +976,33 @@ where
             // Reprendre dans l'état `rawtext`
             | _ => self
                 .emit_token(HTMLToken::Character('<'))
+                .reconsume("rawtext")
+                .and_continue(),
+        }
+    }
+
+    fn handle_rawtext_end_tag_open_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alpha
+            //
+            // Créer un nouveau jeton `end-tag`, définir son nom de
+            // balise en une chaîne de caractères vide. Reprendre dans
+            // l'état `rawtext-end-tag-name`.
+            | Some(ch) if ch.is_ascii_alphabetic() => self
+                .set_token(HTMLToken::new_end_tag(String::new()))
+                .reconsume("rawtext-end-tag-name")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN et un
+            // jeton `character` U+002F SOLIDUS. Reprendre dans
+            // l'état `rawtext`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
                 .reconsume("rawtext")
                 .and_continue(),
         }
@@ -3333,7 +3363,10 @@ where
                 | State::RAWTEXTLessThanSign => {
                     self.handle_rawtext_less_than_sign_state()
                 }
-                | State::RAWTEXTEndTagOpen => todo!(),
+                | State::RAWTEXTEndTagOpen => {
+                    self.handle_rawtext_end_tag_open_state()
+                }
+                | State::RAWTEXTEndTagName => todo!(),
                 | State::BeforeAttributeName => {
                     self.handle_before_attribute_name_state()
                 }
