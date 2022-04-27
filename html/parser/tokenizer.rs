@@ -152,6 +152,9 @@ define_state! {
     /// 13.2.5.2 RCDATA state
     RCDATA = "rcdata",
 
+    /// 13.2.5.3 RAWTEXT state
+    RAWTEXT = "rawtext",
+
     /// 13.2.5.6 Tag open state
     TagOpen = "tag-open",
 
@@ -169,6 +172,9 @@ define_state! {
 
     /// 13.2.5.11 RCDATA end tag name state
     RCDATAEndTagName = "rcdata-end-tag-name",
+
+    /// 13.2.5.12 RAWTEXT less-than sign state
+    RAWTEXTLessThanSign = "rawtext-less-than-sign",
 
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
@@ -579,6 +585,40 @@ where
             // EOF
             //
             // Émettre un token `end of file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit(),
+
+            // Anything else
+            //
+            // Émettre le caractère actuel comme un jeton `character`.
+            | Some(ch) => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+        }
+    }
+
+    fn handle_rawtext_state(&mut self) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+003C LESS-THAN SIGN (<)
+            // Passez à l'état `rawtext-less-than-sign`.
+            | Some('<') => self
+                .state
+                .switch_to("rawtext-less-than-sign")
+                .and_continue(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Émettre un jeton `end of file`
             | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
@@ -3250,6 +3290,7 @@ where
             let state = match self.state.current {
                 | State::Data => self.handle_data_state(),
                 | State::RCDATA => self.handle_rcdata_state(),
+                | State::RAWTEXT => self.handle_rawtext_state(),
                 | State::TagOpen => self.handle_tag_open_state(),
                 | State::EndTagOpen => self.handle_end_tag_open_state(),
                 | State::TagName => self.handle_tag_name_state(),
@@ -3262,6 +3303,7 @@ where
                 | State::RCDATAEndTagName => {
                     self.handle_rcdata_end_tag_name_state()
                 }
+                | State::RAWTEXTLessThanSign => todo!(),
                 | State::BeforeAttributeName => {
                     self.handle_before_attribute_name_state()
                 }
