@@ -2567,7 +2567,6 @@ where
             // Ajouter le caractère actuel au tampon temporaire.
             // Passer à l'état `numeric-character-reference`.
             | Some(ch @ '#') => self
-                .set_temporary_buffer(String::new())
                 .append_character_to_temporary_buffer(ch)
                 .switch_state_to("numeric-character-reference")
                 .and_continue(),
@@ -2590,13 +2589,13 @@ where
     fn handle_named_character_reference_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
-        let current_ch = self.stream.current.expect("le caractère actuel");
+        let ch = self.stream.current.expect("le caractère actuel");
         let rest_of_chars = self.stream.peek_until_end::<String>();
-        let full_str = format!("{current_ch}{rest_of_chars}");
+        let full_str = format!("{ch}{rest_of_chars}");
 
         let entities = &self.named_character_reference_code;
 
-        let (maybe_result, max_size) = entities.iter().fold(
+        let (maybe_result, _max_size) = entities.iter().fold(
             (None, 0),
             |(mut maybe_result, mut max_size), item| {
                 let name = item.0;
@@ -2612,7 +2611,7 @@ where
         );
 
         match maybe_result {
-            | Some(result) => {
+            | Some(_result) => {
                 todo!();
             }
             | None => self
@@ -2639,7 +2638,7 @@ where
                     })
                     .and_continue()
                 } else {
-                    self.and_break()
+                    self.set_token(HTMLToken::Character(ch)).and_break()
                 }
             }
 
@@ -3181,4 +3180,22 @@ mod tests {
             })
         );
     }
+
+    // #[test]
+    // fn test_site() {
+    //     let html_tok =
+    //         get_tokenizer_html(include_str!("crashtests/site.html.local"
+    // ));
+    //
+    //     for tok in html_tok {
+    //         if let HTMLToken::EOF = tok {
+    //             break;
+    //         }
+    //         if let HTMLToken::Character(_) = tok {
+    //             continue;
+    //         }
+    //
+    //         println!("-> {tok:?}");
+    //     }
+    // }
 }
