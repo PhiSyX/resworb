@@ -1353,7 +1353,11 @@ where
             // `character-reference`.
             | Some('&') => self
                 .state
-                .set_return("attribute-value-double-quoted")
+                .set_return(if quote == '"' {
+                    "attribute-value-double-quoted"
+                } else {
+                    "attribute-value-single-quoted"
+                })
                 .switch_to("character-reference")
                 .and_continue(),
 
@@ -3623,6 +3627,25 @@ mod tests {
     ) -> HTMLTokenizer<impl Iterator<Item = char>> {
         let stream = InputStreamPreprocessor::new(input.chars());
         HTMLTokenizer::new(stream)
+    }
+
+    #[test]
+    fn test_ambiguous_ampersand() {
+        let mut html_tok = get_tokenizer_html(include_str!(
+            "crashtests/tag/ambiguous_ampersand.html"
+        ));
+
+        assert_eq!(
+            html_tok.next_token(),
+            Some(HTMLToken::StartTag {
+                name: "a".into(),
+                self_closing_flag: false,
+                attributes: vec![(
+                    "href".into(),
+                    "?a=b&c=d&a0b=c&copy=1&noti=n&not=in&notin=&notin;&not;&;& &".into()
+                )]
+            })
+        );
     }
 
     #[test]
