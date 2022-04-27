@@ -150,6 +150,9 @@ define_state! {
     /// 13.2.5.10 RCDATA end tag open state
     RCDATAEndTagOpen = "rcdata-end-tag-open",
 
+    /// 13.2.5.11 RCDATA end tag name state
+    RCDATAEndTagName = "rcdata-end-tag-name",
+
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
 
@@ -740,6 +743,33 @@ where
             | _ => self
                 .set_token(HTMLToken::Character('<'))
                 .and_emit_current_token()
+                .reconsume("rcdata")
+                .and_continue(),
+        }
+    }
+
+    fn handle_rcdata_end_tag_open_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alpha
+            //
+            // Créer un nouveau jeton `end-tag`, définir son nom comme une
+            // chaîne de caractères vide. Reprendre l'état
+            // `rcdata-end-tag-name`.
+            | Some(ch) if ch.is_ascii_alphabetic() => self
+                .set_token(HTMLToken::new_end_tag(String::new()))
+                .reconsume("rcdata-end-tag-name")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN et un
+            // jeton de `character` U+002F SOLIDUS. Reprendre
+            // dans l'état `rcdata`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
                 .reconsume("rcdata")
                 .and_continue(),
         }
@@ -3048,7 +3078,10 @@ where
                 | State::RCDATALessThanSign => {
                     self.handle_rcdata_less_than_sign_state()
                 }
-                | State::RCDATAEndTagOpen => todo!(),
+                | State::RCDATAEndTagOpen => {
+                    self.handle_rcdata_end_tag_open_state()
+                }
+                | State::RCDATAEndTagName => todo!(),
                 | State::BeforeAttributeName => {
                     self.handle_before_attribute_name_state()
                 }
