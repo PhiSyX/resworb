@@ -20,7 +20,7 @@ where
     queue: Vec<Option<I>>,
     offset: usize,
     is_replayed: bool,
-    current: Option<I>,
+    pub current: Option<I>,
     last_consumed_item: Option<I>,
 }
 
@@ -86,13 +86,26 @@ where
         )
     }
 
+    /// Récupère les prochains éléments du flux jusqu'à la fin de
+    /// l'itération, sans avancer dans l'itération.
+    ///
+    /// Le type générique est obligatoire.
+    pub fn peek_until_end<R: FromIterator<I>>(&mut self) -> R {
+        self.fill_all_in_queue();
+        self.queue.as_slice()[0..]
+            .iter()
+            .filter_map(|mch| mch.clone())
+            .collect::<R>()
+    }
+
     /// Permet de revenir en arrière dans le flux.
     pub fn rollback(&mut self) {
         self.is_replayed = true;
     }
 
+    /// Consomme le prochain élément du flux.
     pub fn next_input(&mut self) -> Option<I> {
-        self.tokenizer.next().and_then(|item| {
+        self.next().and_then(|item| {
             let some_item = Some(item);
             self.current = some_item.clone();
             some_item
@@ -113,6 +126,11 @@ where
         }
     }
 
+    fn fill_all_in_queue(&mut self) {
+        let stored_elements = self.queue.len();
+        (0..=stored_elements).for_each(|_| self.push_next_to_queue());
+    }
+
     fn peek_range(&mut self, range: Range<usize>) -> &[Option<I>] {
         if range.end > self.queue.len() {
             self.fill_queue(range.end);
@@ -131,6 +149,8 @@ where
     Chars: Iterator<Item = char>,
 {
     /// Alias de [InputStreamPreprocessor::next_input]
+    ///
+    /// Consomme le prochain caractère du flux.
     pub fn next_input_char(&mut self) -> Option<Chars::Item> {
         self.next_input()
     }
