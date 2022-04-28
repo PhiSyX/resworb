@@ -4,7 +4,7 @@
 
 use std::{borrow::Cow, collections::VecDeque};
 
-use parser::preprocessor::InputStreamPreprocessor;
+use parser::preprocessor::InputStream;
 
 use super::{
     error::HTMLParserError,
@@ -95,7 +95,8 @@ trait HTMLCharacterInterface {
 // Type //
 // ---- //
 
-pub(crate) type Tokenizer<C> = HTMLTokenizer<C>;
+type Tokenizer<C> = HTMLTokenizer<C>;
+pub(crate) type HTMLInputStream<Iter> = InputStream<Iter, char>;
 
 type ResultHTMLStateIterator =
     Result<HTMLStateIterator, (HTMLParserError, HTMLStateIterator)>;
@@ -104,11 +105,12 @@ type ResultHTMLStateIterator =
 // Structure //
 // --------- //
 
+#[derive(Debug)]
 pub struct HTMLTokenizer<Chars>
 where
     Chars: Iterator<Item = char>,
 {
-    stream: InputStreamPreprocessor<Chars, Chars::Item>,
+    stream: HTMLInputStream<Chars>,
 
     /// Le jeton courant.
     token: Option<HTMLToken>,
@@ -133,6 +135,7 @@ where
     last_start_tag_token: Option<HTMLToken>,
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct HTMLState {
     /// L'état courant.
@@ -335,7 +338,7 @@ where
     C: Iterator<Item = char>,
 {
     pub fn new(iter: C) -> Self {
-        let stream = InputStreamPreprocessor::new(iter);
+        let stream = HTMLInputStream::new(iter);
         Self {
             stream,
             token: None,
@@ -3625,7 +3628,7 @@ mod tests {
     fn get_tokenizer_html(
         input: &'static str,
     ) -> HTMLTokenizer<impl Iterator<Item = char>> {
-        let stream = InputStreamPreprocessor::new(input.chars());
+        let stream = InputStream::new(input.chars());
         HTMLTokenizer::new(stream)
     }
 

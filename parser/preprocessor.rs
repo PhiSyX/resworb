@@ -4,10 +4,17 @@
 
 use std::{borrow::Cow, ops::Range};
 
+// ---- //
+// Type //
+// ---- //
+
+pub type InputStream<T, I> = InputStreamPreprocessor<T, I>;
+
 // --------- //
 // Structure //
 // --------- //
 
+#[derive(Debug)]
 /// Le flux d'entrée est constitué de caractères qui y sont insérés lors
 /// du décodage du flux d'octets d'entrée ou par les diverses API qui
 /// manipulent directement le flux d'entrée.
@@ -16,7 +23,7 @@ where
     T: Iterator<Item = I>,
     I: Clone,
 {
-    tokenizer: T,
+    iter: T,
     queue: Vec<Option<I>>,
     offset: usize,
     is_replayed: bool,
@@ -36,7 +43,7 @@ where
     /// Crée un nouveau flux d'entrée.
     pub fn new(tokenizer: T) -> Self {
         Self {
-            tokenizer,
+            iter: tokenizer,
             queue: vec![],
             offset: 0,
             is_replayed: false,
@@ -139,7 +146,7 @@ where
     }
 
     fn push_next_to_queue(&mut self) {
-        let item = self.tokenizer.next();
+        let item = self.iter.next();
         self.queue.push(item);
     }
 }
@@ -182,7 +189,7 @@ where
         }
 
         let consumed_item = if self.queue.is_empty() {
-            self.tokenizer.next()
+            self.iter.next()
         } else {
             self.queue.remove(0)
         };
