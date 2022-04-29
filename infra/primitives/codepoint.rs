@@ -28,14 +28,14 @@ pub trait CodePointInterface: Copy {
     /// U+0000 NULL à U+007F DELETE, inclusivement.
     fn is_ascii_code_point(self) -> bool;
 
-    // est U+0009 TAB, U+000A LF, ou U+000D CR.
+    /// est U+0009 TAB, U+000A LF, ou U+000D CR.
     fn is_ascii_tab_or_newline(self) -> bool;
 
-    // Un C0 control est un point de code dans la gamme U+0000 NULL to
-    // U+001F INFORMATION SEPARATOR ONE, inclusive.
+    /// Un C0 control est un point de code dans la gamme U+0000 NULL à
+    /// U+001F INFORMATION SEPARATOR ONE, inclus.
     fn is_c0_control(self) -> bool;
 
-    // A C0 control or space is a C0 control or U+0020 SPACE.
+    /// A C0 control ou space est un C0 control ou U+0020 SPACE.
     fn is_c0_control_or_space(self) -> bool;
 
     /// Un non-caractère est un point de code qui se trouve dans
