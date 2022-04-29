@@ -422,13 +422,14 @@ define_errors! {
 
 #[cfg(test)]
 mod tests {
+    use infra::primitives::codepoint::CodePoint;
     use parser::preprocessor::InputStream;
 
     use crate::parser::{token::HTMLToken, tokenizer::HTMLTokenizer};
 
     fn get_tokenizer_html(
         input: &'static str,
-    ) -> HTMLTokenizer<impl Iterator<Item = char>> {
+    ) -> HTMLTokenizer<impl Iterator<Item = CodePoint>> {
         let stream = InputStream::new(input.chars());
         HTMLTokenizer::new(stream)
     }

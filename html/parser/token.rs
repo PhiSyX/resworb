@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use infra::primitives::codepoint::CodePoint;
+
 // ---- //
 // Type //
 // ---- //
@@ -68,7 +70,7 @@ pub enum HTMLToken {
     Comment(String),
 
     /// Le jeton `character`, contient un caractère.
-    Character(char),
+    Character(CodePoint),
 
     /// Le jeton `end of file`
     EOF,
@@ -81,7 +83,7 @@ pub enum HTMLToken {
 impl HTMLToken {
     /// Ajoute un caractère au nom du jeton `DOCTYPE`, ou au nom du jeton
     /// `tag` ou à un jeton `comment`.
-    pub fn append_character(&mut self, ch: char) {
+    pub fn append_character(&mut self, ch: CodePoint) {
         assert!(matches!(
             self,
             Self::DOCTYPE { .. }
@@ -124,7 +126,7 @@ impl HTMLToken {
     /// Définie une chaîne de caractères au nom du jeton `DOCTYPE`.
     /// À priori son nom est équivalent à `None`, à posteriori son nom
     /// doit être équivalent à `Some(String)`.
-    pub fn define_doctype_name(mut self, ch: char) -> Self {
+    pub fn define_doctype_name(mut self, ch: CodePoint) -> Self {
         assert!(matches!(self, Self::DOCTYPE { name: None, .. }));
 
         if let Self::DOCTYPE { ref mut name, .. } = self {
@@ -159,7 +161,7 @@ impl HTMLToken {
     }
 
     /// Ajoute un caractère au jeton `DOCTYPE` à son identifiant public.
-    pub fn append_character_to_public_identifier(&mut self, ch: char) {
+    pub fn append_character_to_public_identifier(&mut self, ch: CodePoint) {
         assert!(matches!(
             self,
             Self::DOCTYPE {
@@ -178,7 +180,7 @@ impl HTMLToken {
     }
 
     /// Ajoute un caractère à l'identifiant système d'un DOCTYPE.
-    pub fn append_character_to_system_identifier(&mut self, ch: char) {
+    pub fn append_character_to_system_identifier(&mut self, ch: CodePoint) {
         assert!(matches!(
             self,
             Self::DOCTYPE {
@@ -275,7 +277,7 @@ impl HTMLToken {
     /// (attr-name), le dernier attribut trouvé.
     ///
     /// attr-name="attr-value"
-    pub fn append_character_to_attribute_name(&mut self, ch: char) {
+    pub fn append_character_to_attribute_name(&mut self, ch: CodePoint) {
         assert!(matches!(
             self,
             Self::StartTag { .. } | Self::EndTag { .. }
@@ -293,7 +295,7 @@ impl HTMLToken {
     /// (attr-value), le dernier attribut trouvé.
     ///
     /// attr-name="attr-value"
-    pub fn append_character_to_attribute_value(&mut self, ch: char) {
+    pub fn append_character_to_attribute_value(&mut self, ch: CodePoint) {
         assert!(matches!(
             self,
             Self::StartTag { .. } | Self::EndTag { .. }
@@ -355,7 +357,7 @@ impl HTMLToken {
 
 impl HTMLToken {
     /// Crée un nouveau jeton (character)(HTMLToken::Character).
-    pub fn new_character(ch: char) -> Self {
+    pub fn new_character(ch: CodePoint) -> Self {
         Self::Character(ch)
     }
 }
