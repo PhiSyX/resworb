@@ -4,6 +4,7 @@
 
 use std::{borrow::Cow, collections::VecDeque};
 
+use infra::datastructs::lists::peekable::PeekableInterface;
 use parser::preprocessor::InputStream;
 
 use super::{
@@ -1565,7 +1566,8 @@ where
     fn handle_markup_declaration_open_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
-        if let Some(word) = self.stream.peek_until::<String>(7) {
+        if let Some(word) = self.stream.meanwhile().peek_until::<String>(7)
+        {
             // Correspondance ASCII insensible à la casse pour le mot
             // "DOCTYPE".
             //
@@ -1598,7 +1600,8 @@ where
         // Consommer ces deux caractères, créer un jeton `comment`
         // dont les données sont une chaîne de caractères vide, passer à
         // l'état `comment-start`.
-        if let Some(word) = self.stream.peek_until::<String>(2) {
+        if let Some(word) = self.stream.meanwhile().peek_until::<String>(2)
+        {
             if word == "--" {
                 self.stream.advance(2);
                 return self
@@ -2244,7 +2247,9 @@ where
             | Some(ch) => {
                 let mut f = false;
 
-                if let Some(word) = self.stream.peek_until::<String>(5) {
+                if let Some(word) =
+                    self.stream.meanwhile().peek_until::<String>(5)
+                {
                     f = false;
 
                     let word =
@@ -3022,7 +3027,8 @@ where
         &mut self,
     ) -> ResultHTMLStateIterator {
         let ch = self.stream.current.expect("le caractère actuel");
-        let rest_of_chars = self.stream.peek_until_end::<String>();
+        let rest_of_chars =
+            self.stream.meanwhile().peek_until_end::<String>();
         let full_str = format!("{ch}{rest_of_chars}");
 
         let entities = &self.named_character_reference_code;
