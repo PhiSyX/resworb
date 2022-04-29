@@ -2,12 +2,23 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::{borrow::Cow, ops::Range};
+use std::borrow::Cow;
+
+use infra::datastructs::lists::{
+    peekable::PeekableInterface, queue::ListQueue,
+};
+
+// ---- //
+// Type //
+// ---- //
+
+pub type InputStream<T, I> = InputStreamPreprocessor<T, I>;
 
 // --------- //
 // Structure //
 // --------- //
 
+#[derive(Debug)]
 /// Le flux d'entrée est constitué de caractères qui y sont insérés lors
 /// du décodage du flux d'octets d'entrée ou par les diverses API qui
 /// manipulent directement le flux d'entrée.
@@ -16,9 +27,7 @@ where
     T: Iterator<Item = I>,
     I: Clone,
 {
-    tokenizer: T,
-    queue: Vec<Option<I>>,
-    offset: usize,
+    iter: ListQueue<T, I>,
     is_replayed: bool,
     pub current: Option<I>,
     last_consumed_item: Option<I>,
@@ -35,10 +44,11 @@ where
 {
     /// Crée un nouveau flux d'entrée.
     pub fn new(tokenizer: T) -> Self {
+        let queue = ListQueue::new(tokenizer);
         Self {
-            tokenizer,
-            queue: vec![],
-            offset: 0,
+            iter: queue,
+            // queue: vec![],
+            // offset: 0,
             is_replayed: false,
             current: None,
             last_consumed_item: None,
@@ -64,43 +74,13 @@ where
         self.nth(n)
     }
 
-    /// Récupère le prochain élément du flux sans avancer dans l'itération.
-    pub fn peek(&mut self) -> Option<&I> {
-        self.fill_queue(self.offset);
-        self.queue.get(self.offset).and_then(|v| v.as_ref())
-    }
-
-    /// Récupère les prochains éléments du flux jusqu'à une certaine
-    /// position dans l'itération, sans avancer dans l'itération.
-    ///
-    /// Le type générique est obligatoire.
-    pub fn peek_until<R: FromIterator<I>>(
-        &mut self,
-        lookahead_offset: usize,
-    ) -> Option<R> {
-        Option::from(
-            self.peek_range(0..lookahead_offset)
-                .iter()
-                .filter_map(|mch| mch.clone())
-                .collect::<R>(),
-        )
-    }
-
-    /// Récupère les prochains éléments du flux jusqu'à la fin de
-    /// l'itération, sans avancer dans l'itération.
-    ///
-    /// Le type générique est obligatoire.
-    pub fn peek_until_end<R: FromIterator<I>>(&mut self) -> R {
-        self.fill_all_in_queue();
-        self.queue.as_slice()[0..]
-            .iter()
-            .filter_map(|mch| mch.clone())
-            .collect::<R>()
-    }
-
     /// Permet de revenir en arrière dans le flux.
     pub fn rollback(&mut self) {
         self.is_replayed = true;
+    }
+
+    pub fn meanwhile(&mut self) -> &mut impl PeekableInterface<T, I> {
+        &mut self.iter
     }
 
     /// Consomme le prochain élément du flux.
@@ -110,37 +90,6 @@ where
             self.current = some_item.clone();
             some_item
         })
-    }
-
-    fn decrement_offset(&mut self) {
-        if self.offset > usize::MIN {
-            self.offset -= 1;
-        }
-    }
-
-    fn fill_queue(&mut self, required_elements: usize) {
-        let stored_elements = self.queue.len();
-        if stored_elements <= required_elements {
-            (stored_elements..=required_elements)
-                .for_each(|_| self.push_next_to_queue());
-        }
-    }
-
-    fn fill_all_in_queue(&mut self) {
-        let stored_elements = self.queue.len();
-        (0..=stored_elements).for_each(|_| self.push_next_to_queue());
-    }
-
-    fn peek_range(&mut self, range: Range<usize>) -> &[Option<I>] {
-        if range.end > self.queue.len() {
-            self.fill_queue(range.end);
-        }
-        &self.queue.as_slice()[range]
-    }
-
-    fn push_next_to_queue(&mut self) {
-        let item = self.tokenizer.next();
-        self.queue.push(item);
     }
 }
 
@@ -159,7 +108,8 @@ where
     /// position dans l'itération, sans avancer dans l'itération, et le
     /// transforme en [Cow<str>].
     pub fn slice_until(&mut self, lookahead_offset: usize) -> Cow<str> {
-        self.peek_until::<Cow<str>>(lookahead_offset)
+        self.iter
+            .peek_until::<Cow<str>>(lookahead_offset)
             .unwrap_or_default()
     }
 }
@@ -179,19 +129,10 @@ where
         if self.is_replayed {
             self.is_replayed = false;
             return self.last_consumed_item.clone();
-        }
-
-        let consumed_item = if self.queue.is_empty() {
-            self.tokenizer.next()
-        } else {
-            self.queue.remove(0)
         };
 
-        self.decrement_offset();
-
-        self.last_consumed_item = consumed_item.clone();
-
-        consumed_item
+        self.last_consumed_item = self.iter.next();
+        self.last_consumed_item.clone()
     }
 }
 
@@ -206,34 +147,8 @@ mod tests {
     }
 
     #[test]
-    fn test_peek() {
-        let mut stream = get_input_stream("Hello World !");
-
-        assert_eq!(stream.next(), Some('H')); // -> 'H'ello Word !
-
-        // On se rend au 5ème caractère sans avancer dans l'itération
-        assert_eq!(stream.advance(5), Some(' ')); // -> ello' 'World !
-
-        assert_eq!(stream.peek(), Some(&'W')); // -> 'W'orld !
-        assert_eq!(stream.peek(), Some(&'W')); // -> 'W'orld !
-        assert_eq!(stream.peek(), Some(&'W')); // -> 'W'orld !
-
-        assert_eq!(stream.collect::<String>(), "World !".to_string());
-    }
-
-    #[test]
-    fn test_peek_until() {
-        let mut stream = get_input_stream("Hello World !");
-        assert_eq!(
-            stream.peek_until::<String>(5),
-            Some(String::from("Hello"))
-        );
-        assert_eq!(stream.next(), Some('H'));
-    }
-
-    #[test]
     fn test_slice_until() {
-        let mut stream = get_input_stream("Hello World !");
+        let mut stream = get_input_stream("Hello World");
         assert_eq!(stream.slice_until(5), Cow::Borrowed("Hello"));
         assert_eq!(stream.next(), Some('H'));
     }

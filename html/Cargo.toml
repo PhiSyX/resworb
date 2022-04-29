@@ -1,6 +1,6 @@
 [package]
 name = "resworb-html"
-version = "0.1.4"
+version = "0.1.7"
 license-file = "../LICENSE"
 edition = "2021"
 
@@ -12,3 +12,4 @@ log = "^0.4"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "^1.0"
 parser = { path = "../parser", package = "resworb-parser" }
+infra = { path = "../infra", package = "resworb-infra" }

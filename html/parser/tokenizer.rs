@@ -4,9 +4,14 @@
 
 use std::{borrow::Cow, collections::VecDeque};
 
-use parser::preprocessor::InputStreamPreprocessor;
+use infra::{
+    datastructs::lists::peekable::PeekableInterface,
+    primitives::codepoint::{CodePoint, CodePointInterface},
+};
+use parser::preprocessor::InputStream;
 
 use super::{
+    codepoint::HTMLCodePoint,
     error::HTMLParserError,
     token::{HTMLTagAttribute, HTMLToken},
 };
@@ -85,17 +90,12 @@ trait HTMLStateIteratorInterface {
     }
 }
 
-trait HTMLCharacterInterface {
-    fn is_html_whitespace(&self) -> bool;
-    fn is_noncharacter(&self) -> bool;
-    fn is_surrogate(&self) -> bool;
-}
-
 // ---- //
 // Type //
 // ---- //
 
-pub(crate) type Tokenizer<C> = HTMLTokenizer<C>;
+type Tokenizer<C> = HTMLTokenizer<C>;
+pub(crate) type HTMLInputStream<Iter> = InputStream<Iter, CodePoint>;
 
 type ResultHTMLStateIterator =
     Result<HTMLStateIterator, (HTMLParserError, HTMLStateIterator)>;
@@ -104,11 +104,12 @@ type ResultHTMLStateIterator =
 // Structure //
 // --------- //
 
+#[derive(Debug)]
 pub struct HTMLTokenizer<Chars>
 where
-    Chars: Iterator<Item = char>,
+    Chars: Iterator<Item = CodePoint>,
 {
-    stream: InputStreamPreprocessor<Chars, Chars::Item>,
+    stream: HTMLInputStream<Chars>,
 
     /// Le jeton courant.
     token: Option<HTMLToken>,
@@ -133,6 +134,7 @@ where
     last_start_tag_token: Option<HTMLToken>,
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct HTMLState {
     /// L'état courant.
@@ -332,10 +334,10 @@ enum HTMLStateIterator {
 
 impl<C> Tokenizer<C>
 where
-    C: Iterator<Item = char>,
+    C: Iterator<Item = CodePoint>,
 {
     pub fn new(iter: C) -> Self {
-        let stream = InputStreamPreprocessor::new(iter);
+        let stream = HTMLInputStream::new(iter);
         Self {
             stream,
             token: None,
@@ -352,7 +354,7 @@ where
 
 impl<C> Tokenizer<C>
 where
-    C: Iterator<Item = char>,
+    C: Iterator<Item = CodePoint>,
 {
     pub fn current_token(&mut self) -> Option<HTMLToken> {
         if let Some(token) = self.token.clone() {
@@ -428,7 +430,7 @@ where
 
     fn append_character_to_temporary_buffer(
         &mut self,
-        ch: char,
+        ch: CodePoint,
     ) -> &mut Self {
         self.temporary_buffer.push(ch);
         self
@@ -517,7 +519,7 @@ impl HTMLState {
 
 impl<C> Tokenizer<C>
 where
-    C: Iterator<Item = char>,
+    C: Iterator<Item = CodePoint>,
 {
     fn handle_data_state(&mut self) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
@@ -1327,7 +1329,7 @@ where
 
     fn handle_attribute_value_quoted_state(
         &mut self,
-        quote: char,
+        quote: CodePoint,
     ) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+0022 QUOTATION MARK (")
@@ -1562,7 +1564,8 @@ where
     fn handle_markup_declaration_open_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
-        if let Some(word) = self.stream.peek_until::<String>(7) {
+        if let Some(word) = self.stream.meanwhile().peek_until::<String>(7)
+        {
             // Correspondance ASCII insensible à la casse pour le mot
             // "DOCTYPE".
             //
@@ -1595,7 +1598,8 @@ where
         // Consommer ces deux caractères, créer un jeton `comment`
         // dont les données sont une chaîne de caractères vide, passer à
         // l'état `comment-start`.
-        if let Some(word) = self.stream.peek_until::<String>(2) {
+        if let Some(word) = self.stream.meanwhile().peek_until::<String>(2)
+        {
             if word == "--" {
                 self.stream.advance(2);
                 return self
@@ -2241,7 +2245,9 @@ where
             | Some(ch) => {
                 let mut f = false;
 
-                if let Some(word) = self.stream.peek_until::<String>(5) {
+                if let Some(word) =
+                    self.stream.meanwhile().peek_until::<String>(5)
+                {
                     f = false;
 
                     let word =
@@ -2450,7 +2456,7 @@ where
 
     fn handle_doctype_public_identifier_quoted(
         &mut self,
-        quote: char,
+        quote: CodePoint,
     ) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+0022 QUOTATION MARK (")
@@ -2833,7 +2839,7 @@ where
 
     fn handle_doctype_system_identifier_quoted_state(
         &mut self,
-        quote: char,
+        quote: CodePoint,
     ) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+0022 QUOTATION MARK (")
@@ -3019,7 +3025,8 @@ where
         &mut self,
     ) -> ResultHTMLStateIterator {
         let ch = self.stream.current.expect("le caractère actuel");
-        let rest_of_chars = self.stream.peek_until_end::<String>();
+        let rest_of_chars =
+            self.stream.meanwhile().peek_until_end::<String>();
         let full_str = format!("{ch}{rest_of_chars}");
 
         let entities = &self.named_character_reference_code;
@@ -3070,7 +3077,8 @@ where
                 self.temporary_buffer.clear();
 
                 entity.codepoints.iter().for_each(|&cp| {
-                    let ch = char::from_u32(cp).expect("un caractère");
+                    let ch =
+                        CodePoint::from_u32(cp).expect("un caractère");
                     self.temporary_buffer.push(ch);
                 });
 
@@ -3311,6 +3319,8 @@ where
     ) -> ResultHTMLStateIterator {
         let mut err: Option<&str> = None;
 
+        let cp = self.character_reference_code as u8 as CodePoint;
+
         match self.character_reference_code {
             // Si le nombre est 0x00, il s'agit d'une erreur d'analyse de
             // type `null-character-reference`. Définir le code de
@@ -3332,14 +3342,14 @@ where
             // Si le nombre est un substitut, il s'agit d'une erreur
             // d'analyse de type `surrogate-character-reference`.
             // Définir le code de référence du caractère à 0xFFFD.
-            | crc if (crc as u8 as char).is_surrogate() => {
+            | _ if cp.is_surrogate() => {
                 err = "surrogate-character-reference".into();
                 self.character_reference_code = 0xFFFD;
             }
 
             // Si le nombre n'est pas un caractère, il s'agit d'une erreur
             // d'analyse de type `noncharacter-character-reference`.
-            | crc if (crc as u8 as char).is_noncharacter() => {
+            | _ if cp.is_noncharacter() => {
                 err = "noncharacter-character-reference".into();
             }
 
@@ -3351,15 +3361,14 @@ where
             // code de référence de caractère au nombre de la deuxième
             // colonne de cette ligne.
             | crc if crc == 0x0D
-                || ((crc as u8 as char).is_control()
-                    && !(crc as u8 as char).is_whitespace()) =>
+                || (cp.is_control() && !cp.is_ascii_whitespace()) =>
             {
                 err = "control-character-reference".into();
             }
             | _ => {}
         }
 
-        let ch = char::from_u32(self.character_reference_code)
+        let ch = CodePoint::from_u32(self.character_reference_code)
             .unwrap_or(char::REPLACEMENT_CHARACTER);
         self.temporary_buffer.clear();
         self.append_character_to_temporary_buffer(ch)
@@ -3379,48 +3388,15 @@ where
 // -------------- //
 
 impl<C> HTMLStateIteratorInterface for Tokenizer<C> where
-    C: Iterator<Item = char>
+    C: Iterator<Item = CodePoint>
 {
 }
 
 impl HTMLStateIteratorInterface for HTMLState {}
 
-impl HTMLCharacterInterface for char {
-    fn is_html_whitespace(&self) -> bool {
-        self.is_ascii_whitespace() && '\r'.ne(self)
-    }
-
-    /// https://infra.spec.whatwg.org/#noncharacter
-    fn is_noncharacter(&self) -> bool {
-        matches!(self,
-            | '\u{FDD0}'..='\u{FDEF}'
-            | '\u{FFFE}'..='\u{FFFF}'
-            | '\u{1_FFFE}'..='\u{1_FFFF}'
-            | '\u{2_FFFE}'..='\u{2_FFFF}'
-            | '\u{3_FFFE}'..='\u{3_FFFF}'
-            | '\u{4_FFFE}'..='\u{4_FFFF}'
-            | '\u{5_FFFE}'..='\u{5_FFFF}'
-            | '\u{6_FFFE}'..='\u{6_FFFF}'
-            | '\u{7_FFFE}'..='\u{7_FFFF}'
-            | '\u{8_FFFE}'..='\u{8_FFFF}'
-            | '\u{9_FFFE}'..='\u{9_FFFF}'
-            | '\u{A_FFFE}'..='\u{A_FFFF}'
-            | '\u{B_FFFE}'..='\u{B_FFFF}'
-            | '\u{C_FFFE}'..='\u{C_FFFF}'
-            | '\u{D_FFFE}'..='\u{D_FFFF}'
-            | '\u{E_FFFE}'..='\u{E_FFFF}'
-            | '\u{F_FFFE}'..='\u{F_FFFF}'
-            | '\u{10_FFFE}'..='\u{10_FFFF}')
-    }
-
-    fn is_surrogate(&self) -> bool {
-        matches!(self, '\u{D_8000}'..='\u{D_FFFF}')
-    }
-}
-
 impl<C> Iterator for Tokenizer<C>
 where
-    C: Iterator<Item = char>,
+    C: Iterator<Item = CodePoint>,
 {
     type Item = HTMLToken;
 
@@ -3624,8 +3600,8 @@ mod tests {
 
     fn get_tokenizer_html(
         input: &'static str,
-    ) -> HTMLTokenizer<impl Iterator<Item = char>> {
-        let stream = InputStreamPreprocessor::new(input.chars());
+    ) -> HTMLTokenizer<impl Iterator<Item = CodePoint>> {
+        let stream = InputStream::new(input.chars());
         HTMLTokenizer::new(stream)
     }
 
