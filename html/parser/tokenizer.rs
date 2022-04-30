@@ -217,6 +217,9 @@ define_state! {
     /// 13.2.5.24 Script data escaped end tag open state
     ScriptDataEscapedEndTagOpen = "script-data-escaped-end-tag-open",
 
+    /// 13.2.5.25 Script data escaped end tag name state
+    ScriptDataEscapedEndTagName = "script-data-escaped-end-tag-name",
+
     /// 13.2.5.26 Script data double escape start state
     ScriptDataDoubleEscapeStart = "script-data-double-escape-start",
 
@@ -1539,6 +1542,33 @@ where
             // Reprendre dans l'état `script-data-escaped`.
             | _ => self
                 .set_token(HTMLToken::Character('<'))
+                .reconsume("script-data-escaped")
+                .and_continue(),
+        }
+    }
+
+    fn handle_script_data_escaped_end_tag_open_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alpha
+            //
+            // Créer un nouveau jeton `end-tag`, définir son nom de balise
+            // en une chaîne de caractères vide. Reprendre dans l'état
+            // `script-data-escaped-end-tag-name`.
+            | Some(ch) if ch.is_ascii_alphabetic() => self
+                .set_token(HTMLToken::new_end_tag(String::new()))
+                .reconsume("script-data-escaped-end-tag-name")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN et un
+            // jeton `character` U+002F SOLIDUS. Reprendre dans l'état
+            // `script-data-escaped`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
                 .reconsume("script-data-escaped")
                 .and_continue(),
         }
@@ -3912,6 +3942,9 @@ where
                     self.handle_script_data_escaped_less_than_sign_state()
                 }
                 | State::ScriptDataEscapedEndTagOpen => {
+                    self.handle_script_data_escaped_end_tag_open_state()
+                }
+                | State::ScriptDataEscapedEndTagName => {
                     todo!()
                 }
                 | State::ScriptDataDoubleEscapeStart => {
