@@ -190,6 +190,12 @@ define_state! {
     /// 13.2.5.15 Script data less-than sign state
     ScriptDataLessThanSign = "script-data-less-than-sign",
 
+    /// 13.2.5.16 Script data end tag open state
+    ScriptDataEndTagOpen = "script-data-end-tag-open",
+
+    /// 13.2.5.18 Script data escape start state
+    ScriptDataEscapeStart = "script-data-escape-start",
+
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
 
@@ -1129,6 +1135,41 @@ where
                 .emit_token(HTMLToken::Character('/'))
                 .emit_each_characters_of_temporary_buffer()
                 .reconsume("rawtext")
+                .and_continue(),
+        }
+    }
+
+    fn handle_script_data_less_than_sign_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002F SOLIDUS (/)
+            //
+            // Définir le tampon temporaire comme une chaîne de caractères
+            // vide. Passer à l'état `script-data-end-tag-open`.
+            | Some('/') => self
+                .set_temporary_buffer(String::new())
+                .switch_state_to("script-data-end-tag-open")
+                .and_continue(),
+
+            // U+0021 EXCLAMATION MARK (!)
+            //
+            // Passer à l'état `script-data-escape-start`. Émettre un
+            // jeton `character` U+003C LESS-THAN SIGN et un jeton
+            // `character` U+0021 EXCLAMATION MARK.
+            | Some('!') => self
+                .switch_state_to("script-data-escape-start")
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('!'))
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            // Reprendre dans l'état de données du script.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .reconsume("script-data")
                 .and_continue(),
         }
     }
@@ -3474,6 +3515,12 @@ where
                     self.handle_rawtext_end_tag_name_state()
                 }
                 | State::ScriptDataLessThanSign => {
+                    self.handle_script_data_less_than_sign_state()
+                }
+                | State::ScriptDataEndTagOpen => {
+                    todo!()
+                }
+                | State::ScriptDataEscapeStart => {
                     todo!()
                 }
                 | State::BeforeAttributeName => {
