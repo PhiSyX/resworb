@@ -1390,6 +1390,59 @@ where
         }
     }
 
+    fn handle_script_data_escaped_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `script-data-escaped-dash-dash`.
+            // Émettre un jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => self
+                .switch_state_to("script-data-escaped-dash-dash")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-escaped-less-than-sign`.
+            | Some('<') => self
+                .switch_state_to("script-data-escaped-less-than-sign")
+                .and_continue(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Passer à l'état
+            // `script-data-escaped`. Émettre un jeton `character` U+FFFD
+            // REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .switch_state_to("script-data-escaped")
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit(),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-in-script-html-comment-like-text`. Émettre un jeton
+            // `end of file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
+                "eof-in-script-html-comment-like-text",
+            ),
+
+            // Anything else
+            //
+            // Passer à l'état `script-data-escaped`. Émettre le caractère
+            // actuel comme un jeton `character`.
+            | Some(ch) => self
+                .switch_state_to("script-data-escaped")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+        }
+    }
+
     fn handle_script_data_escaped_dash_dash_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
@@ -3809,7 +3862,7 @@ where
                     self.handle_script_data_escaped_state()
                 }
                 | State::ScriptDataEscapedDash => {
-                    todo!()
+                    self.handle_script_data_escaped_dash_state()
                 }
                 | State::ScriptDataEscapedDashDash => {
                     self.handle_script_data_escaped_dash_dash_state()
