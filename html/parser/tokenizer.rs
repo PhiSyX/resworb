@@ -205,6 +205,9 @@ define_state! {
     /// 13.2.5.20 Script data escaped state
     ScriptDataEscaped = "script-data-escaped",
 
+    /// 13.2.5.21 Script data escaped dash state
+    ScriptDataEscapedDash = "script-data-escaped-dash",
+
     /// 13.2.5.22 Script data escaped dash dash state
     ScriptDataEscapedDashDash = "script-data-escaped-dash-dash",
 
@@ -1335,6 +1338,55 @@ where
             //
             // Reprendre dans l'état `script-data`.
             | _ => self.reconsume("script-data").and_continue(),
+        }
+    }
+
+    fn handle_script_data_escaped_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `script-data-escaped-dash`. Émettre un jeton
+            // `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => self
+                .switch_state_to("script-data-escaped-dash")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-escaped-less-than-sign`.
+            | Some('<') => self
+                .switch_state_to("script-data-escaped-less-than-sign")
+                .and_continue(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-in-script-html-comment-like-text`. Émettre un jeton
+            // `end of file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
+                "eof-in-script-html-comment-like-text",
+            ),
+
+            // Anything else
+            //
+            // Émettre le caractère actuel comme un jeton `character`.
+            | Some(ch) => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
         }
     }
 
@@ -3754,6 +3806,9 @@ where
                     self.handle_script_data_escape_start_dash_state()
                 }
                 | State::ScriptDataEscaped => {
+                    self.handle_script_data_escaped_state()
+                }
+                | State::ScriptDataEscapedDash => {
                     todo!()
                 }
                 | State::ScriptDataEscapedDashDash => {
