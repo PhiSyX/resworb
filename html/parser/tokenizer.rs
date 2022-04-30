@@ -591,7 +591,7 @@ where
     fn handle_rcdata_state(&mut self) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+0026 AMPERSAND (&)
-            // Définir l'état de retour à l'état `rcdata`. Passez à l'état
+            // Définir l'état de retour à l'état `rcdata`. Passer à l'état
             // `character-reference`.
             | Some('&') => self
                 .state
@@ -634,7 +634,7 @@ where
     fn handle_rawtext_state(&mut self) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+003C LESS-THAN SIGN (<)
-            // Passez à l'état `rawtext-less-than-sign`.
+            // Passer à l'état `rawtext-less-than-sign`.
             | Some('<') => self
                 .state
                 .switch_to("rawtext-less-than-sign")
@@ -820,8 +820,8 @@ where
             // U+0020 SPACE
             //
             // Si le jeton `end tag` actuel est un jeton `end tag`
-            // approprié, passez à l'état `before-attribute-name`. Sinon,
-            // traitez-le comme indiqué dans l'entrée "Anything
+            // approprié, passer à l'état `before-attribute-name`. Sinon,
+            // le traiter comme indiqué dans l'entrée "Anything
             // else" ci-dessous.
             | Some(ch) if ch.is_html_whitespace() => self
                 .state
@@ -831,8 +831,8 @@ where
             // U+002F SOLIDUS (/)
             //
             // Si le jeton `end tag` actuel est un jeton `end tag`
-            // approprié, passez l'état de balise de
-            // `self-closing-start-tag`. Sinon, traitez-le comme dans
+            // approprié, passer l'état de balise de
+            // `self-closing-start-tag`. Sinon, le traiter comme dans
             // l'entrée "Anything else" ci-dessous.
             | Some('/') => self
                 .state
@@ -948,7 +948,7 @@ where
             //
             // Si le jeton `end tag` actuel est un jeton `end tag`
             // approprié, alors passer à l'état `before-attribute-name`.
-            // Sinon, traitez-le comme indiqué dans l'entrée
+            // Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some(ch)
                 if ch.is_html_whitespace()
@@ -963,7 +963,7 @@ where
             //
             // Si le jeton `end tag` actuel est un jeton `end tag`
             // approprié, alors passer à l'état `self-closing-start-tag`.
-            // Sinon, traitez-le comme indiqué dans l'entrée
+            // Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some('/') if self.is_appropriate_end_tag() => self
                 .state
@@ -974,7 +974,7 @@ where
             //
             // Si le jeton `end tag` actuel est un jeton `end tag`
             // approprié, alors passer à l'état `data` et émettre le jeton
-            // courant. Sinon, traitez-le comme indiqué dans l'entrée
+            // courant. Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some('>') if self.is_appropriate_end_tag() => {
                 self.state.switch_to("data").and_emit()
@@ -1083,7 +1083,7 @@ where
             //
             // Si le jeton `end-tag` actuel est un jeton `end-tag`
             // approprié, alors passer à l'état `before-attribute-name`.
-            // Sinon, traitez-le comme indiqué dans l'entrée "Anything
+            // Sinon, le traiter comme indiqué dans l'entrée "Anything
             // else" ci-dessous.
             | Some(ch)
                 if ch.is_html_whitespace()
@@ -1098,7 +1098,7 @@ where
             //
             // Si le jeton `end-tag` actuel est un jeton `end-tag`
             // approprié, passer à l'état à `self-closing-start-tag`.
-            // Sinon, traitez-le comme indiqué dans l'entrée
+            // Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some('/') if self.is_appropriate_end_tag() => self
                 .state
@@ -1108,8 +1108,8 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Si le jeton `end-tag` actuel est un jeton `end-tag`
-            // approprié, passer à l'état `data` et émettez
-            // le jeton `end-tag` actuel. Sinon, traitez-le comme
+            // approprié, passer à l'état `data` et émettre
+            // le jeton `end-tag` actuel. Sinon, le traiter comme
             // indiqué dans l'entrée "Anything else" ci-dessous.
             | Some('>') if self.is_appropriate_end_tag() => {
                 self.state.switch_to("data").and_emit()
@@ -1225,7 +1225,7 @@ where
             //
             // Si le jeton `end-tag` actuel est un jeton `end-tag`
             // approprié, il faut passer à l'état `before-attribute-name`.
-            // Sinon, traitez-le comme indiqué dans l'entrée `Anything
+            // Sinon, le traiter comme indiqué dans l'entrée `Anything
             // else` ci-dessous.
             | Some(ch)
                 if ch.is_html_whitespace()
@@ -1240,7 +1240,7 @@ where
             //
             // Si le jeton `end-tag` actuel est un jeton `end-tag`
             // approprié, il faut passer à l'état `self-closing-start-tag`.
-            // Sinon, traitez-le comme indiqué dans l'entrée `Anything
+            // Sinon, le traiter comme indiqué dans l'entrée `Anything
             // else` ci-dessous.
             | Some('/') if self.is_appropriate_end_tag() => self
                 .state
@@ -1251,7 +1251,7 @@ where
             //
             // Si le jeton `end-tag` actuel est un jeton `end-tag`
             // approprié, il faut passer à l'état `data`.
-            // Sinon, traitez-le comme indiqué dans l'entrée `Anything
+            // Sinon, le traiter comme indiqué dans l'entrée `Anything
             // else` ci-dessous.
             | Some('>') if self.is_appropriate_end_tag() => {
                 self.state.switch_to("data").and_continue()
@@ -1809,7 +1809,7 @@ where
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état `data`. Émettez le jeton `tag` actuel.
+            // Passer à l'état `data`. Émettre le jeton `tag` actuel.
             | Some('>') => self.state.switch_to("data").and_emit(),
 
             // EOF
@@ -2026,7 +2026,7 @@ where
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
-            // Passez à l'état `comment-less-than-sign-bang-dash`.
+            // Passer à l'état `comment-less-than-sign-bang-dash`.
             | Some('-') => self
                 .state
                 .switch_to("comment-less-than-sign-bang-dash")
@@ -2045,7 +2045,7 @@ where
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
-            // Passez à l'état `comment-less-than-sign-bang-dash-dash`.
+            // Passer à l'état `comment-less-than-sign-bang-dash-dash`.
             | Some('-') => self
                 .state
                 .switch_to("comment-less-than-sign-bang-dash-dash")
@@ -2073,7 +2073,7 @@ where
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type `nested-comment`.
-            // Reprenez à l'état `comment-end`.
+            // Reprendre dans l'état `comment-end`.
             | Some(_) => self
                 .reconsume("comment-end")
                 .and_continue_with_error("nested-comment"),
@@ -2086,7 +2086,7 @@ where
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
-            // Passez à l'état final du commentaire.
+            // Passer à l'état final du commentaire.
             | Some('-') => {
                 self.state.switch_to("comment-end").and_continue()
             }
@@ -2220,7 +2220,7 @@ where
 
             // U+0021 EXCLAMATION MARK (!)
             //
-            // Passez à l'état `comment-end-bang`.
+            // Passer à l'état `comment-end-bang`.
             | Some('!') => {
                 self.state.switch_to("comment-end-bang").and_continue()
             }
@@ -2280,7 +2280,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Il s'agit d'une erreur d'analyse de type
-            // `incorrectly-closed-comment`. Passez à l'état `data`.
+            // `incorrectly-closed-comment`. Passer à l'état `data`.
             // Émettre le jeton `comment` actuel.
             | Some('>') => self
                 .switch_state_to("data")
@@ -2371,7 +2371,7 @@ where
             //
             // Créer un nouveau jeton `doctype`. Définir le nom du jeton
             // comme la version en minuscules du caractère actuel
-            // (ajoutez 0x0020 au point de code du caractère). Passer à
+            // (ajouter 0x0020 au point de code du caractère). Passer à
             // l'état `doctype-name`.
             | Some(ch) if ch.is_ascii_uppercase() => self
                 .set_token(
@@ -2536,12 +2536,12 @@ where
             //
             // Si les six caractères à partir du caractère actuel sont une
             // correspondance ASCII insensible à la casse pour le
-            // mot "PUBLIC", consommez ces caractères et passez à l'état
+            // mot "PUBLIC", consommer ces caractères et passer à l'état
             // `after-doctype-public-keyword`.
             //
             // Sinon, si les six caractères à partir du caractère d'entrée
             // actuel sont une correspondance ASCII insensible à la casse
-            // pour le mot "SYSTEM", consommez ces caractères et passez à
+            // pour le mot "SYSTEM", consommer ces caractères et passer à
             // l'état `after-doctype-system-keyword`.
             //
             // Sinon, il s'agit d'une erreur d'analyse de type
@@ -3151,7 +3151,7 @@ where
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
             //
-            // Passez à l'état `after-doctype-system-identifier`.
+            // Passer à l'état `after-doctype-system-identifier`.
             | Some(ch) if ch == quote => self
                 .state
                 .switch_to("after-doctype-system-identifier")
@@ -3260,7 +3260,7 @@ where
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état `data`. Émettez le jeton `doctype`.
+            // Passer à l'état `data`. Émettre le jeton `doctype`.
             | Some('>') => self.state.switch_to("data").and_emit(),
 
             // U+0000 NULL
@@ -3480,7 +3480,7 @@ where
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // `absence-of-digits-in-numeric-character-reference`. Videz
+            // `absence-of-digits-in-numeric-character-reference`. Vider
             // les points de code consommés comme référence de caractère.
             // Reprendre dans l'état `return-state`.
             | _ => self
@@ -3506,7 +3506,7 @@ where
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // `absence-of-digits-in-numeric-character-reference`. Videz
+            // `absence-of-digits-in-numeric-character-reference`. Vider
             // les points de code consommés comme référence de caractère.
             // Reprendre dans l'état `return-state`.
             | _ => self
@@ -3638,8 +3638,8 @@ where
 
             // Si le nombre est supérieur à 0x10FFFF, il s'agit d'une
             // erreur d'analyse de référence de caractère hors
-            // de la plage unicode. Définissez le code de
-            // référence du caractère à 0xFFFD.
+            // de la plage unicode. Définir le code de référence du
+            // caractère à 0xFFFD.
             | crc if crc > 0x10FFFF => {
                 err = "character-reference-outside-unicode-range".into();
                 self.character_reference_code = 0xFFFD;
@@ -3662,8 +3662,8 @@ where
             // Si le nombre est 0x0D, ou un contrôle qui n'est pas un
             // espace ASCII, il s'agit d'une erreur d'analyse de référence
             // de caractère de contrôle. Si le nombre est l'un des nombres
-            // de la première colonne du tableau suivant, trouvez la ligne
-            // avec ce nombre dans la première colonne, et définissez le
+            // de la première colonne du tableau suivant, trouver la ligne
+            // avec ce nombre dans la première colonne, et définir le
             // code de référence de caractère au nombre de la deuxième
             // colonne de cette ligne.
             | crc if crc == 0x0D
