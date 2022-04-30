@@ -193,6 +193,9 @@ define_state! {
     /// 13.2.5.16 Script data end tag open state
     ScriptDataEndTagOpen = "script-data-end-tag-open",
 
+    /// 13.2.5.17 Script data end tag name state
+    ScriptDataEndTagName = "script-data-end-tag-name",
+
     /// 13.2.5.18 Script data escape start state
     ScriptDataEscapeStart = "script-data-escape-start",
 
@@ -1169,6 +1172,31 @@ where
             // Reprendre dans l'état de données du script.
             | _ => self
                 .emit_token(HTMLToken::Character('<'))
+                .reconsume("script-data")
+                .and_continue(),
+        }
+    }
+
+    fn handle_script_data_end_tag_open_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alpha
+            //
+            // Créer un nouveau jeton `end-tag`, définir son nom de balise
+            // en une chaîne de caractères vide. Reprendre dans l'état
+            // `script-data-end-tag-name`.
+            | Some(ch) if ch.is_ascii_alphabetic() => self
+                .set_token(HTMLToken::new_end_tag(String::new()))
+                .reconsume("script-data-end-tag-name")
+                .and_continue(),
+
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN et un
+            // jeton `character` U+002F SOLIDUS. Reprendre dans l'état
+            // `script-data`.µ
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
                 .reconsume("script-data")
                 .and_continue(),
         }
@@ -3518,6 +3546,9 @@ where
                     self.handle_script_data_less_than_sign_state()
                 }
                 | State::ScriptDataEndTagOpen => {
+                    self.handle_script_data_end_tag_open_state()
+                }
+                | State::ScriptDataEndTagName => {
                     todo!()
                 }
                 | State::ScriptDataEscapeStart => {
