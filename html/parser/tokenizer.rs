@@ -1574,6 +1574,87 @@ where
         }
     }
 
+    fn handle_script_data_escaped_end_tag_name_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, passer à l'état `before-attribute-name`. Sinon,
+            // le traiter comme indiqué dans l'entrée "anything else"
+            // ci-dessous.
+            | Some(ch)
+                if ch.is_html_whitespace()
+                    && self.is_appropriate_end_tag() =>
+            {
+                self.switch_state_to("before-attribute-name")
+                    .and_continue()
+            }
+
+            // U+002F SOLIDUS (/)
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, passer à l'état `self-closing-start-tag`. Sinon,
+            // le traiter comme indiqué dans l'entrée "anything else"
+            // ci-dessous.
+            | Some('/') if self.is_appropriate_end_tag() => self
+                .switch_state_to("self-closing-start-tag")
+                .and_continue(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, passer à l'état `data`. Sinon, le traiter comme
+            // indiqué dans l'entrée "anything else" ci-dessous.
+            | Some('>') if self.is_appropriate_end_tag() => self
+                .switch_state_to("self-closing-start-tag")
+                .and_continue(),
+
+            // ASCII upper alpha
+            //
+            // Ajouter la version en minuscules du caractère actuel
+            // (ajouter 0x0020 au point de code du caractère) au nom
+            // de balise du jeton `*-tag` actuel. Ajouter le caractère
+            // actuel au tampon temporaire.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch.to_ascii_lowercase());
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // ASCII lower alpha
+            //
+            // Ajouter le caractère actuel au nom de balise du jeton
+            // `*-tag` actuel. Ajouter le caractère actuel au tampon
+            // temporaire.
+            | Some(ch) if ch.is_ascii_lowercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch);
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN, un jeton
+            // `character` U+002F SOLIDUS et un jeton `character` pour
+            // chacun des caractères du tampon temporaire (dans l'ordre où
+            // ils ont été ajoutés au tampon). Reprendre dans l'état
+            // `script-data-escaped`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
+                .emit_each_characters_of_temporary_buffer()
+                .reconsume("script-data-escaped")
+                .and_continue(),
+        }
+    }
+
     fn handle_before_attribute_name_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
@@ -3945,7 +4026,7 @@ where
                     self.handle_script_data_escaped_end_tag_open_state()
                 }
                 | State::ScriptDataEscapedEndTagName => {
-                    todo!()
+                    self.handle_script_data_escaped_end_tag_name_state()
                 }
                 | State::ScriptDataDoubleEscapeStart => {
                     todo!()
