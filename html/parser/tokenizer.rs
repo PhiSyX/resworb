@@ -214,6 +214,12 @@ define_state! {
     /// 13.2.5.23 Script data escaped less-than sign state
     ScriptDataEscapedLessThanSign = "script-data-escaped-less-than-sign",
 
+    /// 13.2.5.24 Script data escaped end tag open state
+    ScriptDataEscapedEndTagOpen = "script-data-escaped-end-tag-open",
+
+    /// 13.2.5.26 Script data double escape start state
+    ScriptDataDoubleEscapeStart = "script-data-double-escape-start",
+
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
 
@@ -1500,6 +1506,41 @@ where
                 .switch_state_to("script-data-escaped")
                 .set_token(HTMLToken::Character(ch))
                 .and_emit(),
+        }
+    }
+
+    fn handle_script_data_escaped_less_than_sign_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002F SOLIDUS (/)
+            //
+            // Définir le tampon temporaire à une chaîne de caractères
+            // vide. Passer à l'état `script-data-escaped-end-tag-open`.
+            | Some('/') => self
+                .set_temporary_buffer(String::new())
+                .switch_state_to("script-data-escaped-end-tag-open")
+                .and_continue(),
+
+            // ASCII alpha
+            //
+            // Définir le tampon temporaire à une chaîne de caractères
+            // vide. Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            // Reprendre dans l'état `script-data-double-escape-start`.
+            | Some(ch) if ch.is_ascii_alphabetic() => self
+                .set_temporary_buffer(String::new())
+                .emit_token(HTMLToken::Character('<'))
+                .reconsume("script-data-double-escape-start")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            // Reprendre dans l'état `script-data-escaped`.
+            | _ => self
+                .set_token(HTMLToken::Character('<'))
+                .reconsume("script-data-escaped")
+                .and_continue(),
         }
     }
 
@@ -3868,6 +3909,12 @@ where
                     self.handle_script_data_escaped_dash_dash_state()
                 }
                 | State::ScriptDataEscapedLessThanSign => {
+                    self.handle_script_data_escaped_less_than_sign_state()
+                }
+                | State::ScriptDataEscapedEndTagOpen => {
+                    todo!()
+                }
+                | State::ScriptDataDoubleEscapeStart => {
                     todo!()
                 }
                 | State::BeforeAttributeName => {
