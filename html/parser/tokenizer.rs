@@ -223,6 +223,9 @@ define_state! {
     /// 13.2.5.26 Script data double escape start state
     ScriptDataDoubleEscapeStart = "script-data-double-escape-start",
 
+    /// 13.2.5.27 Script data double escaped state
+    ScriptDataDoubleEscapedState = "script-data-double-escaped",
+
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
 
@@ -1652,6 +1655,63 @@ where
                 .emit_each_characters_of_temporary_buffer()
                 .reconsume("script-data-escaped")
                 .and_continue(),
+        }
+    }
+
+    fn handle_script_double_escape_start_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            // U+002F SOLIDUS (/)
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Si le tampon temporaire est la chaîne de caractères
+            // "script", nous devons passer à l'état
+            // `script-data-double-escaped`. Sinon, passer à l'état
+            // `script-data-escaped`. Émettre le caractère actuel comme un
+            // jeton `character`.
+            | Some(ch)
+                if (ch.is_html_whitespace()
+                    || matches!(ch, '/' | '>')) =>
+            {
+                if self.temporary_buffer == "script" {
+                    self.switch_state_to("script-data-double-escaped");
+                } else {
+                    self.switch_state_to("script-data-escaped");
+                }
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+
+            // ASCII upper alpha
+            //
+            // Ajouter la version en minuscules du caractère d'entrée
+            // actuel (ajouter 0x0020 au point de code du caractère) au
+            // tampon temporaire. Émet le caractère actuel comme un jeton
+            // `character`.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .append_character_to_temporary_buffer(
+                    ch.to_ascii_lowercase(),
+                )
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // ASCII lower alpha
+            //
+            // Ajouter le caractère actuel au tampon temporaire.
+            // Émettre le caractère actuel comme un jeton `character`.
+            | Some(ch) if ch.is_ascii_lowercase() => self
+                .append_character_to_temporary_buffer(ch)
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `script-data-escaped`.
+            | _ => self.reconsume("script-data-escaped").and_continue(),
         }
     }
 
@@ -4029,6 +4089,9 @@ where
                     self.handle_script_data_escaped_end_tag_name_state()
                 }
                 | State::ScriptDataDoubleEscapeStart => {
+                    self.handle_script_double_escape_start_state()
+                }
+                | State::ScriptDataDoubleEscapedState => {
                     todo!()
                 }
                 | State::BeforeAttributeName => {
