@@ -202,6 +202,9 @@ define_state! {
     /// 13.2.5.19 Script data escape start dash state
     ScriptDataEscapeStartDash = "script-data-escape-start-dash",
 
+    /// 13.2.5.22 Script data escaped dash dash state
+    ScriptDataEscapedDashDash = "script-data-escaped-dash-dash",
+
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
 
@@ -1299,6 +1302,26 @@ where
             // jeton `character` U+002D HYPHEN-MINUS.
             | Some(ch @ '-') => self
                 .switch_state_to("script-data-escape-start-dash")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `script-data`.
+            | _ => self.reconsume("script-data").and_continue(),
+        }
+    }
+
+    fn handle_script_data_escape_start_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `script-data-escaped-dash-dash`.
+            // Émettre un jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => self
+                .switch_state_to("script-data-escaped-dash-dash")
                 .set_token(HTMLToken::Character(ch))
                 .and_emit(),
 
@@ -3662,6 +3685,9 @@ where
                     self.handle_script_data_escape_start_state()
                 }
                 | State::ScriptDataEscapeStartDash => {
+                    self.handle_script_data_escape_start_dash_state()
+                }
+                | State::ScriptDataEscapedDashDash => {
                     todo!()
                 }
                 | State::BeforeAttributeName => {
