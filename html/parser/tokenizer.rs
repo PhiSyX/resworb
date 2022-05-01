@@ -229,6 +229,9 @@ define_state! {
     /// 13.2.5.28 Script data double escaped dash state
     ScriptDataDoubleEscapedDash = "script-data-double-escaped-dash",
 
+    /// 13.2.5.29 Script data double escaped dash dash state
+    ScriptDataDoubleEscapedDashDash = "script-data-double-escaped-dash-dash",
+
     /// 13.2.5.30 Script data double escaped less-than sign state
     ScriptDataDoubleEscapedLessThanSign = "script-data-double-escaped-less-than-sign",
 
@@ -597,7 +600,7 @@ where
 
             // EOF
             //
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
@@ -640,7 +643,7 @@ where
 
             // EOF
             //
-            // Émettre un token `end of file`.
+            // Émettre un token `end-of-file`.
             | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
@@ -674,7 +677,7 @@ where
 
             // EOF
             //
-            // Émettre un jeton `end of file`
+            // Émettre un jeton `end-of-file`
             | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
@@ -709,7 +712,7 @@ where
 
             // EOF
             //
-            // Émettre un jeton `enf of file`
+            // Émettre un jeton `end-of-file`
             | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
@@ -765,7 +768,7 @@ where
             // Il s'agit d'une erreur d'analyse de type
             // `eof-before-tag-name`. Émettre un jeton de
             // `character` U+003C LESS-THAN SIGN et un jeton de
-            // `end of file`.
+            // `end-of-file`.
             | None => self
                 .emit_token(HTMLToken::Character('<'))
                 .set_token(HTMLToken::EOF)
@@ -812,7 +815,7 @@ where
             // Il s'agit d'une erreur d'analyse de type
             // `eof-before-tag-name`. Émettre un jeton `character`
             // U+003C LESS-THAN SIGN, un jeton de `character` U+002F
-            // SOLIDUS et un jeton `end of file`.
+            // SOLIDUS et un jeton `end-of-file`.
             | None => self
                 .emit_token(HTMLToken::Character('<'))
                 .emit_token(HTMLToken::Character('/'))
@@ -890,7 +893,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type ` eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-tag"),
@@ -1394,7 +1397,7 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `eof-in-script-html-comment-like-text`. Émettre un jeton
-            // `end of file`.
+            // `end-of-file`.
             | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
                 "eof-in-script-html-comment-like-text",
             ),
@@ -1445,7 +1448,7 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `eof-in-script-html-comment-like-text`. Émettre un jeton
-            // `end of file`.
+            // `end-of-file`.
             | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
                 "eof-in-script-html-comment-like-text",
             ),
@@ -1505,7 +1508,7 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `eof-in-script-html-comment-like-text`. Émettre un jeton
-            // `end of file`.
+            // `end-of-file`.
             | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
                 "eof-in-script-html-comment-like-text",
             ),
@@ -1721,7 +1724,7 @@ where
         }
     }
 
-    fn handle_script_double_escaped_state(
+    fn handle_script_data_double_escaped_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
@@ -1760,7 +1763,7 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `eof-in-script-html-comment-like-text`. Émettre un jeton
-            // `end of file`.
+            // `end-of-file`.
             | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
                 "eof-in-script-html-comment-like-text",
             ),
@@ -1771,6 +1774,63 @@ where
             | Some(ch) => {
                 self.set_token(HTMLToken::Character(ch)).and_emit()
             }
+        }
+    }
+
+    fn handle_script_data_double_escaped_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `script-data-double-escaped-dash-dash`.
+            // Émettre un jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => self
+                .switch_state_to("script-data-double-escaped-dash-dash")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-double-escaped-less-than-sign`.
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            | Some(ch @ '<') => self
+                .switch_state_to(
+                    "script-data-double-escaped-less-than-sign",
+                )
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Passer à l'état
+            // `script-data-double-escaped`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .switch_state_to("script-data-double-escaped")
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-in-script-html-comment-like-text`. Émettre un jeton
+            // `end-of-file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
+                "eof-in-script-html-comment-like-text",
+            ),
+
+            // Anything else
+            //
+            // Passer à l'état `script-data-double-escaped`. Émettre le
+            // caractère actuel comme un jeton `character`.
+            | Some(ch) => self
+                .switch_state_to("script-data-double-escaped")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
         }
     }
 
@@ -1943,7 +2003,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-tag"),
@@ -2061,7 +2121,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-tag"),
@@ -2125,7 +2185,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("unexpected-null-character"),
@@ -2191,7 +2251,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-tag"),
@@ -2227,7 +2287,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-tag"),
@@ -2311,7 +2371,7 @@ where
 
             // EOF
             //
-            // Émettre `comment`. Émettre un jeton `end of file`.
+            // Émettre `comment`. Émettre un jeton `end-of-file`.
             | None => self
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -2710,7 +2770,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Créer un nouveau jeton `doctype`. Mettre son drapeau
             // force-quirks à vrai. Émettre le jeton actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .emit_token(
                     HTMLToken::new_doctype().define_force_quirks_flag(),
@@ -2789,7 +2849,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Créer un nouveau jeton `doctype`. Mettre son drapeau
             // force-quirks à vrai. Émettre le jeton actuel. Émettre un
-            // jeton de `end of file`.
+            // jeton de `end-of-file`.
             | None => self
                 .emit_token(
                     HTMLToken::new_doctype().define_force_quirks_flag(),
@@ -2856,7 +2916,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
-            // jeton de `end of file`.
+            // jeton de `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2899,7 +2959,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -3030,7 +3090,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -3110,7 +3170,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -3189,7 +3249,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -3258,7 +3318,7 @@ where
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -3321,7 +3381,7 @@ where
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -3412,7 +3472,7 @@ where
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -3493,7 +3553,7 @@ where
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -3609,7 +3669,7 @@ where
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -4151,9 +4211,12 @@ where
                     self.handle_script_double_escape_start_state()
                 }
                 | State::ScriptDataDoubleEscapedState => {
-                    self.handle_script_double_escaped_state()
+                    self.handle_script_data_double_escaped_state()
                 }
                 | State::ScriptDataDoubleEscapedDash => {
+                    self.handle_script_data_double_escaped_dash_state()
+                }
+                | State::ScriptDataDoubleEscapedDashDash => {
                     todo!()
                 }
                 | State::ScriptDataDoubleEscapedLessThanSign => {
