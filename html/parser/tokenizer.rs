@@ -160,6 +160,9 @@ define_state! {
     /// 13.2.5.4 Script data state
     ScriptData = "script-data",
 
+    /// 13.2.5.5 PLAINTEXT state
+    PLAINTEXT = "plaintext",
+
     /// 13.2.5.6 Tag open state
     TagOpen = "tag-open",
 
@@ -716,6 +719,33 @@ where
             // EOF
             //
             // Émettre un jeton `end-of-file`
+            | None => self.set_token(HTMLToken::EOF).and_emit(),
+
+            // Anything else
+            //
+            // Émettre le caractère actuel comme un jeton `character`.
+            | Some(ch) => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+        }
+    }
+
+    fn handle_plaintext_state(&mut self) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Émettre un jeton `end-of-file`.
             | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
@@ -4307,6 +4337,7 @@ where
                 | State::RCDATA => self.handle_rcdata_state(),
                 | State::RAWTEXT => self.handle_rawtext_state(),
                 | State::ScriptData => self.handle_script_data_state(),
+                | State::PLAINTEXT => self.handle_plaintext_state(),
                 | State::TagOpen => self.handle_tag_open_state(),
                 | State::EndTagOpen => self.handle_end_tag_open_state(),
                 | State::TagName => self.handle_tag_name_state(),
