@@ -352,6 +352,12 @@ define_state! {
     /// 13.2.5.68 Bogus DOCTYPE state
     BogusDOCTYPE = "bogus-doctype",
 
+    /// 13.2.5.69 CDATA section state
+    CDATASection = "cdata-section",
+
+    /// 13.2.5.70 CDATA section bracket state
+    CDATASectionBracket = "cdata-section-bracket",
+
     /// 13.2.5.72 Character reference state
     CharacterReference = "character-reference",
 
@@ -3909,6 +3915,32 @@ where
         }
     }
 
+    fn handle_cdata_section_state(&mut self) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+005D RIGHT SQUARE BRACKET (])
+            //
+            // Passer à l'état `cdata-section-bracket`.
+            | Some(']') => self
+                .switch_state_to("cdata-section-bracket")
+                .and_continue(),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type `eof-in-cdata`.
+            // Émettre un jeton `end-of-file`.
+            | None => self
+                .set_token(HTMLToken::EOF)
+                .and_emit_with_error("eof-in-cdata"),
+
+            // Anything else
+            //
+            // Émettre le caractère actuel comme un jeton de `character`.
+            | Some(ch) => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+        }
+    }
+
     fn handle_character_reference_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
@@ -4509,6 +4541,10 @@ where
                     self.handle_after_doctype_system_identifier_state()
                 }
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
+                | State::CDATASection => self.handle_cdata_section_state(),
+                | State::CDATASectionBracket => {
+                    todo!()
+                }
                 | State::CharacterReference => {
                     self.handle_character_reference_state()
                 }
