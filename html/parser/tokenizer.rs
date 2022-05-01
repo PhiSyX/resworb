@@ -235,6 +235,9 @@ define_state! {
     /// 13.2.5.30 Script data double escaped less-than sign state
     ScriptDataDoubleEscapedLessThanSign = "script-data-double-escaped-less-than-sign",
 
+    /// 13.2.5.31 Script data double escape end state
+    ScriptDataDoubleEscapeEnd = "script-data-double-escape-end",
+
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
 
@@ -1895,6 +1898,30 @@ where
                 .switch_state_to("script-data-double-escaped")
                 .set_token(HTMLToken::Character(ch))
                 .and_emit(),
+        }
+    }
+
+    fn handle_script_data_double_escaped_less_than_sign_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002F SOLIDUS (/)
+            //
+            // Définir le tampon temporaire à une chaîne de caractères
+            // vide. Passer à l'état `script-data-double-escape-end`.
+            // Émettre un jeton `character` U+002F SOLIDUS.
+            | Some(ch @ '/') => self
+                .set_temporary_buffer(String::new())
+                .switch_state_to("script-data-double-escape-end")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `script-data-double-escaped`.
+            | _ => {
+                self.reconsume("script-data-double-escaped").and_continue()
+            }
         }
     }
 
@@ -4284,6 +4311,9 @@ where
                     self.handle_script_data_double_escaped_dash_dash_state()
                 }
                 | State::ScriptDataDoubleEscapedLessThanSign => {
+                    self.handle_script_data_double_escaped_less_than_sign_state()
+                }
+                | State::ScriptDataDoubleEscapeEnd => {
                     todo!()
                 }
                 | State::BeforeAttributeName => {
