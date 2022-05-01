@@ -358,6 +358,9 @@ define_state! {
     /// 13.2.5.70 CDATA section bracket state
     CDATASectionBracket = "cdata-section-bracket",
 
+    /// 13.2.5.71 CDATA section end state
+    CDATASectionEnd = "cdata-section-end",
+
     /// 13.2.5.72 Character reference state
     CharacterReference = "character-reference",
 
@@ -3941,6 +3944,28 @@ where
         }
     }
 
+    fn handle_cdata_section_bracket_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+005D RIGHT SQUARE BRACKET (])
+            //
+            // Passez à l'état `cdata-section-end`.
+            | Some(']') => {
+                self.switch_state_to("cdata-section-end").and_continue()
+            }
+
+            // Anything else
+            //
+            // Émettre un jeton `character `U+005D RIGHT SQUARE BRACKET.
+            // Reprendre dans l'état de `cdata-section`.
+            | _ => self
+                .emit_token(HTMLToken::Character(']'))
+                .reconsume("cdata-section")
+                .and_continue(),
+        }
+    }
+
     fn handle_character_reference_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
@@ -4543,6 +4568,9 @@ where
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
                 | State::CDATASection => self.handle_cdata_section_state(),
                 | State::CDATASectionBracket => {
+                    self.handle_cdata_section_bracket_state()
+                }
+                | State::CDATASectionEnd => {
                     todo!()
                 }
                 | State::CharacterReference => {
