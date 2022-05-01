@@ -3966,6 +3966,34 @@ where
         }
     }
 
+    fn handle_cdata_section_end_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+005D RIGHT SQUARE BRACKET (])
+            //
+            // Émettre un jeton `character` U+005D RIGHT SQUARE BRACKET.
+            | Some(ch @ ']') => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+
+            // U+003E GREATER-THAN SIGN character
+            //
+            // Passer à l'état `data`.
+            | Some('>') => self.switch_state_to("data").and_continue(),
+
+            // Anything else
+            //
+            // Émettre deux jetons `character` U+005D RIGHT SQUARE BRACKET.
+            // Reprendre dans l'état `cdata-section`.
+            | _ => self
+                .emit_token(HTMLToken::Character(']'))
+                .emit_token(HTMLToken::Character(']'))
+                .reconsume("cdata-section")
+                .and_continue(),
+        }
+    }
+
     fn handle_character_reference_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
@@ -4571,7 +4599,7 @@ where
                     self.handle_cdata_section_bracket_state()
                 }
                 | State::CDATASectionEnd => {
-                    todo!()
+                    self.handle_cdata_section_end_state()
                 }
                 | State::CharacterReference => {
                     self.handle_character_reference_state()
