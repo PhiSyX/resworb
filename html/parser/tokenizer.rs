@@ -157,6 +157,9 @@ define_state! {
     /// 13.2.5.3 RAWTEXT state
     RAWTEXT = "rawtext",
 
+    /// 13.2.5.4 Script data state
+    ScriptData = "script-data",
+
     /// 13.2.5.6 Tag open state
     TagOpen = "tag-open",
 
@@ -183,6 +186,57 @@ define_state! {
 
     /// 13.2.5.14 RAWTEXT end tag name state
     RAWTEXTEndTagName = "rawtext-end-tag-name",
+
+    /// 13.2.5.15 Script data less-than sign state
+    ScriptDataLessThanSign = "script-data-less-than-sign",
+
+    /// 13.2.5.16 Script data end tag open state
+    ScriptDataEndTagOpen = "script-data-end-tag-open",
+
+    /// 13.2.5.17 Script data end tag name state
+    ScriptDataEndTagName = "script-data-end-tag-name",
+
+    /// 13.2.5.18 Script data escape start state
+    ScriptDataEscapeStart = "script-data-escape-start",
+
+    /// 13.2.5.19 Script data escape start dash state
+    ScriptDataEscapeStartDash = "script-data-escape-start-dash",
+
+    /// 13.2.5.20 Script data escaped state
+    ScriptDataEscaped = "script-data-escaped",
+
+    /// 13.2.5.21 Script data escaped dash state
+    ScriptDataEscapedDash = "script-data-escaped-dash",
+
+    /// 13.2.5.22 Script data escaped dash dash state
+    ScriptDataEscapedDashDash = "script-data-escaped-dash-dash",
+
+    /// 13.2.5.23 Script data escaped less-than sign state
+    ScriptDataEscapedLessThanSign = "script-data-escaped-less-than-sign",
+
+    /// 13.2.5.24 Script data escaped end tag open state
+    ScriptDataEscapedEndTagOpen = "script-data-escaped-end-tag-open",
+
+    /// 13.2.5.25 Script data escaped end tag name state
+    ScriptDataEscapedEndTagName = "script-data-escaped-end-tag-name",
+
+    /// 13.2.5.26 Script data double escape start state
+    ScriptDataDoubleEscapeStart = "script-data-double-escape-start",
+
+    /// 13.2.5.27 Script data double escaped state
+    ScriptDataDoubleEscapedState = "script-data-double-escaped",
+
+    /// 13.2.5.28 Script data double escaped dash state
+    ScriptDataDoubleEscapedDash = "script-data-double-escaped-dash",
+
+    /// 13.2.5.29 Script data double escaped dash dash state
+    ScriptDataDoubleEscapedDashDash = "script-data-double-escaped-dash-dash",
+
+    /// 13.2.5.30 Script data double escaped less-than sign state
+    ScriptDataDoubleEscapedLessThanSign = "script-data-double-escaped-less-than-sign",
+
+    /// 13.2.5.31 Script data double escape end state
+    ScriptDataDoubleEscapeEnd = "script-data-double-escape-end",
 
     /// 13.2.5.32 Before attribute name state
     BeforeAttributeName = "before-attribute-name",
@@ -549,7 +603,7 @@ where
 
             // EOF
             //
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
@@ -564,7 +618,7 @@ where
     fn handle_rcdata_state(&mut self) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+0026 AMPERSAND (&)
-            // Définir l'état de retour à l'état `rcdata`. Passez à l'état
+            // Définir l'état de retour à l'état `rcdata`. Passer à l'état
             // `character-reference`.
             | Some('&') => self
                 .state
@@ -592,7 +646,7 @@ where
 
             // EOF
             //
-            // Émettre un token `end of file`.
+            // Émettre un token `end-of-file`.
             | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
@@ -607,7 +661,7 @@ where
     fn handle_rawtext_state(&mut self) -> ResultHTMLStateIterator {
         match self.stream.next_input_char() {
             // U+003C LESS-THAN SIGN (<)
-            // Passez à l'état `rawtext-less-than-sign`.
+            // Passer à l'état `rawtext-less-than-sign`.
             | Some('<') => self
                 .state
                 .switch_to("rawtext-less-than-sign")
@@ -626,7 +680,42 @@ where
 
             // EOF
             //
-            // Émettre un jeton `end of file`
+            // Émettre un jeton `end-of-file`
+            | None => self.set_token(HTMLToken::EOF).and_emit(),
+
+            // Anything else
+            //
+            // Émettre le caractère actuel comme un jeton `character`.
+            | Some(ch) => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+        }
+    }
+
+    fn handle_script_data_state(&mut self) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-less-than-sign`.
+            | Some('<') => self
+                .state
+                .switch_to("script-data-less-than-sign")
+                .and_continue(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Émettre un jeton `end-of-file`
             | None => self.set_token(HTMLToken::EOF).and_emit(),
 
             // Anything else
@@ -682,7 +771,7 @@ where
             // Il s'agit d'une erreur d'analyse de type
             // `eof-before-tag-name`. Émettre un jeton de
             // `character` U+003C LESS-THAN SIGN et un jeton de
-            // `end of file`.
+            // `end-of-file`.
             | None => self
                 .emit_token(HTMLToken::Character('<'))
                 .set_token(HTMLToken::EOF)
@@ -729,7 +818,7 @@ where
             // Il s'agit d'une erreur d'analyse de type
             // `eof-before-tag-name`. Émettre un jeton `character`
             // U+003C LESS-THAN SIGN, un jeton de `character` U+002F
-            // SOLIDUS et un jeton `end of file`.
+            // SOLIDUS et un jeton `end-of-file`.
             | None => self
                 .emit_token(HTMLToken::Character('<'))
                 .emit_token(HTMLToken::Character('/'))
@@ -758,8 +847,8 @@ where
             // U+0020 SPACE
             //
             // Si le jeton `end tag` actuel est un jeton `end tag`
-            // approprié, passez à l'état `before-attribute-name`. Sinon,
-            // traitez-le comme indiqué dans l'entrée "Anything
+            // approprié, passer à l'état `before-attribute-name`. Sinon,
+            // le traiter comme indiqué dans l'entrée "Anything
             // else" ci-dessous.
             | Some(ch) if ch.is_html_whitespace() => self
                 .state
@@ -769,8 +858,8 @@ where
             // U+002F SOLIDUS (/)
             //
             // Si le jeton `end tag` actuel est un jeton `end tag`
-            // approprié, passez l'état de balise de
-            // `self-closing-start-tag`. Sinon, traitez-le comme dans
+            // approprié, passer l'état de balise de
+            // `self-closing-start-tag`. Sinon, le traiter comme dans
             // l'entrée "Anything else" ci-dessous.
             | Some('/') => self
                 .state
@@ -807,7 +896,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type ` eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-tag"),
@@ -886,7 +975,7 @@ where
             //
             // Si le jeton `end tag` actuel est un jeton `end tag`
             // approprié, alors passer à l'état `before-attribute-name`.
-            // Sinon, traitez-le comme indiqué dans l'entrée
+            // Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some(ch)
                 if ch.is_html_whitespace()
@@ -901,7 +990,7 @@ where
             //
             // Si le jeton `end tag` actuel est un jeton `end tag`
             // approprié, alors passer à l'état `self-closing-start-tag`.
-            // Sinon, traitez-le comme indiqué dans l'entrée
+            // Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some('/') if self.is_appropriate_end_tag() => self
                 .state
@@ -912,7 +1001,7 @@ where
             //
             // Si le jeton `end tag` actuel est un jeton `end tag`
             // approprié, alors passer à l'état `data` et émettre le jeton
-            // courant. Sinon, traitez-le comme indiqué dans l'entrée
+            // courant. Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some('>') if self.is_appropriate_end_tag() => {
                 self.state.switch_to("data").and_emit()
@@ -1021,7 +1110,7 @@ where
             //
             // Si le jeton `end-tag` actuel est un jeton `end-tag`
             // approprié, alors passer à l'état `before-attribute-name`.
-            // Sinon, traitez-le comme indiqué dans l'entrée "Anything
+            // Sinon, le traiter comme indiqué dans l'entrée "Anything
             // else" ci-dessous.
             | Some(ch)
                 if ch.is_html_whitespace()
@@ -1036,7 +1125,7 @@ where
             //
             // Si le jeton `end-tag` actuel est un jeton `end-tag`
             // approprié, passer à l'état à `self-closing-start-tag`.
-            // Sinon, traitez-le comme indiqué dans l'entrée
+            // Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some('/') if self.is_appropriate_end_tag() => self
                 .state
@@ -1046,8 +1135,8 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Si le jeton `end-tag` actuel est un jeton `end-tag`
-            // approprié, passer à l'état `data` et émettez
-            // le jeton `end-tag` actuel. Sinon, traitez-le comme
+            // approprié, passer à l'état `data` et émettre
+            // le jeton `end-tag` actuel. Sinon, le traiter comme
             // indiqué dans l'entrée "Anything else" ci-dessous.
             | Some('>') if self.is_appropriate_end_tag() => {
                 self.state.switch_to("data").and_emit()
@@ -1089,6 +1178,813 @@ where
                 .emit_each_characters_of_temporary_buffer()
                 .reconsume("rawtext")
                 .and_continue(),
+        }
+    }
+
+    fn handle_script_data_less_than_sign_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002F SOLIDUS (/)
+            //
+            // Définir le tampon temporaire comme une chaîne de caractères
+            // vide. Passer à l'état `script-data-end-tag-open`.
+            | Some('/') => self
+                .set_temporary_buffer(String::new())
+                .switch_state_to("script-data-end-tag-open")
+                .and_continue(),
+
+            // U+0021 EXCLAMATION MARK (!)
+            //
+            // Passer à l'état `script-data-escape-start`. Émettre un
+            // jeton `character` U+003C LESS-THAN SIGN et un jeton
+            // `character` U+0021 EXCLAMATION MARK.
+            | Some('!') => self
+                .switch_state_to("script-data-escape-start")
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('!'))
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            // Reprendre dans l'état de données du script.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .reconsume("script-data")
+                .and_continue(),
+        }
+    }
+
+    fn handle_script_data_end_tag_open_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alpha
+            //
+            // Créer un nouveau jeton `end-tag`, définir son nom de balise
+            // en une chaîne de caractères vide. Reprendre dans l'état
+            // `script-data-end-tag-name`.
+            | Some(ch) if ch.is_ascii_alphabetic() => self
+                .set_token(HTMLToken::new_end_tag(String::new()))
+                .reconsume("script-data-end-tag-name")
+                .and_continue(),
+
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN et un
+            // jeton `character` U+002F SOLIDUS. Reprendre dans l'état
+            // `script-data`.µ
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
+                .reconsume("script-data")
+                .and_continue(),
+        }
+    }
+
+    fn handle_script_data_end_tag_name_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, il faut passer à l'état `before-attribute-name`.
+            // Sinon, le traiter comme indiqué dans l'entrée `Anything
+            // else` ci-dessous.
+            | Some(ch)
+                if ch.is_html_whitespace()
+                    && self.is_appropriate_end_tag() =>
+            {
+                self.state
+                    .switch_to("before-attribute-name")
+                    .and_continue()
+            }
+
+            // U+002F SOLIDUS (/)
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, il faut passer à l'état `self-closing-start-tag`.
+            // Sinon, le traiter comme indiqué dans l'entrée `Anything
+            // else` ci-dessous.
+            | Some('/') if self.is_appropriate_end_tag() => self
+                .state
+                .switch_to("self-closing-start-tag")
+                .and_continue(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, il faut passer à l'état `data`.
+            // Sinon, le traiter comme indiqué dans l'entrée `Anything
+            // else` ci-dessous.
+            | Some('>') if self.is_appropriate_end_tag() => {
+                self.state.switch_to("data").and_continue()
+            }
+
+            // ASCII upper alpha
+            //
+            // Ajouter la version en minuscules du caractère d'entrée
+            // actuel (ajouter 0x0020 au point de code du caractère) au nom
+            // de la balise du jeton `*-tag` actuel. Ajouter le caractère
+            // actuel au tampon temporaire.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch.to_ascii_lowercase())
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // ASCII lower alpha
+            //
+            // Ajouter le caractère actuel au nom de la balise du jeton
+            // `*-tag` actuel. Ajouter le caractère actuel au tampon
+            // temporaire.
+            | Some(ch) if ch.is_ascii_lowercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch)
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN, un
+            // jeton `character` U+002F SOLIDUS et un jeton `character`
+            // pour chacun des caractères du tampon temporaire (dans
+            // l'ordre où ils ont été ajoutés au tampon). Reprendre dans
+            // l'état `script-data`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
+                .emit_each_characters_of_temporary_buffer()
+                .reconsume("script-data")
+                .and_continue(),
+        }
+    }
+
+    fn handle_script_data_escape_start_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `script-data-escape-start-dash`. Émettre un
+            // jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => self
+                .switch_state_to("script-data-escape-start-dash")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `script-data`.
+            | _ => self.reconsume("script-data").and_continue(),
+        }
+    }
+
+    fn handle_script_data_escape_start_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `script-data-escaped-dash-dash`.
+            // Émettre un jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => self
+                .switch_state_to("script-data-escaped-dash-dash")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `script-data`.
+            | _ => self.reconsume("script-data").and_continue(),
+        }
+    }
+
+    fn handle_script_data_escaped_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `script-data-escaped-dash`. Émettre un jeton
+            // `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => self
+                .switch_state_to("script-data-escaped-dash")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-escaped-less-than-sign`.
+            | Some('<') => self
+                .switch_state_to("script-data-escaped-less-than-sign")
+                .and_continue(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-in-script-html-comment-like-text`. Émettre un jeton
+            // `end-of-file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
+                "eof-in-script-html-comment-like-text",
+            ),
+
+            // Anything else
+            //
+            // Émettre le caractère actuel comme un jeton `character`.
+            | Some(ch) => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+        }
+    }
+
+    fn handle_script_data_escaped_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `script-data-escaped-dash-dash`.
+            // Émettre un jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => self
+                .switch_state_to("script-data-escaped-dash-dash")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-escaped-less-than-sign`.
+            | Some('<') => self
+                .switch_state_to("script-data-escaped-less-than-sign")
+                .and_continue(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Passer à l'état
+            // `script-data-escaped`. Émettre un jeton `character` U+FFFD
+            // REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .switch_state_to("script-data-escaped")
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit(),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-in-script-html-comment-like-text`. Émettre un jeton
+            // `end-of-file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
+                "eof-in-script-html-comment-like-text",
+            ),
+
+            // Anything else
+            //
+            // Passer à l'état `script-data-escaped`. Émettre le caractère
+            // actuel comme un jeton `character`.
+            | Some(ch) => self
+                .switch_state_to("script-data-escaped")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+        }
+    }
+
+    fn handle_script_data_escaped_dash_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Émettre un jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-escaped-less-than-sign`.
+            | Some('<') => self
+                .switch_state_to("script-data-escaped-less-than-sign")
+                .and_continue(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état `script-data`. Émettre un jeton `character`
+            // U+003E GREATER-THAN SIGN.
+            | Some(ch @ '>') => self
+                .switch_state_to("script-data")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Passer à l'état
+            // `script-data-escaped`. Émettre un jeton `character` U+FFFD
+            // REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .switch_state_to("script-data-escaped")
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-in-script-html-comment-like-text`. Émettre un jeton
+            // `end-of-file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
+                "eof-in-script-html-comment-like-text",
+            ),
+
+            // Anything else
+            //
+            // Passer à l'état `script-data-escaped`. Émettre le
+            // caractère actuel comme un jeton `character`.
+            | Some(ch) => self
+                .switch_state_to("script-data-escaped")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+        }
+    }
+
+    fn handle_script_data_escaped_less_than_sign_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002F SOLIDUS (/)
+            //
+            // Définir le tampon temporaire à une chaîne de caractères
+            // vide. Passer à l'état `script-data-escaped-end-tag-open`.
+            | Some('/') => self
+                .set_temporary_buffer(String::new())
+                .switch_state_to("script-data-escaped-end-tag-open")
+                .and_continue(),
+
+            // ASCII alpha
+            //
+            // Définir le tampon temporaire à une chaîne de caractères
+            // vide. Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            // Reprendre dans l'état `script-data-double-escape-start`.
+            | Some(ch) if ch.is_ascii_alphabetic() => self
+                .set_temporary_buffer(String::new())
+                .emit_token(HTMLToken::Character('<'))
+                .reconsume("script-data-double-escape-start")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            // Reprendre dans l'état `script-data-escaped`.
+            | _ => self
+                .set_token(HTMLToken::Character('<'))
+                .reconsume("script-data-escaped")
+                .and_continue(),
+        }
+    }
+
+    fn handle_script_data_escaped_end_tag_open_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // ASCII alpha
+            //
+            // Créer un nouveau jeton `end-tag`, définir son nom de balise
+            // en une chaîne de caractères vide. Reprendre dans l'état
+            // `script-data-escaped-end-tag-name`.
+            | Some(ch) if ch.is_ascii_alphabetic() => self
+                .set_token(HTMLToken::new_end_tag(String::new()))
+                .reconsume("script-data-escaped-end-tag-name")
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN et un
+            // jeton `character` U+002F SOLIDUS. Reprendre dans l'état
+            // `script-data-escaped`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
+                .reconsume("script-data-escaped")
+                .and_continue(),
+        }
+    }
+
+    fn handle_script_data_escaped_end_tag_name_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, passer à l'état `before-attribute-name`. Sinon,
+            // le traiter comme indiqué dans l'entrée "anything else"
+            // ci-dessous.
+            | Some(ch)
+                if ch.is_html_whitespace()
+                    && self.is_appropriate_end_tag() =>
+            {
+                self.switch_state_to("before-attribute-name")
+                    .and_continue()
+            }
+
+            // U+002F SOLIDUS (/)
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, passer à l'état `self-closing-start-tag`. Sinon,
+            // le traiter comme indiqué dans l'entrée "anything else"
+            // ci-dessous.
+            | Some('/') if self.is_appropriate_end_tag() => self
+                .switch_state_to("self-closing-start-tag")
+                .and_continue(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Si le jeton `end-tag` actuel est un jeton `end-tag`
+            // approprié, passer à l'état `data`. Sinon, le traiter comme
+            // indiqué dans l'entrée "anything else" ci-dessous.
+            | Some('>') if self.is_appropriate_end_tag() => self
+                .switch_state_to("self-closing-start-tag")
+                .and_continue(),
+
+            // ASCII upper alpha
+            //
+            // Ajouter la version en minuscules du caractère actuel
+            // (ajouter 0x0020 au point de code du caractère) au nom
+            // de balise du jeton `*-tag` actuel. Ajouter le caractère
+            // actuel au tampon temporaire.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch.to_ascii_lowercase());
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // ASCII lower alpha
+            //
+            // Ajouter le caractère actuel au nom de balise du jeton
+            // `*-tag` actuel. Ajouter le caractère actuel au tampon
+            // temporaire.
+            | Some(ch) if ch.is_ascii_lowercase() => self
+                .change_current_token(|tag_tok| {
+                    tag_tok.append_character(ch);
+                })
+                .append_character_to_temporary_buffer(ch)
+                .and_continue(),
+
+            // Anything else
+            //
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN, un jeton
+            // `character` U+002F SOLIDUS et un jeton `character` pour
+            // chacun des caractères du tampon temporaire (dans l'ordre où
+            // ils ont été ajoutés au tampon). Reprendre dans l'état
+            // `script-data-escaped`.
+            | _ => self
+                .emit_token(HTMLToken::Character('<'))
+                .emit_token(HTMLToken::Character('/'))
+                .emit_each_characters_of_temporary_buffer()
+                .reconsume("script-data-escaped")
+                .and_continue(),
+        }
+    }
+
+    fn handle_script_double_escape_start_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            // U+002F SOLIDUS (/)
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Si le tampon temporaire est la chaîne de caractères
+            // "script", nous devons passer à l'état
+            // `script-data-double-escaped`. Sinon, passer à l'état
+            // `script-data-escaped`. Émettre le caractère actuel comme un
+            // jeton `character`.
+            | Some(ch)
+                if (ch.is_html_whitespace()
+                    || matches!(ch, '/' | '>')) =>
+            {
+                self.switch_state_to(
+                    if self.temporary_buffer == "script" {
+                        "script-data-double-escaped"
+                    } else {
+                        "script-data-escaped"
+                    },
+                )
+                .set_token(HTMLToken::Character(ch))
+                .and_emit()
+            }
+
+            // ASCII upper alpha
+            //
+            // Ajouter la version en minuscules du caractère d'entrée
+            // actuel (ajouter 0x0020 au point de code du caractère) au
+            // tampon temporaire. Émet le caractère actuel comme un jeton
+            // `character`.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .append_character_to_temporary_buffer(
+                    ch.to_ascii_lowercase(),
+                )
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // ASCII lower alpha
+            //
+            // Ajouter le caractère actuel au tampon temporaire.
+            // Émettre le caractère actuel comme un jeton `character`.
+            | Some(ch) if ch.is_ascii_lowercase() => self
+                .append_character_to_temporary_buffer(ch)
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `script-data-escaped`.
+            | _ => self.reconsume("script-data-escaped").and_continue(),
+        }
+    }
+
+    fn handle_script_data_double_escaped_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `script-data-double-escaped-dash`. Émettre
+            // un jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => self
+                .switch_state_to("script-data-double-escaped-dash")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-double-escaped-less-than-sign`.
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            | Some(ch @ '<') => self
+                .switch_state_to(
+                    "script-data-double-escaped-less-than-sign",
+                )
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-in-script-html-comment-like-text`. Émettre un jeton
+            // `end-of-file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
+                "eof-in-script-html-comment-like-text",
+            ),
+
+            // Anything else
+            //
+            // Émettre le caractère actuel comme un jeton `character`.
+            | Some(ch) => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+        }
+    }
+
+    fn handle_script_data_double_escaped_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Passer à l'état `script-data-double-escaped-dash-dash`.
+            // Émettre un jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => self
+                .switch_state_to("script-data-double-escaped-dash-dash")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-double-escaped-less-than-sign`.
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            | Some(ch @ '<') => self
+                .switch_state_to(
+                    "script-data-double-escaped-less-than-sign",
+                )
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Passer à l'état
+            // `script-data-double-escaped`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .switch_state_to("script-data-double-escaped")
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-in-script-html-comment-like-text`. Émettre un jeton
+            // `end-of-file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
+                "eof-in-script-html-comment-like-text",
+            ),
+
+            // Anything else
+            //
+            // Passer à l'état `script-data-double-escaped`. Émettre le
+            // caractère actuel comme un jeton `character`.
+            | Some(ch) => self
+                .switch_state_to("script-data-double-escaped")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+        }
+    }
+
+    fn handle_script_data_double_escaped_dash_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Émettre un jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-double-escaped-less-than-sign`.
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            | Some(ch @ '<') => self
+                .switch_state_to(
+                    "script-data-double-escaped-less-than-sign",
+                )
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état `script-data`. Émettre un jeton `character`
+            // U+003E GREATER-THAN SIGN.
+            | Some(ch @ '>') => self
+                .switch_state_to("script-data")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Passez à l'état
+            // `script-data-double-escaped`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .switch_state_to("script-data-double-escaped")
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-in-script-html-comment-like-text`. Émettre un jeton
+            // `end-of-file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
+                "eof-in-script-html-comment-like-text",
+            ),
+
+            // Anything else
+            //
+            // Passer à l'état `script-data-double-escaped`. Émettre le
+            // caractère actuel comme un jeton `character`.
+            | Some(ch) => self
+                .switch_state_to("script-data-double-escaped")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+        }
+    }
+
+    fn handle_script_data_double_escaped_less_than_sign_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002F SOLIDUS (/)
+            //
+            // Définir le tampon temporaire à une chaîne de caractères
+            // vide. Passer à l'état `script-data-double-escape-end`.
+            // Émettre un jeton `character` U+002F SOLIDUS.
+            | Some(ch @ '/') => self
+                .set_temporary_buffer(String::new())
+                .switch_state_to("script-data-double-escape-end")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `script-data-double-escaped`.
+            | _ => {
+                self.reconsume("script-data-double-escaped").and_continue()
+            }
+        }
+    }
+
+    fn handle_script_data_double_escape_end_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+0009 CHARACTER TABULATION (tab)
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+0020 SPACE
+            // U+002F SOLIDUS (/)
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Si le tampon temporaire est la chaîne de caractères
+            // "script", nous devons passer à l'état `script-data-escaped`.
+            // Sinon, passer à l'état `script-data-double-escaped`. Émettre
+            // le caractère actuel comme un jeton `character`.
+            | Some(ch)
+                if ch.is_html_whitespace() && matches!(ch, '/' | '>') =>
+            {
+                self.switch_state_to(
+                    if self.temporary_buffer == "script" {
+                        "script-data-escaped"
+                    } else {
+                        "script-data-double-escaped"
+                    },
+                )
+                .set_token(HTMLToken::Character(ch))
+                .and_emit()
+            }
+
+            // ASCII upper alpha
+            //
+            // Ajouter la version en minuscules du caractère actuel
+            // (ajouter 0x0020 au point de code du caractère) au
+            // tampon temporaire. Émettre le caractère actuel comme
+            // un jeton `character`.
+            | Some(ch) if ch.is_ascii_uppercase() => self
+                .append_character_to_temporary_buffer(
+                    ch.to_ascii_lowercase(),
+                )
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // ASCII lower alpha
+            //
+            // Ajouter le caractère actuel au tampon temporaire. Émettre le
+            // caractère actuel comme un jeton `character`.
+            | Some(ch) if ch.is_ascii_lowercase() => self
+                .append_character_to_temporary_buffer(ch)
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // Anything else
+            //
+            // Reprendre dans l'état `script-data-double-escaped`.
+            | _ => {
+                self.reconsume("script-data-double-escaped").and_continue()
+            }
         }
     }
 
@@ -1261,7 +2157,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-tag"),
@@ -1379,7 +2275,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-tag"),
@@ -1443,7 +2339,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("unexpected-null-character"),
@@ -1503,13 +2399,13 @@ where
 
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état `data`. Émettez le jeton `tag` actuel.
+            // Passer à l'état `data`. Émettre le jeton `tag` actuel.
             | Some('>') => self.state.switch_to("data").and_emit(),
 
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-tag"),
@@ -1545,7 +2441,7 @@ where
             // EOF
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-tag`.
-            // Émettre un jeton `end of file`.
+            // Émettre un jeton `end-of-file`.
             | None => self
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-tag"),
@@ -1629,7 +2525,7 @@ where
 
             // EOF
             //
-            // Émettre `comment`. Émettre un jeton `end of file`.
+            // Émettre `comment`. Émettre un jeton `end-of-file`.
             | None => self
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -1720,7 +2616,7 @@ where
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
-            // Passez à l'état `comment-less-than-sign-bang-dash`.
+            // Passer à l'état `comment-less-than-sign-bang-dash`.
             | Some('-') => self
                 .state
                 .switch_to("comment-less-than-sign-bang-dash")
@@ -1739,7 +2635,7 @@ where
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
-            // Passez à l'état `comment-less-than-sign-bang-dash-dash`.
+            // Passer à l'état `comment-less-than-sign-bang-dash-dash`.
             | Some('-') => self
                 .state
                 .switch_to("comment-less-than-sign-bang-dash-dash")
@@ -1767,7 +2663,7 @@ where
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type `nested-comment`.
-            // Reprenez à l'état `comment-end`.
+            // Reprendre dans l'état `comment-end`.
             | Some(_) => self
                 .reconsume("comment-end")
                 .and_continue_with_error("nested-comment"),
@@ -1780,7 +2676,7 @@ where
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
-            // Passez à l'état final du commentaire.
+            // Passer à l'état final du commentaire.
             | Some('-') => {
                 self.state.switch_to("comment-end").and_continue()
             }
@@ -1914,7 +2810,7 @@ where
 
             // U+0021 EXCLAMATION MARK (!)
             //
-            // Passez à l'état `comment-end-bang`.
+            // Passer à l'état `comment-end-bang`.
             | Some('!') => {
                 self.state.switch_to("comment-end-bang").and_continue()
             }
@@ -1974,7 +2870,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Il s'agit d'une erreur d'analyse de type
-            // `incorrectly-closed-comment`. Passez à l'état `data`.
+            // `incorrectly-closed-comment`. Passer à l'état `data`.
             // Émettre le jeton `comment` actuel.
             | Some('>') => self
                 .switch_state_to("data")
@@ -2028,7 +2924,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Créer un nouveau jeton `doctype`. Mettre son drapeau
             // force-quirks à vrai. Émettre le jeton actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .emit_token(
                     HTMLToken::new_doctype().define_force_quirks_flag(),
@@ -2065,7 +2961,7 @@ where
             //
             // Créer un nouveau jeton `doctype`. Définir le nom du jeton
             // comme la version en minuscules du caractère actuel
-            // (ajoutez 0x0020 au point de code du caractère). Passer à
+            // (ajouter 0x0020 au point de code du caractère). Passer à
             // l'état `doctype-name`.
             | Some(ch) if ch.is_ascii_uppercase() => self
                 .set_token(
@@ -2107,7 +3003,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Créer un nouveau jeton `doctype`. Mettre son drapeau
             // force-quirks à vrai. Émettre le jeton actuel. Émettre un
-            // jeton de `end of file`.
+            // jeton de `end-of-file`.
             | None => self
                 .emit_token(
                     HTMLToken::new_doctype().define_force_quirks_flag(),
@@ -2174,7 +3070,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
-            // jeton de `end of file`.
+            // jeton de `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2217,7 +3113,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2230,12 +3126,12 @@ where
             //
             // Si les six caractères à partir du caractère actuel sont une
             // correspondance ASCII insensible à la casse pour le
-            // mot "PUBLIC", consommez ces caractères et passez à l'état
+            // mot "PUBLIC", consommer ces caractères et passer à l'état
             // `after-doctype-public-keyword`.
             //
             // Sinon, si les six caractères à partir du caractère d'entrée
             // actuel sont une correspondance ASCII insensible à la casse
-            // pour le mot "SYSTEM", consommez ces caractères et passez à
+            // pour le mot "SYSTEM", consommer ces caractères et passer à
             // l'état `after-doctype-system-keyword`.
             //
             // Sinon, il s'agit d'une erreur d'analyse de type
@@ -2348,7 +3244,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2428,7 +3324,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2507,7 +3403,7 @@ where
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2576,7 +3472,7 @@ where
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2639,7 +3535,7 @@ where
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2730,7 +3626,7 @@ where
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2811,7 +3707,7 @@ where
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2845,7 +3741,7 @@ where
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
             //
-            // Passez à l'état `after-doctype-system-identifier`.
+            // Passer à l'état `after-doctype-system-identifier`.
             | Some(ch) if ch == quote => self
                 .state
                 .switch_to("after-doctype-system-identifier")
@@ -2927,7 +3823,7 @@ where
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
-            // jeton `end of file`.
+            // jeton `end-of-file`.
             | None => self
                 .change_current_token(|doctype_tok| {
                     doctype_tok.set_force_quirks_flag(true);
@@ -2954,7 +3850,7 @@ where
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
             //
-            // Passer à l'état `data`. Émettez le jeton `doctype`.
+            // Passer à l'état `data`. Émettre le jeton `doctype`.
             | Some('>') => self.state.switch_to("data").and_emit(),
 
             // U+0000 NULL
@@ -3174,7 +4070,7 @@ where
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // `absence-of-digits-in-numeric-character-reference`. Videz
+            // `absence-of-digits-in-numeric-character-reference`. Vider
             // les points de code consommés comme référence de caractère.
             // Reprendre dans l'état `return-state`.
             | _ => self
@@ -3200,7 +4096,7 @@ where
             // Anything else
             //
             // Il s'agit d'une erreur d'analyse de type
-            // `absence-of-digits-in-numeric-character-reference`. Videz
+            // `absence-of-digits-in-numeric-character-reference`. Vider
             // les points de code consommés comme référence de caractère.
             // Reprendre dans l'état `return-state`.
             | _ => self
@@ -3332,8 +4228,8 @@ where
 
             // Si le nombre est supérieur à 0x10FFFF, il s'agit d'une
             // erreur d'analyse de référence de caractère hors
-            // de la plage unicode. Définissez le code de
-            // référence du caractère à 0xFFFD.
+            // de la plage unicode. Définir le code de référence du
+            // caractère à 0xFFFD.
             | crc if crc > 0x10FFFF => {
                 err = "character-reference-outside-unicode-range".into();
                 self.character_reference_code = 0xFFFD;
@@ -3356,8 +4252,8 @@ where
             // Si le nombre est 0x0D, ou un contrôle qui n'est pas un
             // espace ASCII, il s'agit d'une erreur d'analyse de référence
             // de caractère de contrôle. Si le nombre est l'un des nombres
-            // de la première colonne du tableau suivant, trouvez la ligne
-            // avec ce nombre dans la première colonne, et définissez le
+            // de la première colonne du tableau suivant, trouver la ligne
+            // avec ce nombre dans la première colonne, et définir le
             // code de référence de caractère au nombre de la deuxième
             // colonne de cette ligne.
             | crc if crc == 0x0D
@@ -3410,6 +4306,7 @@ where
                 | State::Data => self.handle_data_state(),
                 | State::RCDATA => self.handle_rcdata_state(),
                 | State::RAWTEXT => self.handle_rawtext_state(),
+                | State::ScriptData => self.handle_script_data_state(),
                 | State::TagOpen => self.handle_tag_open_state(),
                 | State::EndTagOpen => self.handle_end_tag_open_state(),
                 | State::TagName => self.handle_tag_name_state(),
@@ -3430,7 +4327,58 @@ where
                 }
                 | State::RAWTEXTEndTagName => {
                     self.handle_rawtext_end_tag_name_state()
-                },
+                }
+                | State::ScriptDataLessThanSign => {
+                    self.handle_script_data_less_than_sign_state()
+                }
+                | State::ScriptDataEndTagOpen => {
+                    self.handle_script_data_end_tag_open_state()
+                }
+                | State::ScriptDataEndTagName => {
+                    self.handle_script_data_end_tag_name_state()
+                }
+                | State::ScriptDataEscapeStart => {
+                    self.handle_script_data_escape_start_state()
+                }
+                | State::ScriptDataEscapeStartDash => {
+                    self.handle_script_data_escape_start_dash_state()
+                }
+                | State::ScriptDataEscaped => {
+                    self.handle_script_data_escaped_state()
+                }
+                | State::ScriptDataEscapedDash => {
+                    self.handle_script_data_escaped_dash_state()
+                }
+                | State::ScriptDataEscapedDashDash => {
+                    self.handle_script_data_escaped_dash_dash_state()
+                }
+                | State::ScriptDataEscapedLessThanSign => {
+                    self.handle_script_data_escaped_less_than_sign_state()
+                }
+                | State::ScriptDataEscapedEndTagOpen => {
+                    self.handle_script_data_escaped_end_tag_open_state()
+                }
+                | State::ScriptDataEscapedEndTagName => {
+                    self.handle_script_data_escaped_end_tag_name_state()
+                }
+                | State::ScriptDataDoubleEscapeStart => {
+                    self.handle_script_double_escape_start_state()
+                }
+                | State::ScriptDataDoubleEscapedState => {
+                    self.handle_script_data_double_escaped_state()
+                }
+                | State::ScriptDataDoubleEscapedDash => {
+                    self.handle_script_data_double_escaped_dash_state()
+                }
+                | State::ScriptDataDoubleEscapedDashDash => {
+                    self.handle_script_data_double_escaped_dash_dash_state()
+                }
+                | State::ScriptDataDoubleEscapedLessThanSign => {
+                    self.handle_script_data_double_escaped_less_than_sign_state()
+                }
+                | State::ScriptDataDoubleEscapeEnd => {
+                    self.handle_script_data_double_escape_end_state()
+                }
                 | State::BeforeAttributeName => {
                     self.handle_before_attribute_name_state()
                 }

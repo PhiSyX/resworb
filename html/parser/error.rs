@@ -142,6 +142,23 @@ define_errors! {
     EofInDOCTYPE = "eof-in-doctype",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
+    /// du flux d'entrée dans un texte qui ressemble à un commentaire HTML
+    /// à l'intérieur du contenu d'un élément de script (par exemple,
+    /// `<script><!-- foo`).
+    ///
+    /// Note: les structures syntaxiques qui ressemblent à des commentaires
+    /// HTML dans les éléments de script sont analysées comme du contenu
+    /// textuel. Elles peuvent faire partie d'une structure syntaxique
+    /// spécifique au langage de script ou être traitées comme un
+    /// commentaire de type HTML, si le langage de script les prend en
+    /// charge (par exemple, les règles d'analyse des commentaires de type
+    /// HTML se trouvent à l'annexe B de la spécification JavaScript). La
+    /// raison la plus courante de cette erreur est la violation des
+    /// restrictions relatives au contenu des éléments de script.
+    /// [JAVASCRIPT]
+    EofInScriptHtmlCommentLikeText = "eof-in-script-html-comment-like-text",
+
+    /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
     /// du flux d'entrée dans une balise de début ou une balise de fin
     /// (par exemple, `<div id=`). Une telle balise est ignorée.
     EofInTag = "eof-in-tag",
