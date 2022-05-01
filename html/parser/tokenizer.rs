@@ -1834,6 +1834,70 @@ where
         }
     }
 
+    fn handle_script_data_double_escaped_dash_dash_state(
+        &mut self,
+    ) -> ResultHTMLStateIterator {
+        match self.stream.next_input_char() {
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Émettre un jeton `character` U+002D HYPHEN-MINUS.
+            | Some(ch @ '-') => {
+                self.set_token(HTMLToken::Character(ch)).and_emit()
+            }
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Passer à l'état `script-data-double-escaped-less-than-sign`.
+            // Émettre un jeton `character` U+003C LESS-THAN SIGN.
+            | Some(ch @ '<') => self
+                .switch_state_to(
+                    "script-data-double-escaped-less-than-sign",
+                )
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+003E GREATER-THAN SIGN (>)
+            //
+            // Passer à l'état `script-data`. Émettre un jeton `character`
+            // U+003E GREATER-THAN SIGN.
+            | Some(ch @ '>') => self
+                .switch_state_to("script-data")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+
+            // U+0000 NULL
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `unexpected-null-character`. Passez à l'état
+            // `script-data-double-escaped`. Émettre un jeton `character`
+            // U+FFFD REPLACEMENT CHARACTER.
+            | Some('\0') => self
+                .switch_state_to("script-data-double-escaped")
+                .set_token(HTMLToken::Character(
+                    char::REPLACEMENT_CHARACTER,
+                ))
+                .and_emit_with_error("unexpected-null-character"),
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse de type
+            // `eof-in-script-html-comment-like-text`. Émettre un jeton
+            // `end-of-file`.
+            | None => self.set_token(HTMLToken::EOF).and_emit_with_error(
+                "eof-in-script-html-comment-like-text",
+            ),
+
+            // Anything else
+            //
+            // Passer à l'état `script-data-double-escaped`. Émettre le
+            // caractère actuel comme un jeton `character`.
+            | Some(ch) => self
+                .switch_state_to("script-data-double-escaped")
+                .set_token(HTMLToken::Character(ch))
+                .and_emit(),
+        }
+    }
+
     fn handle_before_attribute_name_state(
         &mut self,
     ) -> ResultHTMLStateIterator {
@@ -4217,7 +4281,7 @@ where
                     self.handle_script_data_double_escaped_dash_state()
                 }
                 | State::ScriptDataDoubleEscapedDashDash => {
-                    todo!()
+                    self.handle_script_data_double_escaped_dash_dash_state()
                 }
                 | State::ScriptDataDoubleEscapedLessThanSign => {
                     todo!()
