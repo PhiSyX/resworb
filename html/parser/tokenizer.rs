@@ -5,15 +5,15 @@
 use std::{borrow::Cow, collections::VecDeque};
 
 use infra::{
-    datastructs::lists::peekable::PeekableInterface,
-    primitives::codepoint::{CodePoint, CodePointInterface},
+    primitive::codepoint::{CodePoint, CodePointInterface},
+    structure::lists::peekable::PeekableInterface,
 };
 use parser::preprocessor::InputStream;
 
 use super::{
     codepoint::HTMLCodePoint,
     error::HTMLParserError,
-    token::{HTMLTagAttribute, HTMLToken},
+    token::{HTMLDoctypeToken, HTMLTagAttribute, HTMLTagToken, HTMLToken},
 };
 use crate::{
     named_characters::{
@@ -63,42 +63,45 @@ impl core::fmt::Display for State {
 // Interface //
 // --------- //
 
-trait HTMLStateIteratorInterface {
-    fn ignore(&self) -> ResultHTMLStateIterator {
-        Ok(HTMLStateIterator::Continue)
+trait HTMLTokenizerProcessInterface {
+    fn ignore(&self) -> HTMLTokenizerProcessResult {
+        Ok(HTMLTokenizerProcess::Continue)
     }
 
-    fn and_continue(&self) -> ResultHTMLStateIterator {
-        Ok(HTMLStateIterator::Continue)
+    fn and_continue(&self) -> HTMLTokenizerProcessResult {
+        Ok(HTMLTokenizerProcess::Continue)
     }
 
     fn and_continue_with_error(
         &self,
         err: &str,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         let err = err.parse().unwrap();
-        Err((err, HTMLStateIterator::Continue))
+        Err((err, HTMLTokenizerProcess::Continue))
     }
 
-    fn and_emit(&self) -> ResultHTMLStateIterator {
-        Ok(HTMLStateIterator::Break)
+    fn and_emit(&self) -> HTMLTokenizerProcessResult {
+        Ok(HTMLTokenizerProcess::Emit)
     }
 
-    fn and_emit_with_error(&self, err: &str) -> ResultHTMLStateIterator {
+    fn and_emit_with_error(
+        &self,
+        err: &str,
+    ) -> HTMLTokenizerProcessResult {
         let err = err.parse().unwrap();
-        Err((err, HTMLStateIterator::Break))
+        Err((err, HTMLTokenizerProcess::Emit))
     }
 }
 
-// ---- //
-// Type //
-// ---- //
+enum HTMLTokenizerProcess {
+    Continue,
+    Emit,
+}
 
-type Tokenizer<C> = HTMLTokenizer<C>;
 pub(crate) type HTMLInputStream<Iter> = InputStream<Iter, CodePoint>;
 
-type ResultHTMLStateIterator =
-    Result<HTMLStateIterator, (HTMLParserError, HTMLStateIterator)>;
+type HTMLTokenizerProcessResult =
+    Result<HTMLTokenizerProcess, (HTMLParserError, HTMLTokenizerProcess)>;
 
 // --------- //
 // Structure //
@@ -114,7 +117,7 @@ where
     /// Le jeton courant.
     token: Option<HTMLToken>,
 
-    state: HTMLState,
+    state: HTMLTokenizerState,
 
     /// La sortie de l'étape de tokenisation est une série de zéro ou plus
     /// des jetons.
@@ -134,9 +137,11 @@ where
     last_start_tag_token: Option<HTMLToken>,
 }
 
+type Tokenizer<C> = HTMLTokenizer<C>;
+
 #[derive(Debug)]
 #[derive(Clone)]
-pub struct HTMLState {
+pub struct HTMLTokenizerState {
     /// L'état courant.
     current: State,
     /// L'état de retour.
@@ -389,11 +394,6 @@ define_state! {
     NumericCharacterReferenceEnd = "numeric-character-reference-end"
 }
 
-enum HTMLStateIterator {
-    Continue,
-    Break,
-}
-
 // -------------- //
 // Implémentation //
 // -------------- //
@@ -407,7 +407,7 @@ where
         Self {
             stream,
             token: None,
-            state: HTMLState::default(),
+            state: HTMLTokenizerState::default(),
             output_tokens: VecDeque::default(),
             temporary_buffer: String::default(),
             named_character_reference_code:
@@ -505,8 +505,10 @@ where
     fn flush_temporary_buffer(&mut self) -> &mut Self {
         if self.state.is_character_of_attribute() {
             self.temporary_buffer.clone().chars().for_each(|ch| {
-                self.change_current_token(|tok| {
-                    tok.append_character_to_attribute_value(ch);
+                self.change_current_token(|token| {
+                    token
+                        .into_start_tag()
+                        .append_character_to_attribute_value(ch);
                 });
             });
         } else {
@@ -524,14 +526,16 @@ where
     /// aucune balise de fin n'est appropriée.
     fn is_appropriate_end_tag(&self) -> bool {
         if let (
-            Some(HTMLToken::EndTag {
+            Some(HTMLToken::Tag(HTMLTagToken {
                 name: current_tag_name,
+                is_end_token: true,
                 ..
-            }),
-            Some(HTMLToken::EndTag {
+            })),
+            Some(HTMLToken::Tag(HTMLTagToken {
                 name: last_tag_name,
+                is_end_token: true,
                 ..
-            }),
+            })),
         ) = (self.token.as_ref(), self.last_start_tag_token.as_ref())
         {
             current_tag_name == last_tag_name
@@ -541,7 +545,7 @@ where
     }
 }
 
-impl HTMLState {
+impl HTMLTokenizerState {
     /// Change l'état actuel par un nouvel état.
     /// Terme `switch_to` venant de la spécification HTML "Switch to the
     /// ..."
@@ -587,7 +591,7 @@ impl<C> Tokenizer<C>
 where
     C: Iterator<Item = CodePoint>,
 {
-    fn handle_data_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_data_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0026 AMPERSAND (&)
             //
@@ -627,7 +631,7 @@ where
         }
     }
 
-    fn handle_rcdata_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_rcdata_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0026 AMPERSAND (&)
             // Définir l'état de retour à l'état `rcdata`. Passer à l'état
@@ -670,7 +674,7 @@ where
         }
     }
 
-    fn handle_rawtext_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_rawtext_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+003C LESS-THAN SIGN (<)
             // Passer à l'état `rawtext-less-than-sign`.
@@ -704,7 +708,7 @@ where
         }
     }
 
-    fn handle_script_data_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_script_data_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+003C LESS-THAN SIGN (<)
             //
@@ -739,7 +743,7 @@ where
         }
     }
 
-    fn handle_plaintext_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_plaintext_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0000 NULL
             //
@@ -766,7 +770,7 @@ where
         }
     }
 
-    fn handle_tag_open_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_tag_open_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0021 EXCLAMATION MARK (!)
             //
@@ -788,7 +792,7 @@ where
             // Créer un nouveau jeton `start tag`, et définir son nom
             // en une chaîne de caractères vide. Reprendre dans `tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::new_start_tag(String::new()))
+                .set_token(HTMLToken::Tag(HTMLTagToken::start()))
                 .reconsume("tag-name")
                 .and_continue(),
 
@@ -831,7 +835,7 @@ where
         }
     }
 
-    fn handle_end_tag_open_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_end_tag_open_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // ASCII alpha
             //
@@ -839,7 +843,7 @@ where
             // comme une chaîne de caractères vide. Reprendre l'état
             // `tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::new_end_tag(String::new()))
+                .set_token(HTMLToken::Tag(HTMLTagToken::end()))
                 .reconsume("tag-name")
                 .and_continue(),
 
@@ -878,7 +882,7 @@ where
         }
     }
 
-    fn handle_tag_name_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_tag_name_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -916,8 +920,8 @@ where
             // (ajouter 0x0020 au point de code du caractère) au nom du
             // jeton `tag` actuel.
             | Some(ch) if ch.is_ascii_uppercase() => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character(ch.to_ascii_lowercase());
+                .change_current_token(|token| {
+                    token.append_character(ch.to_ascii_lowercase());
                 })
                 .and_continue(),
 
@@ -927,8 +931,8 @@ where
             // `unexpected-null-character`. Ajouter un caractère U+FFFD
             // `REPLACEMENT_CHARACTER` au nom du jeton `tag` actuel.
             | Some('\0') => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character(char::REPLACEMENT_CHARACTER);
+                .change_current_token(|token| {
+                    token.append_character(char::REPLACEMENT_CHARACTER);
                 })
                 .and_continue_with_error("unexpected-null-character"),
 
@@ -944,8 +948,8 @@ where
             //
             // Ajouter le caractère actuel au nom du jeton `tag` actuel.
             | Some(ch) => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character(ch);
+                .change_current_token(|token| {
+                    token.append_character(ch);
                 })
                 .and_continue(),
         }
@@ -953,7 +957,7 @@ where
 
     fn handle_rcdata_less_than_sign_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002F SOLIDUS (/)
             //
@@ -978,7 +982,7 @@ where
 
     fn handle_rcdata_end_tag_open_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // ASCII alpha
             //
@@ -986,7 +990,7 @@ where
             // chaîne de caractères vide. Reprendre l'état
             // `rcdata-end-tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::new_end_tag(String::new()))
+                .set_token(HTMLToken::Tag(HTMLTagToken::end()))
                 .reconsume("rcdata-end-tag-name")
                 .and_continue(),
 
@@ -1005,7 +1009,7 @@ where
 
     fn handle_rcdata_end_tag_name_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -1053,8 +1057,8 @@ where
             // de balise du jeton `tag` actuel. Ajouter le caractère
             // actuel au tampon temporaire.
             | Some(ch) if ch.is_ascii_uppercase() => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character(ch.to_ascii_lowercase());
+                .change_current_token(|token| {
+                    token.append_character(ch.to_ascii_lowercase());
                 })
                 .append_character_to_temporary_buffer(ch)
                 .and_continue(),
@@ -1065,8 +1069,8 @@ where
             // `tag` actuel. Ajoute le caractère d'entrée actuel au tampon
             // temporaire.
             | Some(ch) if ch.is_ascii_lowercase() => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character(ch);
+                .change_current_token(|token| {
+                    token.append_character(ch);
                 })
                 .append_character_to_temporary_buffer(ch)
                 .and_continue(),
@@ -1089,7 +1093,7 @@ where
 
     fn handle_rawtext_less_than_sign_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002F SOLIDUS (/)
             //
@@ -1113,7 +1117,7 @@ where
 
     fn handle_rawtext_end_tag_open_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // ASCII alpha
             //
@@ -1121,7 +1125,7 @@ where
             // balise en une chaîne de caractères vide. Reprendre dans
             // l'état `rawtext-end-tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::new_end_tag(String::new()))
+                .set_token(HTMLToken::Tag(HTMLTagToken::end()))
                 .reconsume("rawtext-end-tag-name")
                 .and_continue(),
 
@@ -1140,7 +1144,7 @@ where
 
     fn handle_rawtext_end_tag_name_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -1188,8 +1192,8 @@ where
             // de la balise du jeton `*-tag` actuel. Ajouter le caractère
             // actuel au tampon temporaire.
             | Some(ch) if ch.is_ascii_uppercase() => self
-                .change_current_token(|tok| {
-                    tok.append_character(ch.to_ascii_lowercase())
+                .change_current_token(|token| {
+                    token.append_character(ch.to_ascii_lowercase())
                 })
                 .append_character_to_temporary_buffer(ch)
                 .and_continue(),
@@ -1200,7 +1204,7 @@ where
             // `*-tag` actuel. Ajouter le caractère actuel au tampon
             // temporaire.
             | Some(ch) if ch.is_ascii_lowercase() => self
-                .change_current_token(|tok| tok.append_character(ch))
+                .change_current_token(|token| token.append_character(ch))
                 .append_character_to_temporary_buffer(ch)
                 .and_continue(),
 
@@ -1222,7 +1226,7 @@ where
 
     fn handle_script_data_less_than_sign_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002F SOLIDUS (/)
             //
@@ -1257,7 +1261,7 @@ where
 
     fn handle_script_data_end_tag_open_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // ASCII alpha
             //
@@ -1265,7 +1269,7 @@ where
             // en une chaîne de caractères vide. Reprendre dans l'état
             // `script-data-end-tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::new_end_tag(String::new()))
+                .set_token(HTMLToken::Tag(HTMLTagToken::end()))
                 .reconsume("script-data-end-tag-name")
                 .and_continue(),
 
@@ -1282,7 +1286,7 @@ where
 
     fn handle_script_data_end_tag_name_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -1330,8 +1334,8 @@ where
             // de la balise du jeton `*-tag` actuel. Ajouter le caractère
             // actuel au tampon temporaire.
             | Some(ch) if ch.is_ascii_uppercase() => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character(ch.to_ascii_lowercase())
+                .change_current_token(|token| {
+                    token.append_character(ch.to_ascii_lowercase())
                 })
                 .append_character_to_temporary_buffer(ch)
                 .and_continue(),
@@ -1342,9 +1346,7 @@ where
             // `*-tag` actuel. Ajouter le caractère actuel au tampon
             // temporaire.
             | Some(ch) if ch.is_ascii_lowercase() => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character(ch)
-                })
+                .change_current_token(|token| token.append_character(ch))
                 .append_character_to_temporary_buffer(ch)
                 .and_continue(),
 
@@ -1366,7 +1368,7 @@ where
 
     fn handle_script_data_escape_start_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -1386,7 +1388,7 @@ where
 
     fn handle_script_data_escape_start_dash_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -1406,7 +1408,7 @@ where
 
     fn handle_script_data_escaped_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -1455,7 +1457,7 @@ where
 
     fn handle_script_data_escaped_dash_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -1508,7 +1510,7 @@ where
 
     fn handle_script_data_escaped_dash_dash_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -1568,7 +1570,7 @@ where
 
     fn handle_script_data_escaped_less_than_sign_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002F SOLIDUS (/)
             //
@@ -1603,7 +1605,7 @@ where
 
     fn handle_script_data_escaped_end_tag_open_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // ASCII alpha
             //
@@ -1611,7 +1613,7 @@ where
             // en une chaîne de caractères vide. Reprendre dans l'état
             // `script-data-escaped-end-tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::new_end_tag(String::new()))
+                .set_token(HTMLToken::Tag(HTMLTagToken::end()))
                 .reconsume("script-data-escaped-end-tag-name")
                 .and_continue(),
 
@@ -1630,7 +1632,7 @@ where
 
     fn handle_script_data_escaped_end_tag_name_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -1675,8 +1677,8 @@ where
             // de balise du jeton `*-tag` actuel. Ajouter le caractère
             // actuel au tampon temporaire.
             | Some(ch) if ch.is_ascii_uppercase() => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character(ch.to_ascii_lowercase());
+                .change_current_token(|token| {
+                    token.append_character(ch.to_ascii_lowercase());
                 })
                 .append_character_to_temporary_buffer(ch)
                 .and_continue(),
@@ -1687,8 +1689,8 @@ where
             // `*-tag` actuel. Ajouter le caractère actuel au tampon
             // temporaire.
             | Some(ch) if ch.is_ascii_lowercase() => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character(ch);
+                .change_current_token(|token| {
+                    token.append_character(ch);
                 })
                 .append_character_to_temporary_buffer(ch)
                 .and_continue(),
@@ -1711,7 +1713,7 @@ where
 
     fn handle_script_double_escape_start_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -1771,7 +1773,7 @@ where
 
     fn handle_script_data_double_escaped_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -1824,7 +1826,7 @@ where
 
     fn handle_script_data_double_escaped_dash_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -1881,7 +1883,7 @@ where
 
     fn handle_script_data_double_escaped_dash_dash_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -1945,7 +1947,7 @@ where
 
     fn handle_script_data_double_escaped_less_than_sign_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002F SOLIDUS (/)
             //
@@ -1969,7 +1971,7 @@ where
 
     fn handle_script_data_double_escape_end_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -2029,7 +2031,7 @@ where
 
     fn handle_before_attribute_name_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -2056,10 +2058,12 @@ where
             // de cet attribut sur le caractère actuel, et sa valeur une
             // chaîne de caractères vide. Passer à l'état `attribute-name`.
             | Some(ch @ '=') => self
-                .change_current_token(|tag_tok| {
+                .change_current_token(|token| {
                     let mut attribute = HTMLTagAttribute::default();
                     attribute.0 = HTMLTagAttributeName::from(ch);
-                    tag_tok.define_tag_attributes(attribute);
+                    token
+                        .into_start_tag()
+                        .define_tag_attributes(attribute);
                 })
                 .switch_state_to("attribute-name")
                 .and_emit_with_error(
@@ -2073,16 +2077,20 @@ where
             // chaîne de caractères vide.
             // Reprendre l'état `attribute-name`.
             | Some(_) => self
-                .change_current_token(|tag_tok| {
+                .change_current_token(|token| {
                     let attribute = HTMLTagAttribute::default();
-                    tag_tok.define_tag_attributes(attribute);
+                    token
+                        .into_start_tag()
+                        .define_tag_attributes(attribute);
                 })
                 .reconsume("attribute-name")
                 .and_continue(),
         }
     }
 
-    fn handle_attribute_name_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_attribute_name_state(
+        &mut self,
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -2114,10 +2122,12 @@ where
             // (ajouter 0x0020 au point de code du caractère) au nom de
             // l'attribut actuel.
             | Some(ch) if ch.is_ascii_uppercase() => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character_to_attribute_name(
-                        ch.to_ascii_lowercase(),
-                    );
+                .change_current_token(|token| {
+                    token
+                        .into_start_tag()
+                        .append_character_to_attribute_name(
+                            ch.to_ascii_lowercase(),
+                        );
                 })
                 .and_continue(),
 
@@ -2145,8 +2155,10 @@ where
             // Ajouter le caractère actuel au nom de l'attribut
             // actuel.
             | Some(ch) => {
-                self.change_current_token(|tag_tok| {
-                    tag_tok.append_character_to_attribute_name(ch);
+                self.change_current_token(|token| {
+                    token
+                        .into_start_tag()
+                        .append_character_to_attribute_name(ch);
                 });
 
                 if matches!(ch, '"' | '\'' | '<') {
@@ -2162,7 +2174,7 @@ where
 
     fn handle_after_attribute_name_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -2207,9 +2219,11 @@ where
             // Définir le nom et la valeur de cet attribut à une chaîne de
             // caractères vide. Reprendre l'état `attribute-name`.
             | Some(_) => self
-                .change_current_token(|tag_tok| {
+                .change_current_token(|token| {
                     let attribute = HTMLTagAttribute::default();
-                    tag_tok.define_tag_attributes(attribute);
+                    token
+                        .into_start_tag()
+                        .define_tag_attributes(attribute);
                 })
                 .reconsume("attribute-name")
                 .and_continue(),
@@ -2218,7 +2232,7 @@ where
 
     fn handle_before_attribute_value_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -2265,7 +2279,7 @@ where
     fn handle_attribute_value_quoted_state(
         &mut self,
         quote: CodePoint,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0022 QUOTATION MARK (")
             //
@@ -2304,10 +2318,12 @@ where
             // `unexpected-null-character`. Ajouter un caractère U+FFFD
             // `REPLACEMENT_CHARACTER` à la valeur de l'attribut actuel.
             | Some('\0') => self
-                .change_current_token(|html_tok| {
-                    html_tok.append_character_to_attribute_value(
-                        char::REPLACEMENT_CHARACTER,
-                    );
+                .change_current_token(|token| {
+                    token
+                        .into_start_tag()
+                        .append_character_to_attribute_value(
+                            char::REPLACEMENT_CHARACTER,
+                        );
                 })
                 .and_continue_with_error("unexpected-null-character"),
 
@@ -2324,8 +2340,10 @@ where
             // Ajouter le caractère actuel à la valeur de l'attribut
             // actuel.
             | Some(ch) => self
-                .change_current_token(|html_tok| {
-                    html_tok.append_character_to_attribute_value(ch);
+                .change_current_token(|token| {
+                    token
+                        .into_start_tag()
+                        .append_character_to_attribute_value(ch);
                 })
                 .and_continue(),
         }
@@ -2333,7 +2351,7 @@ where
 
     fn handle_attribute_value_unquoted_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -2368,10 +2386,12 @@ where
             // `REPLACEMENT_CHARACTER` U+FFFD à la valeur de l'attribut
             // actuel.
             | Some('\0') => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.append_character_to_attribute_value(
-                        char::REPLACEMENT_CHARACTER,
-                    );
+                .change_current_token(|token| {
+                    token
+                        .into_start_tag()
+                        .append_character_to_attribute_value(
+                            char::REPLACEMENT_CHARACTER,
+                        );
                 })
                 .and_continue_with_error("unexpected-null-character"),
 
@@ -2398,8 +2418,10 @@ where
             // Ajouter le caractère actuel à la valeur de l'attribut
             // actuel.
             | Some(ch) => {
-                self.change_current_token(|html_tok| {
-                    html_tok.append_character_to_attribute_value(ch);
+                self.change_current_token(|token| {
+                    token
+                        .into_start_tag()
+                        .append_character_to_attribute_value(ch);
                 });
 
                 if matches!(ch, '"' | '\'' | '<' | '=' | '`') {
@@ -2415,7 +2437,7 @@ where
 
     fn handle_after_attribute_value_quoted_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -2464,15 +2486,15 @@ where
 
     fn handle_self_closing_start_tag_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
             //
             // Définir le drapeau `self-closing` au jeton `tag` actuel sur
             // vrai. Passer à l'état `data`. Émettre le jeton actuel.
             | Some('>') => self
-                .change_current_token(|tag_tok| {
-                    tag_tok.set_self_closing_tag(true);
+                .change_current_token(|token| {
+                    token.into_start_tag().set_self_closing_tag(true);
                 })
                 .switch_state_to("data")
                 .and_emit(),
@@ -2498,7 +2520,7 @@ where
 
     fn handle_markup_declaration_open_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         if let Some(word) = self.stream.meanwhile().peek_until::<String>(7)
         {
             // Correspondance ASCII insensible à la casse pour le mot
@@ -2555,7 +2577,9 @@ where
             .and_continue_with_error("incorrectly-opened-comment")
     }
 
-    fn handle_bogus_comment_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_bogus_comment_state(
+        &mut self,
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
             //
@@ -2576,8 +2600,8 @@ where
             // `unexpected-null-character`. Ajouter un caractère U+FFFD
             // `REPLACEMENT_CHARACTER` aux données du jeton `comment`.
             | Some('\0') => self
-                .change_current_token(|html_tok| {
-                    html_tok.append_character(char::REPLACEMENT_CHARACTER);
+                .change_current_token(|token| {
+                    token.append_character(char::REPLACEMENT_CHARACTER);
                 })
                 .and_continue_with_error("unexpected-null-character"),
 
@@ -2585,14 +2609,16 @@ where
             //
             // Ajouter le caractère actuel aux données du jeton `comment`.
             | Some(ch) => self
-                .change_current_token(|html_tok| {
-                    html_tok.append_character(ch);
+                .change_current_token(|token| {
+                    token.append_character(ch);
                 })
                 .and_continue(),
         }
     }
 
-    fn handle_comment_start_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_comment_start_state(
+        &mut self,
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -2620,7 +2646,7 @@ where
 
     fn handle_comment_less_than_sign_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0021 EXCLAMATION MARK (!)
             //
@@ -2651,7 +2677,7 @@ where
 
     fn handle_comment_less_than_sign_bang_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -2670,7 +2696,7 @@ where
 
     fn handle_comment_less_than_sign_bang_dash_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -2689,7 +2715,7 @@ where
 
     fn handle_comment_less_than_sign_bang_dash_dash_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
             // EOF
@@ -2711,7 +2737,7 @@ where
 
     fn handle_comment_start_dash_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -2753,7 +2779,7 @@ where
         }
     }
 
-    fn handle_comment_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_comment_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+003C LESS-THAN SIGN (<)
             //
@@ -2808,7 +2834,7 @@ where
 
     fn handle_comment_end_dash_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -2840,7 +2866,7 @@ where
         }
     }
 
-    fn handle_comment_end_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_comment_end_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
             //
@@ -2890,7 +2916,7 @@ where
 
     fn handle_comment_end_bang_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+002D HYPHEN-MINUS (-)
             //
@@ -2941,7 +2967,7 @@ where
         }
     }
 
-    fn handle_doctype_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_doctype_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -2965,9 +2991,9 @@ where
             // force-quirks à vrai. Émettre le jeton actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
-                .emit_token(
-                    HTMLToken::new_doctype().define_force_quirks_flag(),
-                )
+                .emit_token(HTMLToken::DOCTYPE(
+                    HTMLDoctypeToken::new().define_force_quirks_flag(),
+                ))
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-doctype"),
 
@@ -2986,7 +3012,7 @@ where
 
     fn handle_before_doctype_name_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -3003,10 +3029,10 @@ where
             // (ajouter 0x0020 au point de code du caractère). Passer à
             // l'état `doctype-name`.
             | Some(ch) if ch.is_ascii_uppercase() => self
-                .set_token(
-                    HTMLToken::new_doctype()
+                .set_token(HTMLToken::DOCTYPE(
+                    HTMLDoctypeToken::new()
                         .define_doctype_name(ch.to_ascii_lowercase()),
-                )
+                ))
                 .switch_state_to("doctype-name")
                 .and_continue(),
 
@@ -3017,10 +3043,10 @@ where
             // `doctype`. Définir le nom du jeton sur un caractère U+FFFD
             // `REPLACEMENT_CHARACTER`. Passer à l'état `doctype-name`.
             | Some('\0') => self
-                .set_token(
-                    HTMLToken::new_doctype()
+                .set_token(HTMLToken::DOCTYPE(
+                    HTMLDoctypeToken::new()
                         .define_doctype_name(char::REPLACEMENT_CHARACTER),
-                )
+                ))
                 .switch_state_to("doctype-name")
                 .and_continue_with_error("unexpected-null-character"),
 
@@ -3031,9 +3057,9 @@ where
             // Mettre son drapeau force-quirks à vrai. Passer à l'état
             // `data`. Émettre le jeton actuel.
             | Some('>') => self
-                .set_token(
-                    HTMLToken::new_doctype().define_force_quirks_flag(),
-                )
+                .set_token(HTMLToken::DOCTYPE(
+                    HTMLDoctypeToken::new().define_force_quirks_flag(),
+                ))
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-name"),
 
@@ -3044,9 +3070,9 @@ where
             // force-quirks à vrai. Émettre le jeton actuel. Émettre un
             // jeton de `end-of-file`.
             | None => self
-                .emit_token(
-                    HTMLToken::new_doctype().define_force_quirks_flag(),
-                )
+                .emit_token(HTMLToken::DOCTYPE(
+                    HTMLDoctypeToken::new().define_force_quirks_flag(),
+                ))
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-doctype"),
 
@@ -3055,15 +3081,15 @@ where
             // Créer un nouveau jeton `doctype`. Définir le nom du jeton
             // sur le caractère actuel. Passer à l'état `doctype-name`.
             | Some(ch) => self
-                .set_token(
-                    HTMLToken::new_doctype().define_doctype_name(ch),
-                )
+                .set_token(HTMLToken::DOCTYPE(
+                    HTMLDoctypeToken::new().define_doctype_name(ch),
+                ))
                 .switch_state_to("doctype-name")
                 .and_continue(),
         }
     }
 
-    fn handle_doctype_name_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_doctype_name_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -3086,8 +3112,8 @@ where
             // (ajouter 0x0020 au point de code du caractère) au nom
             // du jeton `doctype` actuel.
             | Some(ch) if ch.is_ascii_uppercase() => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.append_character(ch.to_ascii_lowercase());
+                .change_current_token(|token| {
+                    token.append_character(ch.to_ascii_lowercase());
                 })
                 .and_continue(),
 
@@ -3098,9 +3124,8 @@ where
             // REPLACEMENT CHARACTER au nom du jeton `doctype`
             // actuel.
             | Some('\0') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok
-                        .append_character(char::REPLACEMENT_CHARACTER);
+                .change_current_token(|token| {
+                    token.append_character(char::REPLACEMENT_CHARACTER);
                 })
                 .and_continue_with_error("unexpected-null-character"),
 
@@ -3111,8 +3136,8 @@ where
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
             // jeton de `end-of-file`.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3123,8 +3148,8 @@ where
             // Ajouter le caractère actuel au nom du jeton `doctype`
             // actuel.
             | Some(ch) => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.append_character(ch);
+                .change_current_token(|token| {
+                    token.append_character(ch);
                 })
                 .and_continue(),
         }
@@ -3132,7 +3157,7 @@ where
 
     fn handle_after_doctype_name_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -3154,8 +3179,8 @@ where
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3204,8 +3229,8 @@ where
                 }
 
                 if !f {
-                    self.change_current_token(|doctype_tok| {
-                        doctype_tok.set_force_quirks_flag(true);
+                    self.change_current_token(|token| {
+                        token.into_doctype().set_force_quirks_flag(true);
                     })
                     .reconsume("bogus-doctype")
                     .and_continue_with_error(
@@ -3220,7 +3245,7 @@ where
 
     fn handle_after_doctype_public_keyword_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -3241,8 +3266,10 @@ where
             // la chaîne de caractères vide, passer à l'état
             // `doctype-public-identifier-double-quoted`.
             | Some('"') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_public_identifier(String::new());
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .set_public_identifier(String::new());
                 })
                 .switch_state_to("doctype-public-identifier-double-quoted")
                 .and_continue_with_error(
@@ -3257,8 +3284,10 @@ where
             // la chaîne de caractères vide, passer à l'état
             // `doctype-public-identifier-single-quoted`.
             | Some('\'') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_public_identifier(String::new());
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .set_public_identifier(String::new());
                 })
                 .switch_state_to("doctype-public-identifier-single-quoted")
                 .and_continue_with_error(
@@ -3272,8 +3301,8 @@ where
             // force-quirks du jeton `doctype` actuel sur vrai. Passer à
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-public-identifier"),
@@ -3285,8 +3314,8 @@ where
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
             // jeton `end-of-file`.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3299,8 +3328,8 @@ where
             // drapeau force-quirks du jeton `doctype` actuel sur vrai.
             // Reprendre dans l'état `bogus-doctype`.
             | Some(_) => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -3311,7 +3340,7 @@ where
 
     fn handle_before_doctype_public_identifier_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -3327,9 +3356,9 @@ where
             // chaîne de caractères vide, passer à l'état
             // `doctype-public-identifier-double-quoted`.
             | Some('"') => self
-                .set_token(
-                    HTMLToken::new_doctype().define_doctype_name('\0'),
-                )
+                .set_token(HTMLToken::DOCTYPE(
+                    HTMLDoctypeToken::new().define_doctype_name('\0'),
+                ))
                 .switch_state_to("doctype-public-identifier-double-quoted")
                 .and_continue(),
 
@@ -3339,9 +3368,9 @@ where
             // chaîne de caractères vide, passer à l'état
             // `doctype-public-identifier-single-quoted`.
             | Some('\'') => self
-                .set_token(
-                    HTMLToken::new_doctype().define_doctype_name('\0'),
-                )
+                .set_token(HTMLToken::DOCTYPE(
+                    HTMLDoctypeToken::new().define_doctype_name('\0'),
+                ))
                 .switch_state_to("doctype-public-identifier-single-quoted")
                 .and_continue(),
 
@@ -3352,8 +3381,8 @@ where
             // force-quirks du jeton `doctype` actuel sur vrai. Passer à
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-public-identifier"),
@@ -3365,8 +3394,8 @@ where
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3379,8 +3408,8 @@ where
             // drapeau force-quirks du jeton `doctype` actuel sur vrai.
             // Reprendre à l'état `bogus-doctype`.
             | Some(_) => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -3392,7 +3421,7 @@ where
     fn handle_doctype_public_identifier_quoted(
         &mut self,
         quote: CodePoint,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0022 QUOTATION MARK (")
             //
@@ -3417,10 +3446,12 @@ where
             // `REPLACEMENT_CHARACTER` à l'identifiant public du jeton
             // `doctype` actuel.
             | Some('\0') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.append_character_to_public_identifier(
-                        char::REPLACEMENT_CHARACTER,
-                    );
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .append_character_to_public_identifier(
+                            char::REPLACEMENT_CHARACTER,
+                        );
                 })
                 .and_continue_with_error("unexpected-null-character"),
 
@@ -3431,8 +3462,8 @@ where
             // force-quirks du jeton `doctype` actuel sur vrai. Passer à
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("abrupt-doctype-public-identifier"),
@@ -3444,8 +3475,8 @@ where
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3456,8 +3487,10 @@ where
             // Ajouter le caractère actuel à l'identifiant public du jeton
             // `doctype` actuel.
             | Some(ch) => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.append_character_to_public_identifier(ch);
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .append_character_to_public_identifier(ch);
                 })
                 .and_continue(),
         }
@@ -3465,7 +3498,7 @@ where
 
     fn handle_after_doctype_public_identifier_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -3495,8 +3528,10 @@ where
             // `doctype-system-identifier-single-quoted`.
             | Some(ch @ ('"' | '\'')) => {
                 let err = "missing-whitespace-between-doctype-public-and-system-identifiers";
-                self.change_current_token(|doctype_tok| {
-                    doctype_tok.set_system_identifier(String::new());
+                self.change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .set_system_identifier(String::new());
                 })
                 .switch_state_to(if ch == '"' {
                     "doctype-system-identifier-double-quoted"
@@ -3513,8 +3548,8 @@ where
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
             // jeton `end-of-file`.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3536,7 +3571,7 @@ where
 
     fn handle_between_doctype_public_and_system_identifiers_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -3559,8 +3594,10 @@ where
             // `doctype-system-identifier-double-quoted` ou
             // `doctype-system-identifier-single-quoted`.
             | Some(ch @ ('"' | '\'')) => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_system_identifier(String::new());
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .set_system_identifier(String::new());
                 })
                 .switch_state_to(if ch == '"' {
                     "doctype-system-identifier-double-quoted"
@@ -3576,8 +3613,8 @@ where
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3590,8 +3627,8 @@ where
             // drapeau force-quirks du jeton `doctype` actuel. Reprendre
             // dans l'état `bogus-doctype`.
             | Some(_) => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -3602,7 +3639,7 @@ where
 
     fn handle_after_doctype_system_keyword_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -3623,8 +3660,10 @@ where
             // à une chaîne de caractères vide, passer à l'état
             // `doctype-system-identifier-double-quoted`.
             | Some('"') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_system_identifier(String::new());
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-double-quoted")
                 .and_continue_with_error(
@@ -3639,8 +3678,10 @@ where
             // à une chaîne de caractères vide, passer à l'état
             // `doctype-system-identifier-single-quoted`.
             | Some('\'') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_system_identifier(String::new());
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-single-quoted")
                 .and_continue_with_error(
@@ -3654,8 +3695,8 @@ where
             // force-quirks du jeton `doctype` actuel sur vrai. Passer à
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-system-identifier"),
@@ -3667,8 +3708,8 @@ where
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3681,8 +3722,8 @@ where
             // drapeau force-quirks du jeton `doctype` actuel sur vrai.
             // Reprendre dans l'état `bogus-doctype`.
             | Some(_) => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .set_token(HTMLToken::EOF)
                 .reconsume("bogus-doctype")
@@ -3694,7 +3735,7 @@ where
 
     fn handle_before_doctype_system_identifier_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -3710,8 +3751,10 @@ where
             // chaîne de caractères vide, passer à l'état
             // `doctype-system-identifier-double-quoted`.
             | Some('"') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_system_identifier(String::new());
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-double-quoted")
                 .and_continue(),
@@ -3722,8 +3765,10 @@ where
             // chaîne de caractères vide, passer à  l'état
             // `doctype-system-identifier-single-quoted`
             | Some('\'') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_system_identifier(String::new());
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-single-quoted")
                 .and_continue(),
@@ -3735,8 +3780,8 @@ where
             // force-quirks du jeton `doctype` actuel sur vrai. Passer à
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-system-identifier"),
@@ -3748,8 +3793,8 @@ where
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3762,8 +3807,8 @@ where
             // le drapeau force-quirks du jeton `doctype` actuel sur vrai.
             // Reprendre dans l'état `bogus-doctype`.
             | Some(_) => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -3775,7 +3820,7 @@ where
     fn handle_doctype_system_identifier_quoted_state(
         &mut self,
         quote: CodePoint,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
@@ -3793,10 +3838,12 @@ where
             // `REPLACEMENT_CHARACTER` à l'identifiant système du jeton
             // DOCTYPE actuel.
             | Some('\0') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.append_character_to_system_identifier(
-                        char::REPLACEMENT_CHARACTER,
-                    );
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .append_character_to_system_identifier(
+                            char::REPLACEMENT_CHARACTER,
+                        );
                 })
                 .and_continue(),
 
@@ -3807,8 +3854,8 @@ where
             // force-quirks du jeton `doctype` actuel. Passer à l'état de
             // données. Émettre le jeton `doctype` actuel.
             | Some('>') => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("abrupt-doctype-system-identifier"),
@@ -3821,8 +3868,8 @@ where
             // `doctype` actuel. Émission d'un jeton de
             // fin de fichier.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3833,8 +3880,10 @@ where
             // Ajouter le caractère actuel à l'identifiant système du jeton
             // DOCTYPE actuel.
             | Some(ch) => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.append_character_to_system_identifier(ch);
+                .change_current_token(|token| {
+                    token
+                        .into_doctype()
+                        .append_character_to_system_identifier(ch);
                 })
                 .and_continue(),
         }
@@ -3842,7 +3891,7 @@ where
 
     fn handle_after_doctype_system_identifier_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
@@ -3864,8 +3913,8 @@ where
             // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
-                .change_current_token(|doctype_tok| {
-                    doctype_tok.set_force_quirks_flag(true);
+                .change_current_token(|token| {
+                    token.into_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3885,7 +3934,9 @@ where
         }
     }
 
-    fn handle_bogus_doctype_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_bogus_doctype_state(
+        &mut self,
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+003E GREATER-THAN SIGN (>)
             //
@@ -3918,7 +3969,9 @@ where
         }
     }
 
-    fn handle_cdata_section_state(&mut self) -> ResultHTMLStateIterator {
+    fn handle_cdata_section_state(
+        &mut self,
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+005D RIGHT SQUARE BRACKET (])
             //
@@ -3946,7 +3999,7 @@ where
 
     fn handle_cdata_section_bracket_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+005D RIGHT SQUARE BRACKET (])
             //
@@ -3968,7 +4021,7 @@ where
 
     fn handle_cdata_section_end_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+005D RIGHT SQUARE BRACKET (])
             //
@@ -3996,7 +4049,7 @@ where
 
     fn handle_character_reference_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         self.set_temporary_buffer(String::new())
             .append_character_to_temporary_buffer('&');
 
@@ -4034,7 +4087,7 @@ where
     /// chaque caractère au tampon temporaire lorsqu'il est consommé.
     fn handle_named_character_reference_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         let ch = self.stream.current.expect("le caractère actuel");
         let rest_of_chars =
             self.stream.meanwhile().peek_until_end::<String>();
@@ -4110,7 +4163,7 @@ where
 
     fn handle_ambiguous_ampersand_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // ASCII alphanumeric
             //
@@ -4120,8 +4173,10 @@ where
             // comme un jeton `character`.
             | Some(ch) if ch.is_ascii_alphanumeric() => {
                 if self.state.is_character_of_attribute() {
-                    self.change_current_token(|tok| {
-                        tok.append_character_to_attribute_value(ch);
+                    self.change_current_token(|token| {
+                        token
+                            .into_start_tag()
+                            .append_character_to_attribute_value(ch);
                     })
                     .and_continue()
                 } else {
@@ -4149,7 +4204,7 @@ where
 
     fn handle_numeric_character_reference_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         // Définir le code de référence du caractère à zéro (0).
         self.character_reference_code = 0;
 
@@ -4173,7 +4228,7 @@ where
 
     fn handle_hexadecimal_character_reference_start_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // ASCII hex digit
             //
@@ -4199,7 +4254,7 @@ where
 
     fn handle_decimal_character_reference_start_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // ASCII digit
             //
@@ -4225,7 +4280,7 @@ where
 
     fn handle_hexadecimal_character_reference_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // ASCII digit
             //
@@ -4292,7 +4347,7 @@ where
 
     fn handle_decimal_character_reference_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // ASCII digit
             //
@@ -4327,7 +4382,7 @@ where
 
     fn handle_numeric_character_reference_end_state(
         &mut self,
-    ) -> ResultHTMLStateIterator {
+    ) -> HTMLTokenizerProcessResult {
         let mut err: Option<&str> = None;
 
         let cp = self.character_reference_code as u8 as CodePoint;
@@ -4398,12 +4453,12 @@ where
 // Implémentation // -> Interface
 // -------------- //
 
-impl<C> HTMLStateIteratorInterface for Tokenizer<C> where
+impl<C> HTMLTokenizerProcessInterface for Tokenizer<C> where
     C: Iterator<Item = CodePoint>
 {
 }
 
-impl HTMLStateIteratorInterface for HTMLState {}
+impl HTMLTokenizerProcessInterface for HTMLTokenizerState {}
 
 impl<C> Iterator for Tokenizer<C>
 where
@@ -4632,13 +4687,13 @@ where
             };
 
             match state {
-                | Ok(HTMLStateIterator::Continue) => continue,
-                | Ok(HTMLStateIterator::Break) => break,
+                | Ok(HTMLTokenizerProcess::Continue) => continue,
+                | Ok(HTMLTokenizerProcess::Emit) => break,
                 | Err((err, state)) => {
                     log::error!("[HTMLParserError]: {err}");
                     match state {
-                        | HTMLStateIterator::Continue => continue,
-                        | HTMLStateIterator::Break => break,
+                        | HTMLTokenizerProcess::Continue => continue,
+                        | HTMLTokenizerProcess::Emit => break,
                     }
                 }
             }
@@ -4652,7 +4707,7 @@ where
 // Implémentation // -> Default
 // -------------- //
 
-impl Default for HTMLState {
+impl Default for HTMLTokenizerState {
     fn default() -> Self {
         Self {
             current: State::Data,
@@ -4678,69 +4733,72 @@ mod tests {
 
     #[test]
     fn test_ambiguous_ampersand() {
-        let mut html_tok = get_tokenizer_html(include_str!(
+        let mut token = get_tokenizer_html(include_str!(
             "crashtests/tag/ambiguous_ampersand.html"
         ));
 
         assert_eq!(
-            html_tok.next_token(),
-            Some(HTMLToken::StartTag {
+            token.next_token(),
+            Some(HTMLToken::Tag(HTMLTagToken {
                 name: "a".into(),
                 self_closing_flag: false,
                 attributes: vec![(
                     "href".into(),
                     "?a=b&c=d&a0b=c&copy=1&noti=n&not=in&notin=&notin;&not;&;& &".into()
-                )]
-            })
+                )],
+                is_end_token: false
+            }))
         );
     }
 
     #[test]
     fn test_comment() {
-        let mut html_tok = get_tokenizer_html(include_str!(
+        let mut token = get_tokenizer_html(include_str!(
             "crashtests/comment/comment.html"
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            token.next_token(),
             Some(HTMLToken::Comment(" Hello World ".into()))
         );
     }
 
     #[test]
     fn test_tag() {
-        let mut html_tok =
+        let mut token =
             get_tokenizer_html(include_str!("crashtests/tag/tag.html"));
 
         assert_eq!(
-            html_tok.next_token(),
-            Some(HTMLToken::StartTag {
+            token.next_token(),
+            Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
-                attributes: vec![("id".into(), "foo".into())]
-            })
+                attributes: vec![("id".into(), "foo".into())],
+                is_end_token: false
+            }))
         );
 
         // Hello World</div> ...
-        html_tok.nth(12);
+        token.nth(12);
 
         assert_eq!(
-            html_tok.next_token(),
-            Some(HTMLToken::StartTag {
+            token.next_token(),
+            Some(HTMLToken::Tag(HTMLTagToken {
                 name: "input".into(),
                 self_closing_flag: true,
-                attributes: vec![("value".into(), "Hello World".into())]
-            })
+                attributes: vec![("value".into(), "Hello World".into())],
+                is_end_token: false
+            }))
         );
     }
 
     // #[test]
     // fn test_site() {
-    //     let html_tok =
+    //     let token =
     //         get_tokenizer_html(include_str!("crashtests/site.html.local"
     // ));
     //
-    //     for tok in html_tok {
+    //     for tok in token {
     //         if let HTMLToken::EOF = tok {
     //             break;
     //         }

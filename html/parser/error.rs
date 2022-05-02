@@ -439,10 +439,13 @@ define_errors! {
 
 #[cfg(test)]
 mod tests {
-    use infra::primitives::codepoint::CodePoint;
+    use infra::primitive::codepoint::CodePoint;
     use parser::preprocessor::InputStream;
 
-    use crate::parser::{token::HTMLToken, tokenizer::HTMLTokenizer};
+    use crate::parser::{
+        token::{HTMLDoctypeToken, HTMLTagToken, HTMLToken},
+        tokenizer::HTMLTokenizer,
+    };
 
     fn get_tokenizer_html(
         input: &'static str,
@@ -478,26 +481,26 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: Some("foo".into()),
                 system_identifier: None,
                 force_quirks_flag: true,
-            })
+            }))
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: Some(
                     "-//W3C//DTD HTML 4.01//EN".into()
                 ),
                 system_identifier: Some("foo".into()),
                 force_quirks_flag: true,
-            })
+            }))
         );
     }
 
@@ -530,12 +533,12 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: None,
                 public_identifier: None,
                 system_identifier: None,
                 force_quirks_flag: true
-            })
+            }))
         );
     }
 
@@ -594,12 +597,12 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: None,
                 system_identifier: None,
                 force_quirks_flag: true
-            })
+            }))
         );
     }
 
@@ -630,11 +633,12 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::StartTag {
+            Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
-                attributes: vec![("id".into(), "".into())]
-            })
+                attributes: vec![("id".into(), "".into())],
+                is_end_token: false
+            }))
         );
     }
 
@@ -646,12 +650,12 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: None,
                 public_identifier: None,
                 system_identifier: None,
                 force_quirks_flag: true
-            })
+            }))
         );
     }
 
@@ -663,24 +667,24 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: None,
                 system_identifier: None,
                 force_quirks_flag: true
-            })
+            }))
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: None,
                 system_identifier: None,
                 force_quirks_flag: true
-            })
+            }))
         );
     }
 
@@ -692,7 +696,12 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::new_start_tag("div".into()))
+            Some(HTMLToken::Tag(HTMLTagToken {
+                name: "div".into(),
+                self_closing_flag: false,
+                attributes: vec![],
+                is_end_token: false
+            }))
         );
 
         html_tok.next_token();
@@ -709,24 +718,24 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: None,
                 system_identifier: None,
                 force_quirks_flag: true
-            })
+            }))
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: None,
                 system_identifier: None,
                 force_quirks_flag: true
-            })
+            }))
         );
     }
 
@@ -738,26 +747,26 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: Some(
                     "-//W3C//DTD HTML 4.01//EN".into()
                 ),
                 system_identifier: None,
                 force_quirks_flag: false
-            })
+            }))
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: None,
                 system_identifier: Some("http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd".into()),
                 force_quirks_flag: false
-            })
+            }))
         );
     }
 
@@ -769,14 +778,14 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: Some(
                     "-//W3C//DTD HTML 4.01//EN".into()
                 ),
                 system_identifier: None,
                 force_quirks_flag: false
-            })
+            }))
         );
     }
 
@@ -788,14 +797,15 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::StartTag {
+            Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
                 attributes: vec![
                     ("id".into(), "foo".into()),
                     ("class".into(), "bar".into())
-                ]
-            })
+                ],
+                is_end_token: false
+            }))
         );
     }
 
@@ -808,14 +818,14 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE {
+            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
                 name: Some("html".into()),
                 public_identifier: Some(
                     "-//W3C//DTD HTML 4.01//EN".into()
                 ),
                 system_identifier: None,
                 force_quirks_flag: false
-            })
+            }))
         );
     }
 
@@ -844,11 +854,12 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::StartTag {
+            Some(HTMLToken::Tag(HTMLTagToken {
+                is_end_token: false,
                 name: "div".into(),
                 self_closing_flag: false,
                 attributes: vec![("foo<div".into(), "".into())]
-            })
+            }))
         );
 
         html_tok.next_token();
@@ -856,11 +867,12 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::StartTag {
+            Some(HTMLToken::Tag(HTMLTagToken {
+                is_end_token: false,
                 name: "div".into(),
                 self_closing_flag: false,
                 attributes: vec![("id'bar'".into(), "".into())]
-            })
+            }))
         );
     }
 
@@ -872,11 +884,12 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::StartTag {
+            Some(HTMLToken::Tag(HTMLTagToken {
+                is_end_token: false,
                 name: "div".into(),
                 self_closing_flag: false,
                 attributes: vec![("foo".into(), "b'ar'".into())]
-            })
+            }))
         );
     }
 
@@ -889,14 +902,15 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::StartTag {
+            Some(HTMLToken::Tag(HTMLTagToken {
+                is_end_token: false,
                 name: "div".into(),
                 self_closing_flag: false,
                 attributes: vec![
                     ("foo".into(), "bar".into()),
                     (r#"="baz""#.into(), "".into())
                 ]
-            })
+            }))
         );
     }
 
@@ -926,11 +940,12 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::StartTag {
+            Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
-                attributes: vec![("id".into(), "foo".into())]
-            })
+                attributes: vec![("id".into(), "foo".into())],
+                is_end_token: false
+            }))
         );
     }
 }

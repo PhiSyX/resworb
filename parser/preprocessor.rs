@@ -4,8 +4,9 @@
 
 use std::borrow::Cow;
 
-use infra::datastructs::lists::{
-    peekable::PeekableInterface, queue::ListQueue,
+use infra::{
+    primitive::codepoint::CodePoint,
+    structure::lists::{peekable::PeekableInterface, queue::ListQueue},
 };
 
 // ---- //
@@ -95,7 +96,7 @@ where
 
 impl<Chars> InputStreamPreprocessor<Chars, Chars::Item>
 where
-    Chars: Iterator<Item = char>,
+    Chars: Iterator<Item = CodePoint>,
 {
     /// Alias de [InputStreamPreprocessor::next_input]
     ///
@@ -142,7 +143,8 @@ mod tests {
 
     fn get_input_stream(
         input: &'static str,
-    ) -> InputStreamPreprocessor<impl Iterator<Item = char>, char> {
+    ) -> InputStreamPreprocessor<impl Iterator<Item = CodePoint>, CodePoint>
+    {
         InputStreamPreprocessor::new(input.chars())
     }
 
