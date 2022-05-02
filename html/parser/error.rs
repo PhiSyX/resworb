@@ -439,7 +439,7 @@ define_errors! {
 
 #[cfg(test)]
 mod tests {
-    use infra::primitives::codepoint::CodePoint;
+    use infra::primitive::codepoint::CodePoint;
     use parser::preprocessor::InputStream;
 
     use crate::parser::{token::HTMLToken, tokenizer::HTMLTokenizer};

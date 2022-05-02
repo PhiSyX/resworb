@@ -5,8 +5,8 @@
 use std::{borrow::Cow, collections::VecDeque};
 
 use infra::{
-    datastructs::lists::peekable::PeekableInterface,
-    primitives::codepoint::{CodePoint, CodePointInterface},
+    primitive::codepoint::{CodePoint, CodePointInterface},
+    structure::lists::peekable::PeekableInterface,
 };
 use parser::preprocessor::InputStream;
 
