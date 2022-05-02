@@ -12,6 +12,42 @@ pub type HTMLTagAttributeName = String;
 pub type HTMLTagAttributeValue = String;
 pub type HTMLTagAttribute = (HTMLTagAttributeName, HTMLTagAttributeValue);
 
+// --------- //
+// Structure //
+// --------- //
+
+/// Les jetons `DOCTYPE` ont :
+///   - un nom ;
+///   - un identifiant public ;
+///   - un identifiant système ;
+///   - un drapeau "force-quirks".
+#[derive(Debug)]
+#[derive(Clone)]
+#[derive(PartialEq)]
+pub struct HTMLDoctypeToken {
+    pub name: Option<String>,
+    pub public_identifier: Option<String>,
+    pub system_identifier: Option<String>,
+    pub force_quirks_flag: bool,
+}
+
+/// Les jetons `start-tag` (ou `tag`) ont :
+/// Les jetons `end-tag`   (ou `tag`) ont :
+///   - un nom, un nom de balise ;
+///   - un drapeau permettant de savoir s'il s'agit d'une balise
+///     auto-fermante ;
+///   - une liste d'attributs: chacun d'entre eux ayant un nom et une
+///     valeur.
+#[derive(Debug)]
+#[derive(Clone)]
+#[derive(PartialEq)]
+pub struct HTMLTagToken {
+    pub name: String,
+    pub self_closing_flag: bool,
+    pub attributes: Vec<HTMLTagAttribute>,
+    pub is_end_token: bool,
+}
+
 // ----------- //
 // Énumération //
 // ----------- //
@@ -28,41 +64,9 @@ pub type HTMLTagAttribute = (HTMLTagAttributeName, HTMLTagAttributeValue);
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum HTMLToken {
-    /// Les jetons `DOCTYPE` ont :
-    ///   - un nom ;
-    ///   - un identifiant public ;
-    ///   - un identifiant système ;
-    ///   - un drapeau "force-quirks".
-    DOCTYPE {
-        name: Option<String>,
-        public_identifier: Option<String>,
-        system_identifier: Option<String>,
-        force_quirks_flag: bool,
-    },
+    DOCTYPE(HTMLDoctypeToken),
 
-    /// Les jetons `start tag` (ou `tag`) ont :
-    ///   - un nom, un nom de balise ;
-    ///   - un drapeau permettant de savoir s'il s'agit d'une balise
-    ///     auto-fermante ;
-    ///   - une liste d'attributs: chacun d'entre eux ayant un nom et une
-    ///     valeur.
-    StartTag {
-        name: String,
-        self_closing_flag: bool,
-        attributes: Vec<HTMLTagAttribute>,
-    },
-
-    /// Les jetons `end tag` (ou `tag`) ont :
-    ///   - un nom, un nom de balise ;
-    ///   - un drapeau permettant de savoir s'il s'agit d'une balise
-    ///     auto-fermante ;
-    ///   - une liste d'attributs: chacun d'entre eux ayant un nom et une
-    ///     valeur.
-    EndTag {
-        name: String,
-        self_closing_flag: bool,
-        attributes: Vec<HTMLTagAttribute>,
-    },
+    Tag(HTMLTagToken),
 
     /// Le jeton `comment` contient une chaîne de caractères.
     /// Pour cet exemple : `<!-- Hello World -->`. La chaîne de caractères
@@ -86,17 +90,13 @@ impl HTMLToken {
     pub fn append_character(&mut self, ch: CodePoint) {
         assert!(matches!(
             self,
-            Self::DOCTYPE { .. }
-                | Self::StartTag { .. }
-                | Self::EndTag { .. }
-                | Self::Comment(_)
+            Self::DOCTYPE(_) | Self::Tag(_) | Self::Comment(_)
         ));
 
-        if let Self::DOCTYPE {
+        if let Self::DOCTYPE(HTMLDoctypeToken {
             name: Some(name), ..
-        }
-        | Self::StartTag { name, .. }
-        | Self::EndTag { name, .. }
+        })
+        | Self::Tag(HTMLTagToken { name, .. })
         | Self::Comment(name) = self
         {
             name.push(ch);
@@ -109,13 +109,23 @@ impl HTMLToken {
 // ------------- //
 
 impl HTMLToken {
+    pub fn into_doctype(&mut self) -> &mut HTMLDoctypeToken {
+        assert!(matches!(self, Self::DOCTYPE(_)));
+        if let Self::DOCTYPE(doctype) = self {
+            return doctype;
+        }
+        unreachable!()
+    }
+}
+
+impl HTMLDoctypeToken {
     /// Lorsqu'un jeton [DOCTYPE](HTMLToken::DOCTYPE) est créé, son nom,
     /// son identificateur public et son identificateur système doivent
     /// être marqués comme [manquants](None) (ce qui est un état distinct
     /// de la chaîne de caractères vide), et le drapeau `force-quirks`
     /// doit être désactivé (son autre état est activé).
-    pub fn new_doctype() -> Self {
-        Self::DOCTYPE {
+    pub const fn new() -> Self {
+        Self {
             name: None,
             public_identifier: None,
             system_identifier: None,
@@ -123,54 +133,57 @@ impl HTMLToken {
         }
     }
 
-    /// Définie une chaîne de caractères au nom du jeton `DOCTYPE`.
-    /// À priori son nom est équivalent à `None`, à posteriori son nom
-    /// doit être équivalent à `Some(String)`.
-    pub fn define_doctype_name(mut self, ch: CodePoint) -> Self {
-        assert!(matches!(self, Self::DOCTYPE { name: None, .. }));
+    // Self
 
-        if let Self::DOCTYPE { ref mut name, .. } = self {
-            let s = String::from(ch);
-            *name = Some(s);
-        }
-
-        self
-    }
-
-    // Définie le drapeau force-quirks du jeton `DOCTYPE` à true.
-    // À priori le drapeau est désactivé ; à posteriori le drapeau est
-    // activé.
+    /// Définie le drapeau force-quirks du jeton `DOCTYPE` à true.
+    /// À priori le drapeau est désactivé ; à posteriori le drapeau est
+    /// activé.
     pub fn define_force_quirks_flag(mut self) -> Self {
         assert!(matches!(
             self,
-            Self::DOCTYPE {
+            Self {
                 force_quirks_flag: false,
                 ..
             }
         ));
 
-        if let Self::DOCTYPE {
+        let Self {
             ref mut force_quirks_flag,
             ..
-        } = self
-        {
-            *force_quirks_flag = true;
-        }
+        } = self;
+        *force_quirks_flag = true;
 
         self
     }
 
+    /// Définie une chaîne de caractères au nom du jeton `DOCTYPE`.
+    /// À priori son nom est équivalent à `None`, à posteriori son nom
+    /// doit être équivalent à `Some(String)`.
+    pub fn define_doctype_name(mut self, ch: CodePoint) -> Self {
+        assert!(matches!(self, Self { name: None, .. }));
+
+        let Self { ref mut name, .. } = self;
+        *name = Some(ch.into());
+
+        self
+    }
+
+    // &mut Self
+
     /// Ajoute un caractère au jeton `DOCTYPE` à son identifiant public.
-    pub fn append_character_to_public_identifier(&mut self, ch: CodePoint) {
+    pub fn append_character_to_public_identifier(
+        &mut self,
+        ch: CodePoint,
+    ) {
         assert!(matches!(
             self,
-            Self::DOCTYPE {
+            Self {
                 public_identifier: Some(_),
                 ..
             }
         ));
 
-        if let Self::DOCTYPE {
+        if let Self {
             public_identifier: Some(public_identifier),
             ..
         } = self
@@ -180,16 +193,11 @@ impl HTMLToken {
     }
 
     /// Ajoute un caractère à l'identifiant système d'un DOCTYPE.
-    pub fn append_character_to_system_identifier(&mut self, ch: CodePoint) {
-        assert!(matches!(
-            self,
-            Self::DOCTYPE {
-                system_identifier: Some(_),
-                ..
-            }
-        ));
-
-        if let Self::DOCTYPE {
+    pub fn append_character_to_system_identifier(
+        &mut self,
+        ch: CodePoint,
+    ) {
+        if let Self {
             system_identifier: Some(system_identifier),
             ..
         } = self
@@ -199,48 +207,24 @@ impl HTMLToken {
     }
 
     pub fn set_force_quirks_flag(&mut self, to: bool) {
-        assert!(matches!(self, Self::DOCTYPE { .. }));
-
-        if let Self::DOCTYPE {
+        let Self {
             force_quirks_flag, ..
-        } = self
-        {
-            *force_quirks_flag = to;
-        }
+        } = self;
+        *force_quirks_flag = to;
     }
 
     pub fn set_public_identifier(&mut self, pi: String) {
-        assert!(matches!(
-            self,
-            Self::DOCTYPE {
-                public_identifier: None,
-                ..
-            }
-        ));
-
-        if let Self::DOCTYPE {
+        let Self {
             public_identifier, ..
-        } = self
-        {
-            *public_identifier = Some(pi);
-        }
+        } = self;
+        *public_identifier = Some(pi);
     }
 
     pub fn set_system_identifier(&mut self, si: String) {
-        assert!(matches!(
-            self,
-            Self::DOCTYPE {
-                system_identifier: None,
-                ..
-            }
-        ));
-
-        if let Self::DOCTYPE {
+        let Self {
             system_identifier, ..
-        } = self
-        {
-            *system_identifier = Some(si);
-        }
+        } = self;
+        *system_identifier = Some(si);
     }
 }
 
@@ -249,15 +233,46 @@ impl HTMLToken {
 // --------- //
 
 impl HTMLToken {
+    pub fn into_start_tag(&mut self) -> &mut HTMLTagToken {
+        assert!(matches!(
+            self,
+            Self::Tag(HTMLTagToken {
+                is_end_token: false,
+                ..
+            })
+        ));
+        if let Self::Tag(tag) = self {
+            return tag;
+        }
+        unreachable!()
+    }
+
+    pub fn into_end_tag(&mut self) -> &mut HTMLTagToken {
+        assert!(matches!(
+            self,
+            Self::Tag(HTMLTagToken {
+                is_end_token: true,
+                ..
+            })
+        ));
+        if let Self::Tag(tag) = self {
+            return tag;
+        }
+        unreachable!()
+    }
+}
+
+impl HTMLTagToken {
     /// Lorsqu'un jeton [start-tag](HTMLToken::StartTag) est créé,
     /// son drapeau de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
     /// doit être vide.
-    pub fn new_start_tag(name: String) -> Self {
-        Self::StartTag {
-            name,
+    pub fn start() -> Self {
+        Self {
+            name: String::new(),
             self_closing_flag: false,
-            attributes: Vec::default(),
+            attributes: vec![],
+            is_end_token: false,
         }
     }
 
@@ -265,30 +280,25 @@ impl HTMLToken {
     /// son indicateur de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
     /// doit être vide.
-    pub fn new_end_tag(name: String) -> Self {
-        Self::EndTag {
-            name,
+    pub fn end() -> Self {
+        Self {
+            name: String::new(),
             self_closing_flag: false,
-            attributes: Vec::default(),
+            attributes: vec![],
+            is_end_token: true,
         }
     }
+
+    // &mut Self
 
     /// Ajoute un caractère à un jeton `tag`, au nom d'un attribut
     /// (attr-name), le dernier attribut trouvé.
     ///
     /// attr-name="attr-value"
     pub fn append_character_to_attribute_name(&mut self, ch: CodePoint) {
-        assert!(matches!(
-            self,
-            Self::StartTag { .. } | Self::EndTag { .. }
-        ));
-
-        if let Self::StartTag { attributes, .. }
-        | Self::EndTag { attributes, .. } = self
-        {
-            let attr = attributes.iter_mut().last().unwrap();
-            attr.0.push(ch);
-        }
+        let Self { attributes, .. } = self;
+        let attr = attributes.iter_mut().last().unwrap();
+        attr.0.push(ch);
     }
 
     /// Ajoute un caractère à un jeton `tag`, au nom d'un attribut
@@ -296,47 +306,21 @@ impl HTMLToken {
     ///
     /// attr-name="attr-value"
     pub fn append_character_to_attribute_value(&mut self, ch: CodePoint) {
-        assert!(matches!(
-            self,
-            Self::StartTag { .. } | Self::EndTag { .. }
-        ));
-
-        if let Self::StartTag { attributes, .. }
-        | Self::EndTag { attributes, .. } = self
-        {
-            let attr = attributes.iter_mut().last().unwrap();
-            attr.1.push(ch);
-        }
+        let Self { attributes, .. } = self;
+        let attr = attributes.iter_mut().last().unwrap();
+        attr.1.push(ch);
     }
 
     pub fn define_tag_attributes(&mut self, attribute: HTMLTagAttribute) {
-        assert!(matches!(
-            self,
-            Self::StartTag { .. } | Self::EndTag { .. }
-        ));
-
-        if let Self::StartTag { attributes, .. }
-        | Self::EndTag { attributes, .. } = self
-        {
-            attributes.push(attribute);
-        }
+        let Self { attributes, .. } = self;
+        attributes.push(attribute);
     }
 
     pub fn set_self_closing_tag(&mut self, to: bool) {
-        assert!(matches!(
-            self,
-            Self::StartTag { .. } | Self::EndTag { .. }
-        ));
-
-        if let Self::StartTag {
+        let Self {
             self_closing_flag, ..
-        }
-        | Self::EndTag {
-            self_closing_flag, ..
-        } = self
-        {
-            *self_closing_flag = to;
-        }
+        } = self;
+        *self_closing_flag = to;
     }
 }
 
