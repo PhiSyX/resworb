@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use dom::document::QuirksMode;
 use infra::primitive::codepoint::CodePoint;
 
 // ---- //
@@ -119,6 +120,83 @@ impl HTMLToken {
 }
 
 impl HTMLDoctypeToken {
+    const PUBLIC_ID_DEFINED_RULE_1: [&'static str; 3] = [
+        "-//W3O//DTD W3 HTML Strict 3.0//EN//",
+        "-/W3C/DTD HTML 4.0 Transitional/EN",
+        "HTML",
+    ];
+    const PUBLIC_ID_STARTS_WITH_RULE_1: [&'static str; 55] = [
+        "+//Silmaril//dtd html Pro v0r11 19970101//",
+        "-//AS//DTD HTML 3.0 asWedit + extensions//",
+        "-//AdvaSoft Ltd//DTD HTML 3.0 asWedit + extensions//",
+        "-//IETF//DTD HTML 2.0 Level 1//",
+        "-//IETF//DTD HTML 2.0 Level 2//",
+        "-//IETF//DTD HTML 2.0 Strict Level 1//",
+        "-//IETF//DTD HTML 2.0 Strict Level 2//",
+        "-//IETF//DTD HTML 2.0 Strict//",
+        "-//IETF//DTD HTML 2.0//",
+        "-//IETF//DTD HTML 2.1E//",
+        "-//IETF//DTD HTML 3.0//",
+        "-//IETF//DTD HTML 3.2 Final//",
+        "-//IETF//DTD HTML 3.2//",
+        "-//IETF//DTD HTML 3//",
+        "-//IETF//DTD HTML Level 0//",
+        "-//IETF//DTD HTML Level 1//",
+        "-//IETF//DTD HTML Level 2//",
+        "-//IETF//DTD HTML Level 3//",
+        "-//IETF//DTD HTML Strict Level 0//",
+        "-//IETF//DTD HTML Strict Level 1//",
+        "-//IETF//DTD HTML Strict Level 2//",
+        "-//IETF//DTD HTML Strict Level 3//",
+        "-//IETF//DTD HTML Strict//",
+        "-//IETF//DTD HTML//",
+        "-//Metrius//DTD Metrius Presentational//",
+        "-//Microsoft//DTD Internet Explorer 2.0 HTML Strict//",
+        "-//Microsoft//DTD Internet Explorer 2.0 HTML//",
+        "-//Microsoft//DTD Internet Explorer 2.0 Tables//",
+        "-//Microsoft//DTD Internet Explorer 3.0 HTML Strict//",
+        "-//Microsoft//DTD Internet Explorer 3.0 HTML//",
+        "-//Microsoft//DTD Internet Explorer 3.0 Tables//",
+        "-//Netscape Comm. Corp.//DTD HTML//",
+        "-//Netscape Comm. Corp.//DTD Strict HTML//",
+        "-//O'Reilly and Associates//DTD HTML 2.0//",
+        "-//O'Reilly and Associates//DTD HTML Extended 1.0//",
+        "-//O'Reilly and Associates//DTD HTML Extended Relaxed 1.0//",
+        "-//SQ//DTD HTML 2.0 HoTMetaL + extensions//",
+        "-//SoftQuad Software//DTD HoTMetaL PRO 6.0::19990601::extensions to HTML 4.0//",
+        "-//SoftQuad//DTD HoTMetaL PRO 4.0::19971010::extensions to HTML 4.0//",
+        "-//Spyglass//DTD HTML 2.0 Extended//",
+        "-//Sun Microsystems Corp.//DTD HotJava HTML//",
+        "-//Sun Microsystems Corp.//DTD HotJava Strict HTML//",
+        "-//W3C//DTD HTML 3 1995-03-24//",
+        "-//W3C//DTD HTML 3.2 Draft//",
+        "-//W3C//DTD HTML 3.2 Final//",
+        "-//W3C//DTD HTML 3.2//",
+        "-//W3C//DTD HTML 3.2S Draft//",
+        "-//W3C//DTD HTML 4.0 Frameset//",
+        "-//W3C//DTD HTML 4.0 Transitional//",
+        "-//W3C//DTD HTML Experimental 19960712//",
+        "-//W3C//DTD HTML Experimental 970421//",
+        "-//W3C//DTD W3 HTML//",
+        "-//W3O//DTD W3 HTML 3.0//",
+        "-//WebTechs//DTD Mozilla HTML 2.0//",
+        "-//WebTechs//DTD Mozilla HTML//",
+    ];
+    const PUBLIC_ID_STARTS_WITH_RULE_2: [&'static str; 2] = [
+        "-//W3C//DTD XHTML 1.0 Frameset//",
+        "-//W3C//DTD XHTML 1.0 Transitional//",
+    ];
+    const PUBLIC_ID_STARTS_WITH_RULE_2_1: [&'static str; 2] = [
+        "-//W3C//DTD HTML 4.01 Frameset//",
+        "-//W3C//DTD HTML 4.01 Transitional//",
+    ];
+    const SYSTEM_ID_DEFINED_RULE_1: [&'static str; 1] =
+        ["http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd"];
+    const SYSTEM_ID_STARTS_WITH_RULE_1: [&'static str; 2] = [
+        "-//W3C//DTD HTML 4.01 Frameset//",
+        "-//W3C//DTD HTML 4.01 Transitional//",
+    ];
+
     /// Lorsqu'un jeton [DOCTYPE](HTMLToken::DOCTYPE) est créé, son nom,
     /// son identificateur public et son identificateur système doivent
     /// être marqués comme [manquants](None) (ce qui est un état distinct
@@ -133,7 +211,121 @@ impl HTMLDoctypeToken {
         }
     }
 
-    // Self
+    // &Self
+
+    pub fn is_html_name(&self) -> bool {
+        self.name == Some("html".to_owned())
+    }
+
+    pub fn is_public_identifier_missing(&self) -> bool {
+        self.public_identifier.is_none()
+    }
+
+    pub fn is_system_identifier_missing(&self) -> bool {
+        self.system_identifier.is_none()
+    }
+
+    pub fn is_about_legacy_compat(&self) -> bool {
+        self.system_identifier == Some("about:legacy-compat".to_owned())
+    }
+
+    pub fn quirks_mode(&self) -> QuirksMode {
+        fn is_eq(maybe_id: &Option<String>, xid: &str) -> bool {
+            match maybe_id {
+                | Some(p) if p.eq_ignore_ascii_case(xid) => true,
+                | _ => false,
+            }
+        }
+
+        fn is_start_with(maybe_id: &Option<String>, xid: &str) -> bool {
+            match maybe_id {
+                | Some(p)
+                    if p.to_lowercase()
+                        .starts_with(&xid.to_lowercase()) =>
+                {
+                    true
+                }
+                | _ => false,
+            }
+        }
+
+        // Le drapeau force-quirks est activé
+        if self.force_quirks_flag {
+            return QuirksMode::Yes;
+        }
+
+        // Le nom du doctype n'est pas "html"
+        if !self.is_html_name() {
+            return QuirksMode::Yes;
+        }
+
+        // L'identifieur publique est défini à l'une des entrées du tableau
+        // [HTMLDoctypeToken::PUBLIC_ID_DEFINED_RULE_1]
+        let is_pid = Self::PUBLIC_ID_DEFINED_RULE_1
+            .into_iter()
+            .any(|x| is_eq(&self.public_identifier, x));
+
+        if is_pid {
+            return QuirksMode::Yes;
+        }
+
+        // L'identifieur publique est défini à l'une des entrées du tableau
+        // [HTMLDoctypeToken::SYSTEM_ID_DEFINED_RULE_1]
+        let is_sid = Self::SYSTEM_ID_DEFINED_RULE_1
+            .into_iter()
+            .any(|x| is_eq(&self.system_identifier, x));
+
+        if is_sid {
+            return QuirksMode::Yes;
+        }
+
+        // L'identifiant public commence par l'une des entrées du tableau
+        // [HTMLDoctypeToken::PUBLIC_ID_STARTS_WITH_RULE_1]
+        let is_starts_with_pid = Self::PUBLIC_ID_STARTS_WITH_RULE_1
+            .into_iter()
+            .any(|x| is_start_with(&self.public_identifier, x));
+
+        if is_starts_with_pid {
+            return QuirksMode::Yes;
+        }
+
+        // L'identifiant système commence par l'une des entrées du tableau
+        // [HTMLDoctypeToken::SYSTEM_ID_STARTS_WITH_RULE_1]
+        let is_starts_with_sid = Self::SYSTEM_ID_STARTS_WITH_RULE_1
+            .into_iter()
+            .any(|x| is_start_with(&self.system_identifier, x));
+
+        if is_starts_with_sid {
+            return QuirksMode::Yes;
+        }
+
+        // L'identifiant public commence par l'une des entrées du tableau
+        // [HTMLDoctypeToken::PUBLIC_ID_STARTS_WITH_RULE_2]
+        let is_starts_with_pid = Self::PUBLIC_ID_STARTS_WITH_RULE_2
+            .into_iter()
+            .any(|x| is_start_with(&self.public_identifier, x));
+
+        if is_starts_with_pid {
+            return QuirksMode::Yes;
+        }
+
+        // L'identifiant système n'est pas manquant et l'identifier public
+        // commence par l'une des entrées du tableau
+        // [HTMLDoctypeToken::PUBLIC_ID_STARTS_WITH_RULE_2_1]
+        if !self.is_system_identifier_missing() {
+            let is_starts_with_pid = Self::PUBLIC_ID_STARTS_WITH_RULE_2_1
+                .into_iter()
+                .any(|x| is_start_with(&self.public_identifier, x));
+
+            if is_starts_with_pid {
+                return QuirksMode::Yes;
+            }
+        }
+
+        QuirksMode::No
+    }
+
+    // &mut Self
 
     /// Définie le drapeau force-quirks du jeton `DOCTYPE` à true.
     /// À priori le drapeau est désactivé ; à posteriori le drapeau est
@@ -289,8 +481,6 @@ impl HTMLTagToken {
         }
     }
 
-    // &mut Self
-
     /// Ajoute un caractère à un jeton `tag`, au nom d'un attribut
     /// (attr-name), le dernier attribut trouvé.
     ///
@@ -343,5 +533,17 @@ impl HTMLToken {
     /// Crée un nouveau jeton (character)(HTMLToken::Character).
     pub fn new_character(ch: CodePoint) -> Self {
         Self::Character(ch)
+    }
+
+    pub fn is_character(&self) -> bool {
+        matches!(self, Self::Character(_))
+    }
+
+    pub fn is_ascii_whitespace(&self) -> bool {
+        if let Self::Character(ch) = self {
+            ch.is_ascii_whitespace()
+        } else {
+            false
+        }
     }
 }

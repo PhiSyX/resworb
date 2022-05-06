@@ -1,0 +1,10 @@
+[package]
+name = "resworb-dom"
+version = "0.1.0"
+license-file = "../LICENSE"
+edition = "2021"
+
+[lib]
+path = "./lib.rs"
+
+[dependencies]

@@ -9,3 +9,4 @@ path = "./lib.rs"
 
 [dependencies]
 infra = { path = "../infra", package = "resworb-infra" }
+syntax = { version = "^0.15", package = "rowan" }
