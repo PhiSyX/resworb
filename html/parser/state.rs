@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use dom::element::Element;
+use dom::node::Element;
 
 // ----------- //
 // Énumération //
@@ -15,6 +15,7 @@ use dom::element::Element;
 /// affecte la manière dont les tokens sont traités et si les sections
 /// CDATA sont supportées.
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum InsertionMode {
     Initial,
     BeforeHTML,
@@ -44,7 +45,7 @@ pub enum InsertionMode {
 /// 13.2.4.2 The stack of open elements
 #[derive(Default)]
 pub struct StackOfOpenElements {
-    elements: Vec<Element>,
+    pub(crate) elements: Vec<Element>,
 }
 
 /// 13.2.4.3 The list of active formatting elements
@@ -55,7 +56,7 @@ pub struct ListOfActiveFormattingElements {
 
 #[derive(Default)]
 struct Entry {
-    element: dom::element::Element,
+    element: Element,
 }
 
 // -------------- //
@@ -63,6 +64,10 @@ struct Entry {
 // -------------- //
 
 impl StackOfOpenElements {
+    pub fn current_node(&self) -> Option<&Element> {
+        self.elements.last()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.elements.is_empty()
     }

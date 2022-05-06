@@ -9,9 +9,8 @@ mod token;
 mod tokenizer;
 
 use dom::{
-    comment::Comment,
-    doctype::DocumentType,
-    document::{Document, QuirksMode},
+    document::{HTMLDocument, QuirksMode},
+    node::{Comment, DocumentType, Element},
 };
 use infra::primitive::codepoint::CodePoint;
 
@@ -32,10 +31,12 @@ where
     C: Iterator<Item = CodePoint>,
 {
     tokenizer: HTMLTokenizer<C>,
-    document: Document,
+    document: HTMLDocument,
     insertion_mode: InsertionMode,
     stack_of_open_elements: StackOfOpenElements,
+    parsing_fragment: bool,
     stop_parsing: bool,
+    context_element: Option<Element>,
 }
 
 // -------------- //
@@ -46,7 +47,7 @@ impl<C> HTMLParser<C>
 where
     C: Iterator<Item = CodePoint>,
 {
-    pub fn new(document: Document, input: C) -> Self {
+    pub fn new(document: HTMLDocument, input: C) -> Self {
         let tokenizer = HTMLTokenizer::new(input);
 
         Self {
@@ -54,7 +55,9 @@ where
             document,
             insertion_mode: InsertionMode::default(),
             stack_of_open_elements: StackOfOpenElements::default(),
+            parsing_fragment: false,
             stop_parsing: false,
+            context_element: None,
         }
     }
 }
@@ -66,12 +69,58 @@ where
     pub fn run(&mut self) {
         loop {
             match self.tokenizer.next_token() {
-                | None | Some(HTMLToken::EOF) => break,
-                | Some(token) if self.stack_of_open_elements.is_empty() => {
+                | None => break,
+
+                // Lorsque chaque jeton est émis par le tokenizer, l'agent
+                // utilisateur doit suivre les étapes appropriées de la
+                // liste suivante, connue sous le nom de dispatcher de
+                // construction d'arbre :
+                //    - Si la pile d'éléments ouverts est vide
+                //    - Si le nœud courant ajusté est un élément dans
+                //      l'espace de nom HTML
+                // TODO //   - Si le nœud courant ajusté est un point
+                //      d'intégration de texte MathML et que le jeton est
+                //      une balise de début dont le nom de balise n'est ni
+                //      "mglyph" ni "malignmark"
+                // TODO //   - Si le nœud courant ajusté est un point
+                //      d'intégration de texte MathML et que le jeton est
+                //      un jeton de caractère
+                // TODO //   - Si le nœud courant ajusté est un élément
+                //      MathML annotation-xml et que le jeton est une
+                //      balise de départ dont le nom de balise est "svg"
+                //    - Si le nœud courant ajusté est un point
+                //      d'intégration HTML et que le jeton est une balise
+                //      de départ
+                //    - Si le nœud courant ajusté est un point
+                //      d'intégration HTML et que le jeton est un jeton de
+                //      caractère
+                //    - Si le jeton est un jeton de fin de fichier
+                //
+                // Traiter le jeton selon les règles données dans la
+                // section correspondant au mode d'insertion actuel dans le
+                // contenu HTML.
+                | Some(token)
+                    if self.stack_of_open_elements.is_empty()
+                        || self
+                            .adjusted_current_node()
+                            .is_in_html_namespace()
+                        || (self
+                            .adjusted_current_node()
+                            .is_an_html_integration_point()
+                            && (token.is_start_tag()
+                                || token.is_character()))
+                        || token.is_eof() =>
+                {
                     self.process_using_the_rule_for(token);
                 }
+
+                // Otherwise
+                //
+                // Traiter le jeton selon les règles indiquées dans la
+                // section relative à l'analyse syntaxique des jetons dans
+                // le contenu étranger.
                 | Some(token) => {
-                    println!("Test {:?}", token);
+                    self.process_using_the_rules_for_foreign_content(token)
                 }
             }
 
@@ -108,6 +157,29 @@ where
             | InsertionMode::AfterFrameset => todo!(),
             | InsertionMode::AfterAfterBody => todo!(),
             | InsertionMode::AfterAfterFrameset => todo!(),
+        }
+    }
+
+    fn process_using_the_rules_for_foreign_content(
+        &mut self,
+        token: HTMLToken,
+    ) {
+        todo!()
+    }
+
+    fn current_node(&self) -> &Element {
+        self.stack_of_open_elements
+            .current_node()
+            .expect("Le noeud actuel")
+    }
+
+    fn adjusted_current_node(&self) -> &Element {
+        if self.parsing_fragment
+            && self.stack_of_open_elements.elements.len() == 1
+        {
+            self.context_element.as_ref().expect("Context Element")
+        } else {
+            self.current_node()
         }
     }
 
@@ -225,22 +297,26 @@ where
             // des conditions ci-dessus.
             //
             // Ensuite, passer le mode d'insertion à "before html".
-            | HTMLToken::DOCTYPE(doctype_data) => {
-                let is_parse_error = doctype_data.is_html_name()
+            | HTMLToken::DOCTYPE(ref doctype_data) => {
+                let is_parse_error = !doctype_data.is_html_name()
                     || !doctype_data.is_public_identifier_missing()
                     || !doctype_data.is_system_identifier_missing()
                     || !doctype_data.is_about_legacy_compat();
 
                 if is_parse_error {
+                    self.parse_error(token);
                     return;
                 }
 
-                let mut doctype = DocumentType::new(&self.document);
-                doctype.set_name(doctype_data.name.as_ref());
-                doctype.set_public_identifier(
+                let mut doctype = DocumentType::new(
+                    &self.document,
+                    doctype_data.name.as_ref(),
+                );
+
+                doctype.set_public_id(
                     doctype_data.public_identifier.as_ref(),
                 );
-                doctype.set_system_identifier(
+                doctype.set_system_id(
                     doctype_data.system_identifier.as_ref(),
                 );
 

@@ -8,3 +8,4 @@ edition = "2021"
 path = "./lib.rs"
 
 [dependencies]
+infra = { path = "../infra", package = "resworb-infra" }

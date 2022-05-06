@@ -64,6 +64,7 @@ pub struct HTMLTagToken {
 #[derive(Debug)]
 #[derive(Clone)]
 #[derive(PartialEq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum HTMLToken {
     DOCTYPE(HTMLDoctypeToken),
 
@@ -102,6 +103,10 @@ impl HTMLToken {
         {
             name.push(ch);
         }
+    }
+
+    pub fn is_eof(&self) -> bool {
+        matches!(self, Self::EOF)
     }
 }
 
@@ -451,6 +456,22 @@ impl HTMLToken {
             return tag;
         }
         unreachable!()
+    }
+
+    pub fn is_start_tag(&self) -> bool {
+        if let Self::Tag(HTMLTagToken { is_end_token, .. }) = self {
+            !(*is_end_token)
+        } else {
+            false
+        }
+    }
+
+    pub fn is_end_tag(&self) -> bool {
+        if let Self::Tag(HTMLTagToken { is_end_token, .. }) = self {
+            *is_end_token
+        } else {
+            false
+        }
     }
 }
 

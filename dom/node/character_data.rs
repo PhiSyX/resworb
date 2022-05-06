@@ -2,19 +2,25 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::{
-    document::Document,
-    node::{Node, NodeType},
-};
+use super::{Node, NodeType};
+use crate::document::HTMLDocument;
+
+// --------- //
+// Structure //
+// --------- //
 
 pub struct CharacterData {
     data: String,
     node: Node,
 }
 
+// -------------- //
+// Implémentation //
+// -------------- //
+
 impl CharacterData {
     pub fn new(
-        document: &Document,
+        document: &HTMLDocument,
         node_type: NodeType,
         data: String,
     ) -> Self {

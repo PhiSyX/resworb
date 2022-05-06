@@ -8,8 +8,10 @@ use crate::node::Node;
 // Structure //
 // --------- //
 
+/// Chaque document XML et HTML dans une UA HTML est représenté par un
+/// objet Document. [DOM](https://dom.spec.whatwg.org/)
 #[derive(Clone)]
-pub struct Document {
+pub struct HTMLDocument {
     quirks_mode: QuirksMode,
 }
 
@@ -28,7 +30,8 @@ pub enum QuirksMode {
 // Implémentation //
 // -------------- //
 
-impl Document {
+impl HTMLDocument {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             quirks_mode: QuirksMode::Yes,
@@ -36,8 +39,11 @@ impl Document {
     }
 }
 
-impl Document {
-    pub fn append_child(&mut self, node: &Node) {}
+impl HTMLDocument {
+    // todo: fixme
+    pub fn append_child(&mut self, node: &Node) {
+        todo!()
+    }
 
     pub fn set_quirks_mode(&mut self, mode: QuirksMode) -> &mut Self {
         self.quirks_mode = mode;
