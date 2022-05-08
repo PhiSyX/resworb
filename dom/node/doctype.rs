@@ -2,17 +2,17 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use super::{Node, NodeType};
-use crate::document::HTMLDocument;
+use infra::structure::tree::TreeNode;
+
+use super::{Node, NodeData, NodeType};
 
 // --------- //
 // Structure //
 // --------- //
 
+#[derive(Debug)]
 /// Les doctypes ont un nom associé, un ID public et un ID système.
 pub struct DocumentType {
-    node: Node,
-
     name: String,
     public_id: String,
     system_id: String,
@@ -27,9 +27,8 @@ impl DocumentType {
     /// qu'ils ne soient explicitement donnés lors de la création d'un
     /// doctype, son ID public et son ID système sont une chaîne de
     /// caractères vide.
-    pub fn new(document: &HTMLDocument, name: Option<&String>) -> Self {
+    pub fn new(name: Option<&String>) -> Self {
         Self {
-            node: Node::new(document, NodeType::DOCUMENT_TYPE_NODE),
             name: if let Some(x) = name {
                 x.to_owned()
             } else {
@@ -42,10 +41,6 @@ impl DocumentType {
 }
 
 impl DocumentType {
-    pub fn node(&self) -> &Node {
-        &self.node
-    }
-
     pub fn set_name(&mut self, maybe_name: Option<&String>) -> &mut Self {
         self.name = if let Some(x) = maybe_name {
             x.to_owned()
@@ -77,5 +72,18 @@ impl DocumentType {
             String::new()
         };
         self
+    }
+}
+
+// -------------- //
+// Implémentation // -> Interface
+// -------------- //
+
+impl From<DocumentType> for TreeNode<Node> {
+    fn from(doctype: DocumentType) -> Self {
+        Self::new(Node::new(
+            NodeData::Doctype(doctype),
+            NodeType::DOCUMENT_TYPE_NODE,
+        ))
     }
 }

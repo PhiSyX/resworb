@@ -2,16 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use super::CharacterData;
-use crate::{
-    document::HTMLDocument,
-    node::{Node, NodeType},
-};
+use infra::structure::tree::TreeNode;
+
+use super::{CharacterData, Node, NodeData, NodeType};
 
 // --------- //
 // Structure //
 // --------- //
 
+#[derive(Debug)]
 pub struct Comment {
     character_data: CharacterData,
 }
@@ -21,17 +20,25 @@ pub struct Comment {
 // -------------- //
 
 impl Comment {
-    /// Les étapes du constructeur du nouveau Commentaire(data) consistent
+    /// Les étapes du constructeur du nouveau commentaire consistent
     /// à définir les données de ce dernier comme étant des [CharacterData]
     /// et le nœud du document de ce dernier comme étant le [Document]
     /// associé à l'objet global actuel.
-    pub fn new(document: &HTMLDocument, data: String) -> Self {
-        let character_data =
-            CharacterData::new(document, NodeType::COMMENT_NODE, data);
+    pub fn new(data: String) -> Self {
+        let character_data = CharacterData::new(data);
         Self { character_data }
     }
+}
 
-    pub fn node(&self) -> &Node {
-        self.character_data.node()
+// -------------- //
+// Implémentation // -> Interface
+// -------------- //
+
+impl From<Comment> for TreeNode<Node> {
+    fn from(comment: Comment) -> Self {
+        Self::new(Node::new(
+            NodeData::Comment(comment),
+            NodeType::COMMENT_NODE,
+        ))
     }
 }

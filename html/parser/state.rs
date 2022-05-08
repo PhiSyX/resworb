@@ -2,7 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use dom::node::Element;
+use dom::node::{Element, Node};
+use infra::structure::tree::TreeNode;
 
 // ----------- //
 // Énumération //
@@ -43,18 +44,15 @@ pub enum InsertionMode {
 }
 
 /// 13.2.4.2 The stack of open elements
-#[derive(Default)]
 pub struct StackOfOpenElements {
-    pub(crate) elements: Vec<Element>,
+    elements: Vec<TreeNode<Node>>,
 }
 
 /// 13.2.4.3 The list of active formatting elements
-#[derive(Default)]
 pub struct ListOfActiveFormattingElements {
     entries: Vec<Entry>,
 }
 
-#[derive(Default)]
 struct Entry {
     element: Element,
 }
@@ -63,19 +61,49 @@ struct Entry {
 // Implémentation //
 // -------------- //
 
+impl InsertionMode {
+    pub fn switch_to(&mut self, mode: Self) {
+        *self = mode;
+    }
+}
+
 impl StackOfOpenElements {
-    pub fn current_node(&self) -> Option<&Element> {
+    pub fn len(&self) -> usize {
+        self.elements.len()
+    }
+
+    pub fn current_node(&self) -> Option<&TreeNode<Node>> {
         self.elements.last()
     }
 
     pub fn is_empty(&self) -> bool {
         self.elements.is_empty()
     }
+
+    pub fn put(&mut self, element: TreeNode<Node>) {
+        self.elements.push(element);
+    }
 }
 
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
+
+impl Default for StackOfOpenElements {
+    fn default() -> Self {
+        Self {
+            elements: Default::default(),
+        }
+    }
+}
+
+impl Default for ListOfActiveFormattingElements {
+    fn default() -> Self {
+        Self {
+            entries: Default::default(),
+        }
+    }
+}
 
 impl Default for InsertionMode {
     /// Initialement, le mode d'insertion est "initial".

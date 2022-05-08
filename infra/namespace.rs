@@ -20,7 +20,7 @@ pub const NAMESPACES: [(&str, &str); 6] = [
 /// Les différents espaces de noms.
 #[derive(Debug)]
 #[derive(PartialEq)]
-pub enum Namespaces {
+pub enum Namespace {
     HTML,
     MathML,
     SVG,
@@ -33,7 +33,7 @@ pub enum Namespaces {
 // Implémentation // -> Interface
 // -------------- //
 
-impl fmt::Display for Namespaces {
+impl fmt::Display for Namespace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -50,7 +50,7 @@ impl fmt::Display for Namespaces {
     }
 }
 
-impl str::FromStr for Namespaces {
+impl str::FromStr for Namespace {
     type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {

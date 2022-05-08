@@ -2,21 +2,30 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use crate::element::HTMLElementInterface;
+
 // --------- //
 // Structure //
 // --------- //
 
 #[derive(Debug)]
-pub struct CharacterData {
-    data: String,
-}
+#[derive(Default)]
+pub struct HTMLHeadElement {}
 
 // -------------- //
 // Implémentation //
 // -------------- //
 
-impl CharacterData {
-    pub fn new(data: String) -> Self {
-        Self { data }
+impl HTMLHeadElement {
+    pub const NAME: &'static str = "head";
+}
+
+// -------------- //
+// Implémentation // -> Interface
+// -------------- //
+
+impl HTMLElementInterface for HTMLHeadElement {
+    fn tag_name(&self) -> &'static str {
+        Self::NAME
     }
 }

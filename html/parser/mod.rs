@@ -8,11 +8,17 @@ mod state;
 mod token;
 mod tokenizer;
 
+use std::{borrow::BorrowMut, ops::Deref};
+
 use dom::{
-    document::{HTMLDocument, QuirksMode},
-    node::{Comment, DocumentType, Element},
+    document::{Document, DocumentNode, QuirksMode},
+    element::HTMLHtmlElement,
+    node::{DocumentType, Node},
 };
-use infra::primitive::codepoint::CodePoint;
+use infra::{
+    self, namespace::Namespace, primitive::codepoint::CodePoint,
+    structure::tree::TreeNode,
+};
 
 use self::{
     state::{
@@ -31,12 +37,12 @@ where
     C: Iterator<Item = CodePoint>,
 {
     tokenizer: HTMLTokenizer<C>,
-    document: HTMLDocument,
+    document: DocumentNode,
     insertion_mode: InsertionMode,
     stack_of_open_elements: StackOfOpenElements,
     parsing_fragment: bool,
     stop_parsing: bool,
-    context_element: Option<Element>,
+    context_element: Option<TreeNode<Node>>,
 }
 
 // -------------- //
@@ -47,7 +53,7 @@ impl<C> HTMLParser<C>
 where
     C: Iterator<Item = CodePoint>,
 {
-    pub fn new(document: HTMLDocument, input: C) -> Self {
+    pub fn new(document: DocumentNode, input: C) -> Self {
         let tokenizer = HTMLTokenizer::new(input);
 
         Self {
@@ -135,7 +141,9 @@ where
             | InsertionMode::Initial => {
                 self.handle_initial_insertion_mode(token)
             }
-            | InsertionMode::BeforeHTML => todo!(),
+            | InsertionMode::BeforeHTML => {
+                self.handle_before_html_insertion_mode(token)
+            }
             | InsertionMode::BeforeHead => todo!(),
             | InsertionMode::InHead => todo!(),
             | InsertionMode::InHeadNoscript => todo!(),
@@ -167,15 +175,8 @@ where
         todo!()
     }
 
-    fn current_node(&self) -> &Element {
-        self.stack_of_open_elements
-            .current_node()
-            .expect("Le noeud actuel")
-    }
-
-    fn adjusted_current_node(&self) -> &Element {
-        if self.parsing_fragment
-            && self.stack_of_open_elements.elements.len() == 1
+    fn adjusted_current_node(&self) -> &TreeNode<Node> {
+        if self.parsing_fragment && self.stack_of_open_elements.len() == 1
         {
             self.context_element.as_ref().expect("Context Element")
         } else {
@@ -183,12 +184,37 @@ where
         }
     }
 
-    fn switch_insertion_mode_to(
+    fn create_element_for(
         &mut self,
-        mode: InsertionMode,
-    ) -> &mut Self {
-        self.insertion_mode = mode;
-        self
+        token: &HTMLTagToken,
+        namespace: Namespace,
+    ) -> Option<TreeNode<Node>> {
+        let HTMLTagToken {
+            name: local_name,
+            attributes,
+            ..
+        } = token;
+
+        let maybe_element = Document::create_element(local_name, None);
+
+        if let Ok(element) = maybe_element.as_ref() {
+            element.set_document(self.document.deref());
+
+            attributes.iter().for_each(|attribute| {
+                element
+                    .element_ref()
+                    .borrow_mut()
+                    .set_attribute(&attribute.0, &attribute.1);
+            });
+        }
+
+        maybe_element.ok()
+    }
+
+    fn current_node(&self) -> &TreeNode<Node> {
+        self.stack_of_open_elements
+            .current_node()
+            .expect("Le noeud actuel")
     }
 
     fn parse_error(&self, token: HTMLToken) {
@@ -235,10 +261,9 @@ where
             // A comment token
             //
             // Insérer un commentaire comme dernier enfant de l'objet
-            // Document.
+            // [Document].
             | HTMLToken::Comment(comment) => {
-                let comment = Comment::new(&self.document, comment);
-                self.document.append_child(comment.node());
+                self.document.insert_comment(comment);
             }
 
             // A DOCTYPE token
@@ -308,10 +333,8 @@ where
                     return;
                 }
 
-                let mut doctype = DocumentType::new(
-                    &self.document,
-                    doctype_data.name.as_ref(),
-                );
+                let mut doctype =
+                    DocumentType::new(doctype_data.name.as_ref());
 
                 doctype.set_public_id(
                     doctype_data.public_identifier.as_ref(),
@@ -320,9 +343,11 @@ where
                     doctype_data.system_identifier.as_ref(),
                 );
 
-                self.document.append_child(doctype.node());
-                self.document.set_quirks_mode(doctype_data.quirks_mode());
-                self.switch_insertion_mode_to(InsertionMode::BeforeHTML);
+                self.document
+                    .get_mut()
+                    .set_doctype(doctype)
+                    .set_quirks_mode(doctype_data.quirks_mode());
+                self.insertion_mode.switch_to(InsertionMode::BeforeHTML);
             }
 
             // Anything else
@@ -335,8 +360,96 @@ where
             // retraitez le jeton.
             | _ => {
                 self.parse_error(token);
-                self.document.set_quirks_mode(QuirksMode::Yes);
-                self.switch_insertion_mode_to(InsertionMode::BeforeHTML);
+                self.document.get_mut().set_quirks_mode(QuirksMode::Yes);
+                self.insertion_mode.switch_to(InsertionMode::BeforeHTML);
+            }
+        }
+    }
+
+    fn handle_before_html_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // A DOCTYPE token
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::DOCTYPE(_) => {
+                self.parse_error(token);
+                /* ignore */
+            }
+
+            // A comment token
+            //
+            // Insérer un commentaire comme dernier enfant de l'objet
+            // [Document].
+            | HTMLToken::Comment(comment) => {
+                self.document.insert_comment(comment);
+            }
+
+            // U+0009 CHARACTER TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            //
+            // Ignorer le jeton.
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                /* ignore */
+            }
+
+            // Une balise de départ dont le nom de balise est: "html"
+            //
+            // Créer un élément pour le jeton dans l'espace de noms HTML,
+            // avec le [Document] comme parent prévu. L'ajouter à l'objet
+            // [Document]. Placer l'élément dans la pile des éléments
+            // ouverts.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end_token: false,
+                    ..
+                },
+            ) if name == "html" => {
+                let element = self
+                    .create_element_for(tag_token, Namespace::HTML)
+                    .expect("Un élément DOM HTMLHtmlElement");
+                self.document.append_child(element.clone());
+                self.stack_of_open_elements.put(element);
+                self.insertion_mode.switch_to(InsertionMode::BeforeHead);
+            }
+
+            // Une balise de fin dont le nom de balise est l'un des
+            // éléments suivants: "head", "body", "html", "br".
+            // Agir comme décrit dans l'entrée "Anything else" ci-dessous.
+            //
+            // Toute autre nom de balise de fin:
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end_token: true,
+                ..
+            }) if !["head", "body", "html", "br"]
+                .into_iter()
+                .any(|x| name.to_lowercase() == x) =>
+            {
+                self.parse_error(token);
+            }
+
+            // Anything else
+            //
+            // Créer un élément html dont le document node est l'objet
+            // [Document]. L'ajouter à l'objet [Document]. Placer cet
+            // élément dans la pile des éléments ouverts.
+            //
+            // Passer le mode d'insertion à "before head", puis retraiter
+            // le jeton.
+            | _ => {
+                let element =
+                    Document::create_element(HTMLHtmlElement::NAME, None)
+                        .expect("Un élément DOM HTMLHtmlElement");
+                element.set_document(self.document.deref());
+                self.document.append_child(element.clone());
+                self.stack_of_open_elements.put(element);
+                self.insertion_mode.switch_to(InsertionMode::BeforeHead);
+                self.process_using_the_rule_for(token);
             }
         }
     }
