@@ -75,10 +75,12 @@ impl<T> TreeNode<T> {
         self.last_child.replace(child.into());
     }
 
+    /// Récupère le premier enfant de l'arbre.
     pub fn get_first_child(&self) -> Ref<'_, Option<TreeNode<T>>> {
         self.first_child.borrow()
     }
 
+    /// Récupère le dernier enfant de l'arbre.
     pub fn get_last_child(&self) -> Ref<'_, Option<TreeNode<T>>> {
         self.last_child.borrow()
     }
@@ -105,12 +107,16 @@ impl<T> TreeNode<T> {
         }
     }
 
+    /// Un objet qui participe à un arbre a un parent, qui est soit null
+    /// soit un objet.
     pub fn parent_node(&self) -> Option<Self> {
         self.parent.borrow().as_deref().and_then(|node_weak| {
             node_weak.upgrade().map(|node_ref| node_ref.into())
         })
     }
 
+    /// Le frère précédent d'un objet est son premier frère précédent ou
+    /// null s'il n'a pas de frère précédent.
     pub fn previous_sibling(&self) -> Option<Self> {
         self.prev_sibling.borrow().as_deref().and_then(|node_weak| {
             node_weak.upgrade().map(|node_ref| node_ref.into())

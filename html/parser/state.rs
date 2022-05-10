@@ -69,22 +69,29 @@ impl InsertionMode {
 }
 
 impl StackOfOpenElements {
+    /// Taille du vecteur de noeuds d'éléments.
     pub fn len(&self) -> usize {
         self.elements.len()
     }
 
+    /// Le nœud actuel est le nœud le plus bas de cette pile d'éléments
+    /// ouverts.
     pub fn current_node(&self) -> Option<&TreeNode<Node>> {
         self.elements.last()
     }
 
+    /// Vérifie si le vecteur de noeuds d'éléments est vide.
     pub fn is_empty(&self) -> bool {
         self.elements.is_empty()
     }
 
+    /// Premier élément du vecteur de noeuds d'éléments.
     pub fn first(&self) -> Option<&TreeNode<Node>> {
         self.elements.first()
     }
 
+    /// Dernier élément (élément HTML) du vecteur de noeuds d'éléments,
+    /// qui a le même nom que celui passé en argument.
     pub fn get_last_element_with_tag_name(
         &self,
         tag_name: &str,
@@ -96,11 +103,12 @@ impl StackOfOpenElements {
 
     pub fn element_immediately_above(
         &self,
-        node_id: usize,
+        node_index: usize,
     ) -> Option<&TreeNode<Node>> {
-        self.elements.get(node_id - 1)
+        self.elements.get(node_index - 1)
     }
 
+    /// Ajoute un nouvel arbre de noeud dans le vecteur.
     pub fn put(&mut self, element: TreeNode<Node>) {
         self.elements.push(element);
     }

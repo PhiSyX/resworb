@@ -148,6 +148,7 @@ where
         }
     }
 
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#using-the-rules-for>
     fn process_using_the_rules_for(
         &mut self,
         m: InsertionMode,
@@ -193,6 +194,11 @@ where
         todo!()
     }
 
+    /// Le noeud courant ajusté est l'élément de contexte si l'analyseur a
+    /// été créé dans le cadre de l'algorithme d'analyse des fragments HTML
+    /// et que la pile d'éléments ouverts ne contient qu'un seul élément
+    /// (cas du fragment) ; sinon, le noeud courant ajusté est le noeud
+    /// courant.
     fn adjusted_current_node(&self) -> &TreeNode<Node> {
         if self.parsing_fragment && self.stack_of_open_elements.len() == 1
         {
@@ -202,6 +208,8 @@ where
         }
     }
 
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#create-an-element-for-the-token>
+    /// todo: FIXME
     fn create_element_for(
         &mut self,
         token: &HTMLTagToken,
@@ -229,6 +237,8 @@ where
         maybe_element.ok()
     }
 
+    /// Le nœud actuel est le nœud le plus bas de cette pile d'éléments
+    /// ouverts.
     fn current_node(&self) -> &TreeNode<Node> {
         self.stack_of_open_elements
             .current_node()
@@ -393,12 +403,13 @@ where
         adjusted_insertion_location
     }
 
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-comment>
     fn insert_comment(&self, comment: String) {
         let mut adjusted_insertion_location =
             self.find_appropriate_place_for_inserting_node(None);
 
         let comment: TreeNode<Node> =
-            Comment::new(comment).into_tree(&self.document);
+            Comment::new(comment.into()).into_tree(&self.document);
 
         if let Some(ref mut parent) = adjusted_insertion_location.parent {
             parent.insert_before(
@@ -408,6 +419,7 @@ where
         }
     }
 
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-an-html-element>
     fn insert_html_element(
         &mut self,
         token: &HTMLTagToken,
@@ -415,6 +427,7 @@ where
         self.insert_foreign_element(token, Namespace::HTML)
     }
 
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-foreign-element>
     fn insert_foreign_element(
         &mut self,
         token: &HTMLTagToken,
@@ -444,6 +457,7 @@ where
         maybe_element
     }
 
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#parse-errors>
     fn parse_error(&self, token: HTMLToken) {
         match token {
             | HTMLToken::Tag(HTMLTagToken {

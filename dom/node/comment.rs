@@ -24,8 +24,8 @@ impl Comment {
     /// à définir les données de ce dernier comme étant des [CharacterData]
     /// et le nœud du document de ce dernier comme étant le [Document]
     /// associé à l'objet global actuel.
-    pub fn new(data: String) -> Self {
-        let character_data = CharacterData::new(data);
+    pub fn new(data: Option<String>) -> Self {
+        let character_data = CharacterData::new(data.unwrap_or_default());
         Self { character_data }
     }
 

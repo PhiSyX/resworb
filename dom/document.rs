@@ -188,7 +188,7 @@ impl DocumentNode {
     }
 
     pub fn insert_comment(&self, text: String) {
-        self.append_child(Comment::new(text).into_tree(self));
+        self.append_child(Comment::new(text.into()).into_tree(self));
     }
 }
 
