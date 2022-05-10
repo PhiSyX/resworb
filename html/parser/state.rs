@@ -16,6 +16,7 @@ use infra::structure::tree::TreeNode;
 /// affecte la manière dont les tokens sont traités et si les sections
 /// CDATA sont supportées.
 #[derive(Debug)]
+#[derive(Copy, Clone)]
 #[derive(PartialEq)]
 pub enum InsertionMode {
     Initial,
@@ -80,6 +81,26 @@ impl StackOfOpenElements {
         self.elements.is_empty()
     }
 
+    pub fn first(&self) -> Option<&TreeNode<Node>> {
+        self.elements.first()
+    }
+
+    pub fn get_last_element_with_tag_name(
+        &self,
+        tag_name: &str,
+    ) -> Option<(usize, &TreeNode<Node>)> {
+        self.elements.iter().enumerate().rfind(|(_, element)| {
+            element.element_ref().local_name() == tag_name
+        })
+    }
+
+    pub fn element_immediately_above(
+        &self,
+        node_id: usize,
+    ) -> Option<&TreeNode<Node>> {
+        self.elements.get(node_id - 1)
+    }
+
     pub fn put(&mut self, element: TreeNode<Node>) {
         self.elements.push(element);
     }
@@ -89,6 +110,7 @@ impl StackOfOpenElements {
 // Implémentation // -> Interface
 // -------------- //
 
+#[allow(clippy::derivable_impls)]
 impl Default for StackOfOpenElements {
     fn default() -> Self {
         Self {
@@ -97,6 +119,7 @@ impl Default for StackOfOpenElements {
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for ListOfActiveFormattingElements {
     fn default() -> Self {
         Self {

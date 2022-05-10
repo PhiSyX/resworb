@@ -12,8 +12,7 @@ use std::{borrow::BorrowMut, ops::Deref};
 
 use dom::{
     document::{Document, DocumentNode, QuirksMode},
-    element::HTMLHtmlElement,
-    node::{DocumentType, Node},
+    node::{Comment, DocumentType, Node},
 };
 use infra::{
     self, namespace::Namespace, primitive::codepoint::CodePoint,
@@ -27,6 +26,7 @@ use self::{
     token::{HTMLTagToken, HTMLToken},
     tokenizer::HTMLTokenizer,
 };
+use crate::tag_names;
 
 // --------- //
 // Structure //
@@ -43,6 +43,14 @@ where
     parsing_fragment: bool,
     stop_parsing: bool,
     context_element: Option<TreeNode<Node>>,
+
+    // Head Element
+    head_element: Option<TreeNode<Node>>,
+}
+
+struct AdjustedInsertionLocation {
+    parent: Option<TreeNode<Node>>,
+    insert_before_sibling: Option<TreeNode<Node>>,
 }
 
 // -------------- //
@@ -64,6 +72,7 @@ where
             parsing_fragment: false,
             stop_parsing: false,
             context_element: None,
+            head_element: None,
         }
     }
 }
@@ -117,7 +126,10 @@ where
                                 || token.is_character()))
                         || token.is_eof() =>
                 {
-                    self.process_using_the_rule_for(token);
+                    self.process_using_the_rules_for(
+                        self.insertion_mode,
+                        token,
+                    );
                 }
 
                 // Otherwise
@@ -136,15 +148,21 @@ where
         }
     }
 
-    fn process_using_the_rule_for(&mut self, token: HTMLToken) {
-        match dbg!(&self.insertion_mode) {
+    fn process_using_the_rules_for(
+        &mut self,
+        m: InsertionMode,
+        token: HTMLToken,
+    ) {
+        match dbg!(&m) {
             | InsertionMode::Initial => {
                 self.handle_initial_insertion_mode(token)
             }
             | InsertionMode::BeforeHTML => {
                 self.handle_before_html_insertion_mode(token)
             }
-            | InsertionMode::BeforeHead => todo!(),
+            | InsertionMode::BeforeHead => {
+                self.handle_before_head_insertion_mode(token)
+            }
             | InsertionMode::InHead => todo!(),
             | InsertionMode::InHeadNoscript => todo!(),
             | InsertionMode::AfterHead => todo!(),
@@ -215,6 +233,215 @@ where
         self.stack_of_open_elements
             .current_node()
             .expect("Le noeud actuel")
+    }
+
+    /// L'endroit approprié pour insérer un nœud, en utilisant
+    /// éventuellement une cible prioritaire particulière, est la position
+    /// dans un élément renvoyé par l'exécution des étapes suivantes :
+    ///
+    /// 1. Si une cible prioritaire a été spécifiée, alors la cible est la
+    /// cible prioritaire.
+    ///
+    /// 2. Déterminer l'emplacement d'insertion ajusté en utilisant les
+    /// premières étapes de correspondance de la liste suivante :
+    ///
+    ///    2.1. Si le `foster parenting` est activée et que la cible est
+    /// un élément table, tbody, tfoot, thead ou tr.
+    ///
+    ///    Note: Le `foster parenting` se produit lorsque le contenu est
+    /// mal intégré dans les table's.
+    ///
+    ///      2.1.1. Le dernier template est le dernier élément template
+    /// dans la pile d'éléments ouverts, s'il y en a.
+    ///
+    ///      2.1.2. Le dernier table est le dernier élément table dans la
+    /// pile des éléments ouverts, s'il y en a.
+    ///
+    ///      2.1.3. S'il y en a un dernier template et qu'il n'y a pas de
+    /// dernière table, ou s'il y en a une, mais que le dernier template
+    /// est plus bas (plus récemment ajouté) que la dernière table dans la
+    /// pile des éléments ouverts, alors : laissez l'emplacement
+    /// d'insertion ajusté à l'intérieur du contenu du template du dernier
+    /// template, après son dernier enfant (s'il y en a), et abandonnez ces
+    /// étapes.
+    ///
+    ///      2.1.4. S'il n'y a pas de dernier table, alors l'emplacement
+    /// d'insertion ajusté se trouve à l'intérieur du premier élément de la
+    /// pile d'éléments ouverts (l'élément html), après son dernier enfant
+    /// (s'il y en a un), et on abandonne ces étapes. (cas d'un fragment)
+    ///
+    ///      2.1.5. Si la dernière table a un noeud parent, alors
+    /// l'emplacement d'insertion ajusté sera à l'intérieur du noeud parent
+    /// de la dernière table, immédiatement avant la dernière
+    ///        table, et annulera ces étapes.
+    ///
+    ///      2.1.6. Laisser "l'élément précédent" être l'élément
+    /// directement au-dessus de la dernière table dans la pile des
+    /// éléments ouverts.
+    ///
+    ///      2.1.7. Que l'emplacement d'insertion ajusté soit à
+    /// l'intérieur de l'élément précédent, après son dernier enfant (le
+    /// cas échéant).
+    ///
+    ///    Note: Ces étapes sont nécessaires en partie parce qu'il est
+    /// possible que des éléments, en particulier l'élément table dans ce
+    /// cas, aient été déplacés par un script dans le DOM, ou même
+    /// entièrement retirés du DOM, après que l'élément ait été inséré par
+    /// l'analyseur.
+    ///
+    ///    2.2. Sinon : l'emplacement d'insertion ajusté doit être à
+    /// l'intérieur de la cible, après son dernier enfant (s'il y en a).
+    ///
+    /// 3. Si l'emplacement d'insertion ajusté se trouve à l'intérieur d'un
+    /// élément template, il doit plutôt se trouver à l'intérieur du
+    /// contenu template de l'élément template, après son dernier enfant
+    /// (s'il y en a).
+    ///
+    /// 4. Retourner l'emplacement d'insertion ajusté.
+    fn find_appropriate_place_for_inserting_node(
+        &self,
+        override_target: Option<&TreeNode<Node>>,
+    ) -> AdjustedInsertionLocation {
+        let maybe_target =
+            override_target.or_else(|| Some(self.current_node()));
+
+        let mut adjusted_insertion_location = AdjustedInsertionLocation {
+            insert_before_sibling: None,
+            parent: None,
+        };
+
+        if self.foster_parenting
+            && [
+                tag_names::table,
+                tag_names::tbody,
+                tag_names::tfoot,
+                tag_names::thead,
+                tag_names::tr,
+            ]
+            .into_iter()
+            .any(|tag_name| {
+                if let Some(target) = maybe_target {
+                    target.element_ref().local_name() == tag_name
+                } else {
+                    false
+                }
+            })
+        {
+            let last_template = self
+                .stack_of_open_elements
+                .get_last_element_with_tag_name(tag_names::template);
+            let last_table = self
+                .stack_of_open_elements
+                .get_last_element_with_tag_name(tag_names::table);
+
+            if let Some((template_index, template)) = last_template {
+                fn return_adjusted_insertion_location(
+                    template: &TreeNode<Node>,
+                ) -> AdjustedInsertionLocation {
+                    let tc =
+                        template.element_ref().content().map(|t| t.into());
+                    AdjustedInsertionLocation {
+                        parent: tc,
+                        insert_before_sibling: None,
+                    }
+                }
+
+                if last_table.is_none() {
+                    return return_adjusted_insertion_location(template);
+                }
+
+                if let Some((table_index, _)) = last_table {
+                    if template_index > table_index {
+                        return return_adjusted_insertion_location(
+                            template,
+                        );
+                    }
+                }
+            }
+
+            if last_table.is_none() {
+                assert!(self.parsing_fragment);
+
+                return AdjustedInsertionLocation {
+                    parent: self.stack_of_open_elements.first().cloned(),
+                    insert_before_sibling: None,
+                };
+            }
+
+            if let Some((table_index, table)) = last_table {
+                let parent = table.parent_node();
+                if let Some(node) = parent {
+                    adjusted_insertion_location.parent = node.into();
+                    adjusted_insertion_location
+                        .insert_before_sibling
+                        .replace(table.to_owned());
+                } else {
+                    let previous_element = self
+                        .stack_of_open_elements
+                        .element_immediately_above(table_index);
+                    adjusted_insertion_location.parent =
+                        previous_element.cloned();
+                }
+            }
+        } else {
+            adjusted_insertion_location = AdjustedInsertionLocation {
+                parent: maybe_target.cloned(),
+                insert_before_sibling: None,
+            };
+        }
+
+        adjusted_insertion_location
+    }
+
+    fn insert_comment(&self, comment: String) {
+        let mut adjusted_insertion_location =
+            self.find_appropriate_place_for_inserting_node(None);
+
+        let comment: TreeNode<Node> =
+            Comment::new(comment).into_tree(&self.document);
+
+        if let Some(ref mut parent) = adjusted_insertion_location.parent {
+            parent.insert_before(
+                comment,
+                adjusted_insertion_location.insert_before_sibling.as_ref(),
+            );
+        }
+    }
+
+    fn insert_html_element(
+        &mut self,
+        token: &HTMLTagToken,
+    ) -> Option<TreeNode<Node>> {
+        self.insert_foreign_element(token, Namespace::HTML)
+    }
+
+    fn insert_foreign_element(
+        &mut self,
+        token: &HTMLTagToken,
+        namespace: Namespace,
+    ) -> Option<TreeNode<Node>> {
+        let adjusted_insertion_location =
+            self.find_appropriate_place_for_inserting_node(None);
+
+        let maybe_element = self.create_element_for(token, namespace);
+
+        if let Some(element) = maybe_element.as_ref() {
+            self.stack_of_open_elements.put(element.to_owned());
+            if let Some(parent) = adjusted_insertion_location.parent {
+                if let Some(sibling) = adjusted_insertion_location
+                    .insert_before_sibling
+                    .as_ref()
+                {
+                    parent
+                        .insert_before(element.to_owned(), Some(sibling));
+                    return maybe_element;
+                }
+
+                parent.append_child(element.to_owned());
+            }
+        }
+
+        maybe_element
     }
 
     fn parse_error(&self, token: HTMLToken) {
@@ -407,7 +634,7 @@ where
                     is_end_token: false,
                     ..
                 },
-            ) if name == "html" => {
+            ) if name == tag_names::html => {
                 let element = self
                     .create_element_for(tag_token, Namespace::HTML)
                     .expect("Un élément DOM HTMLHtmlElement");
@@ -426,9 +653,14 @@ where
                 ref name,
                 is_end_token: true,
                 ..
-            }) if !["head", "body", "html", "br"]
-                .into_iter()
-                .any(|x| name.to_lowercase() == x) =>
+            }) if ![
+                tag_names::head,
+                tag_names::body,
+                tag_names::html,
+                tag_names::br,
+            ]
+            .into_iter()
+            .any(|x| name.to_lowercase() == x) =>
             {
                 self.parse_error(token);
             }
@@ -443,13 +675,115 @@ where
             // le jeton.
             | _ => {
                 let element =
-                    Document::create_element(HTMLHtmlElement::NAME, None)
+                    Document::create_element(tag_names::html, None)
                         .expect("Un élément DOM HTMLHtmlElement");
                 element.set_document(self.document.deref());
                 self.document.append_child(element.clone());
                 self.stack_of_open_elements.put(element);
                 self.insertion_mode.switch_to(InsertionMode::BeforeHead);
-                self.process_using_the_rule_for(token);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+        }
+    }
+
+    fn handle_before_head_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // U+0009 CHARACTER TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            //
+            // Ignorer le jeton.
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                /* ignore */
+            }
+
+            // A comment token
+            | HTMLToken::Comment(comment) => {
+                self.insert_comment(comment);
+            }
+
+            // A DOCTYPE token
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::DOCTYPE(_) => self.parse_error(token),
+
+            // A start tag whose tag name is "html"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end_token: false,
+                ..
+            }) if name == tag_names::html => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // A start tag whose tag name is "head"
+            //
+            // Insérer un élément HTML pour le jeton.
+            // Placer le pointeur de l'élément head sur le nouvel élément
+            // head fraîchement créé.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end_token: false,
+                    ..
+                },
+            ) if name == tag_names::head => {
+                let head_element = self.insert_html_element(tag_token);
+                self.head_element = head_element;
+                self.insertion_mode.switch_to(InsertionMode::InHead);
+            }
+
+            // Une balise de fin dont le nom de balise est l'un des
+            // éléments suivants: "head", "body", "html", "br".
+            // Agir comme décrit dans l'entrée "Anything else" ci-dessous.
+            //
+            // Toute autre nom de balise de fin:
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end_token: true,
+                ..
+            }) if ![
+                tag_names::head,
+                tag_names::body,
+                tag_names::html,
+                tag_names::br,
+            ]
+            .into_iter()
+            .any(|x| name.to_lowercase() == x) =>
+            {
+                self.parse_error(token);
+            }
+
+            // Anything else
+            //
+            // Insérer un élément HTML pour un jeton de balise de début
+            // "head" sans attributs.
+            // Placer le pointeur de l'élément "head" sur l'élément "head"
+            // fraîchement créé.
+            // Passer le mode d'insertion à "in head".
+            // Retraiter le jeton en cours.
+            | _ => {
+                let head_element =
+                    HTMLTagToken::start().with_name(tag_names::head);
+                self.head_element =
+                    self.insert_html_element(&head_element);
+                self.insertion_mode.switch_to(InsertionMode::InHead);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
             }
         }
     }

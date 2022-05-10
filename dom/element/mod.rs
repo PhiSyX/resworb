@@ -4,12 +4,14 @@
 
 mod document;
 mod metadata;
+mod scripting;
 
 use core::fmt;
 use std::str::FromStr;
 
 pub use document::HTMLHtmlElement;
 pub use metadata::{HTMLHeadElement, HTMLTitleElement};
+pub use scripting::HTMLTemplateElement;
 
 // --------- //
 // Interface //
@@ -41,6 +43,12 @@ pub enum HTMLElement {
         /// 4.2.2 The title element
         metadata::HTMLTitleElement,
     ),
+
+    // 4.12 Scripting
+    ScriptingTemplate(
+        /// 4.12.3 The template element
+        scripting::HTMLTemplateElement,
+    ),
 }
 
 // -------------- //
@@ -62,6 +70,9 @@ impl FromStr for HTMLElement {
             | "title" => {
                 Self::MetadataTitle(metadata::HTMLTitleElement::default())
             }
+            | "template" => Self::ScriptingTemplate(
+                scripting::HTMLTemplateElement::default(),
+            ),
             | _ => return Err("Element inconnu"),
         })
     }
@@ -76,6 +87,7 @@ impl fmt::Display for HTMLElement {
                 | Self::DocumentHtml(el) => el.tag_name(),
                 | Self::MetadataHead(el) => el.tag_name(),
                 | Self::MetadataTitle(el) => el.tag_name(),
+                | Self::ScriptingTemplate(el) => el.tag_name(),
             }
         )
     }

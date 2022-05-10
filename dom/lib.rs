@@ -13,3 +13,6 @@ pub mod node;
 
 /// 4 The elements of HTML (HTML Specs)
 pub mod element;
+
+/// 4.7. Interface DocumentFragment (DOM Specs)
+pub mod fragment;

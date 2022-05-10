@@ -19,7 +19,7 @@ pub use doctype::DocumentType;
 pub use element::Element;
 use infra::structure::tree::{TreeNode, TreeNodeWeak};
 
-use crate::document::Document;
+use crate::{document::Document, fragment::DocumentFragment};
 
 // --------- //
 // Structure //
@@ -40,6 +40,7 @@ pub struct Node {
 #[derive(Debug)]
 pub enum NodeData {
     Document(Document),
+    DocumentFragment(DocumentFragment),
     Element(Element),
     Comment(Comment),
     Doctype(DocumentType),

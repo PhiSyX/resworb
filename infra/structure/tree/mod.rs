@@ -5,7 +5,8 @@
 mod node;
 mod weak;
 
-use std::{cell::Ref, ops, rc::Rc};
+use core::ops;
+use std::{cell::Ref, rc::Rc};
 
 pub use weak::TreeNodeWeak;
 
@@ -81,11 +82,51 @@ impl<T> TreeNode<T> {
     pub fn get_last_child(&self) -> Ref<'_, Option<TreeNode<T>>> {
         self.last_child.borrow()
     }
+
+    pub fn insert_before(&self, node: Self, maybe_child: Option<&Self>) {
+        if maybe_child.is_none() {
+            self.append_child(node);
+            return;
+        }
+
+        assert!(node.parent.borrow().is_none());
+
+        if let Some(child) = maybe_child {
+            child.parent.replace(Some(self.into()));
+            match child.previous_sibling() {
+                | Some(prev_sibling) => {
+                    prev_sibling.next_sibling.replace(Some(child.clone()));
+                    child.prev_sibling.replace(Some(prev_sibling.into()));
+                }
+                | None => {
+                    self.first_child.replace(Some(child.clone()));
+                }
+            }
+        }
+    }
+
+    pub fn parent_node(&self) -> Option<Self> {
+        self.parent.borrow().as_deref().and_then(|node_weak| {
+            node_weak.upgrade().map(|node_ref| node_ref.into())
+        })
+    }
+
+    pub fn previous_sibling(&self) -> Option<Self> {
+        self.prev_sibling.borrow().as_deref().and_then(|node_weak| {
+            node_weak.upgrade().map(|node_ref| node_ref.into())
+        })
+    }
 }
 
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
+
+impl<T> From<Rc<Node<T>>> for TreeNode<T> {
+    fn from(rc: Rc<Node<T>>) -> Self {
+        Self::new_node(rc)
+    }
+}
 
 impl<T> Clone for TreeNode<T> {
     fn clone(&self) -> Self {

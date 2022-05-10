@@ -7,3 +7,6 @@ pub mod named_characters;
 
 /// Analyse syntaxique des documents HTML
 pub mod parser;
+
+/// Liste des noms de balises HTML.
+pub mod tag_names;

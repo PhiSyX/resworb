@@ -6,7 +6,7 @@ use std::{cell::RefCell, collections::HashMap};
 
 use infra::namespace::Namespace;
 
-use crate::element::HTMLElement;
+use crate::{element::HTMLElement, fragment::DocumentFragment};
 
 // --------- //
 // Structure //
@@ -34,6 +34,23 @@ impl Element {
 }
 
 impl Element {
+    pub fn local_name(&self) -> String {
+        self.inner_data.to_string()
+    }
+
+    pub fn content(&self) -> Option<DocumentFragment> {
+        assert!(matches!(
+            self.inner_data,
+            HTMLElement::ScriptingTemplate(_)
+        ));
+
+        if let HTMLElement::ScriptingTemplate(el) = &self.inner_data {
+            return Some(el.content.borrow().clone());
+        }
+
+        None
+    }
+
     pub fn namespace(&self) -> String {
         self.inner_data.to_string()
     }

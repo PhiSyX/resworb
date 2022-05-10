@@ -28,6 +28,12 @@ impl Comment {
         let character_data = CharacterData::new(data);
         Self { character_data }
     }
+
+    pub fn into_tree(self, document: &TreeNode<Node>) -> TreeNode<Node> {
+        let tree = TreeNode::from(self);
+        tree.set_document(document);
+        tree
+    }
 }
 
 // -------------- //

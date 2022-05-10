@@ -5,6 +5,8 @@
 use dom::document::QuirksMode;
 use infra::primitive::codepoint::CodePoint;
 
+use crate::tag_names;
+
 // ---- //
 // Type //
 // ---- //
@@ -219,7 +221,7 @@ impl HTMLDoctypeToken {
     // &Self
 
     pub fn is_html_name(&self) -> bool {
-        self.name == Some("html".to_owned())
+        self.name == Some(tag_names::html.to_owned())
     }
 
     pub fn is_public_identifier_missing(&self) -> bool {
@@ -500,6 +502,11 @@ impl HTMLTagToken {
             attributes: vec![],
             is_end_token: true,
         }
+    }
+
+    pub fn with_name(mut self, name: impl ToString) -> Self {
+        self.name = name.to_string();
+        self
     }
 
     /// Ajoute un caractère à un jeton `tag`, au nom d'un attribut

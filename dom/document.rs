@@ -188,9 +188,7 @@ impl DocumentNode {
     }
 
     pub fn insert_comment(&self, text: String) {
-        let comment: TreeNode<Node> = Comment::new(text).into();
-        comment.set_document(self);
-        self.append_child(comment);
+        self.append_child(Comment::new(text).into_tree(self));
     }
 }
 
