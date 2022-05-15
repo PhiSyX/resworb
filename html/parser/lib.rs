@@ -1559,7 +1559,7 @@ mod tests {
     #[test]
     fn test_parse_document() {
         let document_node = DocumentNode::new();
-        let html_file = include_str!("crashtests/site.html.local");
+        let html_file = include_str!("crashtests/test.html");
         let mut parser = HTMLParser::new(document_node, html_file.chars());
         parser.run();
     }

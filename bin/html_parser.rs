@@ -24,7 +24,7 @@ fn main() {
             .expect("La lecture du fichier HTML.")
     } else {
         ByteStream::from(include_str!(
-            "../html/parser/crashtests/site.html.local"
+            "../html/parser/crashtests/test.html"
         ))
     };
 
