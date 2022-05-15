@@ -97,7 +97,7 @@ impl From<&str> for ByteStream {
 }
 
 impl TryFrom<Result<fs::File, io::Error>> for ByteStream {
-    type Error = std::io::Error;
+    type Error = io::Error;
 
     fn try_from(
         maybe_file: Result<fs::File, io::Error>,
