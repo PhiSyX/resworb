@@ -1,0 +1,17 @@
+[package]
+name = "resworb-html-parser"
+version = "0.1.9"
+license-file = "../../LICENSE"
+edition = "2021"
+
+[lib]
+path = "./lib.rs"
+
+[dependencies]
+log = "^0.4"
+macros = { path = "../../macros", package = "resworb-macros" }
+parser = { path = "../../parser", package = "resworb-parser" }
+infra = { path = "../../infra", package = "resworb-infra" }
+dom = { path = "../../dom", package = "resworb-dom" }
+html_elements = { path = "../elements", package = "resworb-html-elements" }
+named-character-references = { path = "../named-character-references", package = "resworb-html-named-character-references" }

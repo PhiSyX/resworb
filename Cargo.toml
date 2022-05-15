@@ -3,15 +3,26 @@ name = "resworb"
 version = "0.1.0"
 license-file = "./LICENSE"
 edition = "2021"
+default-run = "resworb"
 
 [workspace]
 members = [
-    "html"
+    "dom",
+    "html",
+    "html/elements",
+    "html/named-character-references",
+    "html/parser",
 ]
 
 [[bin]]
 name = "resworb"
 path = "./resworb.rs"
 
+[[bin]]
+name = "resworb-html-parser"
+path = "./bin/html_parser.rs"
+
 [dependencies]
+parser = { path = "parser", package = "resworb-parser" }
+dom = { path = "dom", package = "resworb-dom" }
 html = { path = "html", package = "resworb-html" }

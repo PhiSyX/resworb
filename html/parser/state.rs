@@ -2,7 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use std::collections::HashMap;
+
 use dom::node::{Element, Node};
+use html_elements::tag_names;
 use infra::structure::tree::TreeNode;
 
 // ----------- //
@@ -46,7 +49,7 @@ pub enum InsertionMode {
 
 /// 13.2.4.2 The stack of open elements
 pub struct StackOfOpenElements {
-    elements: Vec<TreeNode<Node>>,
+    pub(crate) elements: Vec<TreeNode<Node>>,
 }
 
 /// 13.2.4.3 The list of active formatting elements
@@ -54,8 +57,12 @@ pub struct ListOfActiveFormattingElements {
     entries: Vec<Entry>,
 }
 
-struct Entry {
-    element: Element,
+// ----------- //
+// Énumération //
+// ----------- //
+
+pub enum Entry {
+    Marker,
 }
 
 // -------------- //
@@ -90,14 +97,18 @@ impl StackOfOpenElements {
         self.elements.first()
     }
 
+    pub fn last(&self) -> Option<&TreeNode<Node>> {
+        self.elements.last()
+    }
+
     /// Dernier élément (élément HTML) du vecteur de noeuds d'éléments,
     /// qui a le même nom que celui passé en argument.
     pub fn get_last_element_with_tag_name(
         &self,
-        tag_name: &str,
+        tag_name: tag_names,
     ) -> Option<(usize, &TreeNode<Node>)> {
         self.elements.iter().enumerate().rfind(|(_, element)| {
-            element.element_ref().local_name() == tag_name
+            tag_name == element.element_ref().local_name()
         })
     }
 
@@ -108,9 +119,40 @@ impl StackOfOpenElements {
         self.elements.get(node_index - 1)
     }
 
+    /// Retire le dernier élément du vecteur de noeud.
+    pub fn pop(&mut self) -> Option<TreeNode<Node>> {
+        self.elements.pop()
+    }
+
+    pub fn pop_until_tag(&mut self, tag_name: tag_names) {
+        while let Some(node) = self.current_node() {
+            let element = node.element_ref();
+            if tag_name == element.local_name() {
+                self.elements.pop();
+                break;
+            }
+            self.elements.pop();
+        }
+    }
+
     /// Ajoute un nouvel arbre de noeud dans le vecteur.
     pub fn put(&mut self, element: TreeNode<Node>) {
         self.elements.push(element);
+    }
+}
+
+impl ListOfActiveFormattingElements {
+    pub fn clear_up_to_the_last_marker(&mut self) {
+        while let Some(entry) = self.entries.pop() {
+            match entry {
+                | Entry::Marker => break,
+                | _ => continue,
+            }
+        }
+    }
+
+    pub fn insert_marker_at_end(&mut self) {
+        self.entries.push(Entry::Marker);
     }
 }
 

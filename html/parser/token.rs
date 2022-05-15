@@ -2,7 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use dom::document::QuirksMode;
+use dom::node::QuirksMode;
+use html_elements::{
+    interface::IsOneOfAttributesInterface, tag_attributes,
+};
 use infra::primitive::codepoint::CodePoint;
 
 use crate::tag_names;
@@ -47,8 +50,9 @@ pub struct HTMLDoctypeToken {
 pub struct HTMLTagToken {
     pub name: String,
     pub self_closing_flag: bool,
+    pub self_closing_flag_acknowledge: bool,
     pub attributes: Vec<HTMLTagAttribute>,
-    pub is_end_token: bool,
+    pub is_end: bool,
 }
 
 // ----------- //
@@ -221,7 +225,7 @@ impl HTMLDoctypeToken {
     // &Self
 
     pub fn is_html_name(&self) -> bool {
-        self.name == Some(tag_names::html.to_owned())
+        self.name == Some(tag_names::html.to_string())
     }
 
     pub fn is_public_identifier_missing(&self) -> bool {
@@ -435,10 +439,7 @@ impl HTMLToken {
     pub fn into_start_tag(&mut self) -> &mut HTMLTagToken {
         assert!(matches!(
             self,
-            Self::Tag(HTMLTagToken {
-                is_end_token: false,
-                ..
-            })
+            Self::Tag(HTMLTagToken { is_end: false, .. })
         ));
         if let Self::Tag(tag) = self {
             return tag;
@@ -449,10 +450,7 @@ impl HTMLToken {
     pub fn into_end_tag(&mut self) -> &mut HTMLTagToken {
         assert!(matches!(
             self,
-            Self::Tag(HTMLTagToken {
-                is_end_token: true,
-                ..
-            })
+            Self::Tag(HTMLTagToken { is_end: true, .. })
         ));
         if let Self::Tag(tag) = self {
             return tag;
@@ -461,7 +459,11 @@ impl HTMLToken {
     }
 
     pub fn is_start_tag(&self) -> bool {
-        if let Self::Tag(HTMLTagToken { is_end_token, .. }) = self {
+        if let Self::Tag(HTMLTagToken {
+            is_end: is_end_token,
+            ..
+        }) = self
+        {
             !(*is_end_token)
         } else {
             false
@@ -469,7 +471,11 @@ impl HTMLToken {
     }
 
     pub fn is_end_tag(&self) -> bool {
-        if let Self::Tag(HTMLTagToken { is_end_token, .. }) = self {
+        if let Self::Tag(HTMLTagToken {
+            is_end: is_end_token,
+            ..
+        }) = self
+        {
             *is_end_token
         } else {
             false
@@ -478,7 +484,7 @@ impl HTMLToken {
 }
 
 impl HTMLTagToken {
-    /// Lorsqu'un jeton [start-tag](HTMLToken::StartTag) est créé,
+    /// Lorsqu'un jeton [start-tag](HTMLToken::Tag) est créé,
     /// son drapeau de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
     /// doit être vide.
@@ -486,12 +492,13 @@ impl HTMLTagToken {
         Self {
             name: String::new(),
             self_closing_flag: false,
+            self_closing_flag_acknowledge: false,
             attributes: vec![],
-            is_end_token: false,
+            is_end: false,
         }
     }
 
-    /// Lorsqu'un jeton de [balise de début](HTMLToken::EndTag) est créé,
+    /// Lorsqu'un jeton de [end-tag](HTMLToken::Tag) est créé,
     /// son indicateur de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
     /// doit être vide.
@@ -499,8 +506,9 @@ impl HTMLTagToken {
         Self {
             name: String::new(),
             self_closing_flag: false,
+            self_closing_flag_acknowledge: false,
             attributes: vec![],
-            is_end_token: true,
+            is_end: true,
         }
     }
 
@@ -534,11 +542,32 @@ impl HTMLTagToken {
         attributes.push(attribute);
     }
 
+    pub fn has_attributes(
+        &self,
+        attribute_names: impl IntoIterator<Item = tag_attributes> + Copy,
+    ) -> bool {
+        let Self { attributes, .. } = self;
+        attributes.iter().any(|(attribute_name, _)| {
+            attribute_name.is_one_of(attribute_names)
+        })
+    }
+
     pub fn set_self_closing_tag(&mut self, to: bool) {
         let Self {
             self_closing_flag, ..
         } = self;
         *self_closing_flag = to;
+    }
+
+    pub fn set_acknowledge_self_closing_flag(&mut self) {
+        let Self {
+            self_closing_flag,
+            self_closing_flag_acknowledge,
+            ..
+        } = self;
+        if *self_closing_flag {
+            *self_closing_flag_acknowledge = true;
+        }
     }
 }
 

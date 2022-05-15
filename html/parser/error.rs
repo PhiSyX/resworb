@@ -442,7 +442,7 @@ mod tests {
     use infra::primitive::codepoint::CodePoint;
     use parser::preprocessor::InputStream;
 
-    use crate::parser::{
+    use crate::{
         token::{HTMLDoctypeToken, HTMLTagToken, HTMLToken},
         tokenizer::HTMLTokenizer,
     };
@@ -636,8 +636,9 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![("id".into(), "".into())],
-                is_end_token: false
+                is_end: false
             }))
         );
     }
@@ -699,8 +700,9 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![],
-                is_end_token: false
+                is_end: false
             }))
         );
 
@@ -800,11 +802,12 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![
                     ("id".into(), "foo".into()),
                     ("class".into(), "bar".into())
                 ],
-                is_end_token: false
+                is_end: false
             }))
         );
     }
@@ -855,9 +858,10 @@ mod tests {
         assert_eq!(
             html_tok.next_token(),
             Some(HTMLToken::Tag(HTMLTagToken {
-                is_end_token: false,
+                is_end: false,
                 name: "div".into(),
                 self_closing_flag: false,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![("foo<div".into(), "".into())]
             }))
         );
@@ -868,9 +872,10 @@ mod tests {
         assert_eq!(
             html_tok.next_token(),
             Some(HTMLToken::Tag(HTMLTagToken {
-                is_end_token: false,
+                is_end: false,
                 name: "div".into(),
                 self_closing_flag: false,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![("id'bar'".into(), "".into())]
             }))
         );
@@ -885,9 +890,10 @@ mod tests {
         assert_eq!(
             html_tok.next_token(),
             Some(HTMLToken::Tag(HTMLTagToken {
-                is_end_token: false,
+                is_end: false,
                 name: "div".into(),
                 self_closing_flag: false,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![("foo".into(), "b'ar'".into())]
             }))
         );
@@ -903,9 +909,10 @@ mod tests {
         assert_eq!(
             html_tok.next_token(),
             Some(HTMLToken::Tag(HTMLTagToken {
-                is_end_token: false,
+                is_end: false,
                 name: "div".into(),
                 self_closing_flag: false,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![
                     ("foo".into(), "bar".into()),
                     (r#"="baz""#.into(), "".into())
@@ -943,8 +950,9 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![("id".into(), "foo".into())],
-                is_end_token: false
+                is_end: false
             }))
         );
     }

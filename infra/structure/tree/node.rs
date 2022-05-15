@@ -65,3 +65,9 @@ impl<T> ops::DerefMut for Node<T> {
         self.data.borrow_mut()
     }
 }
+
+impl<T: PartialEq> PartialEq for Node<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data
+    }
+}
