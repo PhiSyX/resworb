@@ -1557,6 +1557,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[should_panic]
     fn test_parse_document() {
         let document_node = DocumentNode::new();
         let html_file = include_str!("crashtests/test.html");
