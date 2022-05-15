@@ -4,7 +4,7 @@
 
 use std::cell::RefCell;
 
-use crate::{element::HTMLElementInterface, fragment::DocumentFragment};
+use crate::interface::HTMLElementInterface;
 
 // --------- //
 // Structure //
@@ -12,15 +12,16 @@ use crate::{element::HTMLElementInterface, fragment::DocumentFragment};
 
 #[derive(Debug)]
 #[derive(Default)]
-pub struct HTMLTemplateElement {
-    pub(crate) content: RefCell<DocumentFragment>,
+#[derive(PartialEq)]
+pub struct HTMLTemplateElement<DocumentFragmentNode> {
+    pub content: RefCell<DocumentFragmentNode>,
 }
 
 // -------------- //
 // Implémentation //
 // -------------- //
 
-impl HTMLTemplateElement {
+impl<DocumentFragment> HTMLTemplateElement<DocumentFragment> {
     pub const NAME: &'static str = "template";
 
     pub fn new(content: DocumentFragment) -> Self {
@@ -34,7 +35,9 @@ impl HTMLTemplateElement {
 // Implémentation // -> Interface
 // -------------- //
 
-impl HTMLElementInterface for HTMLTemplateElement {
+impl<DocumentFragment> HTMLElementInterface
+    for HTMLTemplateElement<DocumentFragment>
+{
     fn tag_name(&self) -> &'static str {
         Self::NAME
     }

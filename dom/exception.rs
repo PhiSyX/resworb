@@ -67,6 +67,7 @@ impl fmt::Display for DOMException {
             f,
             "{}",
             match self {
+                #[allow(deprecated)]
                 | DOMException::IndexSizeError => "",
                 | DOMException::HierarchyRequestError =>
                     "The operation would yield an incorrect node tree.",
@@ -90,7 +91,9 @@ impl fmt::Display for DOMException {
                     "The object can not be modified in this way.",
                 | DOMException::NamespaceError =>
                     "The operation is not allowed by Namespaces in XML.",
+                #[allow(deprecated)]
                 | DOMException::InvalidAccessError => "",
+                #[allow(deprecated)]
                 | DOMException::TypeMismatchError => "",
                 | DOMException::SecurityError =>
                     "The operation is insecure.",

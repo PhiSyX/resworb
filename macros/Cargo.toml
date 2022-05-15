@@ -1,5 +1,5 @@
 [package]
-name = "resworb-html"
+name = "resworb-macros"
 version = "0.1.0"
 license-file = "../LICENSE"
 edition = "2021"
@@ -8,4 +8,3 @@ edition = "2021"
 path = "./lib.rs"
 
 [dependencies]
-parser = { path = "./parser", package = "resworb-html-parser" }

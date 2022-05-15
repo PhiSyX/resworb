@@ -3,16 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 /// 2.8. Exceptions (Web IDL Specs)
-mod exception;
-
-/// 3.1 Documents (HTML Parsing Specs)
-pub mod document;
+pub mod exception;
 
 /// 4. Nodes (DOM Specs)
 pub mod node;
-
-/// 4 The elements of HTML (HTML Specs)
-pub mod element;
-
-/// 4.7. Interface DocumentFragment (DOM Specs)
-pub mod fragment;

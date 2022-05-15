@@ -2,16 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use infra::structure::tree::TreeNode;
-
-use super::{Node, NodeData, NodeType};
-
 // --------- //
 // Structure //
 // --------- //
 
-#[derive(Debug)]
 /// Les doctypes ont un nom associé, un ID public et un ID système.
+#[derive(Debug)]
+#[derive(PartialEq)]
 pub struct DocumentType {
     name: String,
     public_id: String,
@@ -72,18 +69,5 @@ impl DocumentType {
             String::new()
         };
         self
-    }
-}
-
-// -------------- //
-// Implémentation // -> Interface
-// -------------- //
-
-impl From<DocumentType> for TreeNode<Node> {
-    fn from(doctype: DocumentType) -> Self {
-        Self::new(Node::new(
-            NodeData::Doctype(doctype),
-            NodeType::DOCUMENT_TYPE_NODE,
-        ))
     }
 }

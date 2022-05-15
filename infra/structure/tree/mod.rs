@@ -19,6 +19,7 @@ use self::node::Node;
 /// Un arbre est une structure arborescente hiérarchique finie. L'ordre
 /// d'un arbre est un pré-ordre, une traversée en profondeur d'un arbre.
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub struct TreeNode<T> {
     node_ref: Rc<Node<T>>,
 }

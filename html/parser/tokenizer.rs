@@ -8,6 +8,10 @@ use infra::{
     primitive::codepoint::{CodePoint, CodePointInterface},
     structure::lists::peekable::PeekableInterface,
 };
+use macros::dd;
+use named_character_references::{
+    NamedCharacterReferences, NamedCharacterReferencesEntities,
+};
 use parser::preprocessor::InputStream;
 
 use super::{
@@ -15,12 +19,7 @@ use super::{
     error::HTMLParserError,
     token::{HTMLDoctypeToken, HTMLTagAttribute, HTMLTagToken, HTMLToken},
 };
-use crate::{
-    named_characters::{
-        NamedCharacterReferences, NamedCharacterReferencesEntities,
-    },
-    parser::token::HTMLTagAttributeName,
-};
+use crate::token::HTMLTagAttributeName;
 
 // ----- //
 // Macro //
@@ -65,11 +64,11 @@ impl core::fmt::Display for State {
 
 trait HTMLTokenizerProcessInterface {
     fn ignore(&self) -> HTMLTokenizerProcessResult {
-        Ok(HTMLTokenizerProcess::Continue)
+        Ok(HTMLTokenizerProcessControlFlow::Continue)
     }
 
     fn and_continue(&self) -> HTMLTokenizerProcessResult {
-        Ok(HTMLTokenizerProcess::Continue)
+        Ok(HTMLTokenizerProcessControlFlow::Continue)
     }
 
     fn and_continue_with_error(
@@ -77,11 +76,11 @@ trait HTMLTokenizerProcessInterface {
         err: &str,
     ) -> HTMLTokenizerProcessResult {
         let err = err.parse().unwrap();
-        Err((err, HTMLTokenizerProcess::Continue))
+        Err((err, HTMLTokenizerProcessControlFlow::Continue))
     }
 
     fn and_emit(&self) -> HTMLTokenizerProcessResult {
-        Ok(HTMLTokenizerProcess::Emit)
+        Ok(HTMLTokenizerProcessControlFlow::Emit)
     }
 
     fn and_emit_with_error(
@@ -89,19 +88,21 @@ trait HTMLTokenizerProcessInterface {
         err: &str,
     ) -> HTMLTokenizerProcessResult {
         let err = err.parse().unwrap();
-        Err((err, HTMLTokenizerProcess::Emit))
+        Err((err, HTMLTokenizerProcessControlFlow::Emit))
     }
 }
 
-enum HTMLTokenizerProcess {
+enum HTMLTokenizerProcessControlFlow {
     Continue,
     Emit,
 }
 
 pub(crate) type HTMLInputStream<Iter> = InputStream<Iter, CodePoint>;
 
-type HTMLTokenizerProcessResult =
-    Result<HTMLTokenizerProcess, (HTMLParserError, HTMLTokenizerProcess)>;
+type HTMLTokenizerProcessResult = Result<
+    HTMLTokenizerProcessControlFlow,
+    (HTMLParserError, HTMLTokenizerProcessControlFlow),
+>;
 
 // --------- //
 // Structure //
@@ -130,8 +131,8 @@ where
     temporary_buffer: String,
 
     /// [L'état de référence du caractère](State::CharacterReference)
-    /// utilise un [état de retour](HTMLState::returns) pour revenir à
-    /// un état à partir duquel il a été invoqué.
+    /// utilise un [état de retour](HTMLTokenizerState::returns) pour
+    /// revenir à un état à partir duquel il a été invoqué.
     character_reference_code: u32,
 
     last_start_tag_token: Option<HTMLToken>,
@@ -481,8 +482,11 @@ where
         self
     }
 
-    fn switch_state_to(&mut self, state: &str) -> &mut Self {
-        self.state.switch_to(state);
+    pub(crate) fn switch_state_to(
+        &mut self,
+        state: impl AsRef<str>,
+    ) -> &mut Self {
+        self.state.switch_to(state.as_ref());
         self
     }
 
@@ -528,12 +532,12 @@ where
         if let (
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: current_tag_name,
-                is_end_token: true,
+                is_end: true,
                 ..
             })),
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: last_tag_name,
-                is_end_token: true,
+                is_end: true,
                 ..
             })),
         ) = (self.token.as_ref(), self.last_start_tag_token.as_ref())
@@ -4472,7 +4476,7 @@ where
         }
 
         loop {
-            let state = match self.state.current {
+            let state = match dd!(&self.state.current) {
                 | State::Data => self.handle_data_state(),
                 | State::RCDATA => self.handle_rcdata_state(),
                 | State::RAWTEXT => self.handle_rawtext_state(),
@@ -4687,13 +4691,17 @@ where
             };
 
             match state {
-                | Ok(HTMLTokenizerProcess::Continue) => continue,
-                | Ok(HTMLTokenizerProcess::Emit) => break,
+                | Ok(HTMLTokenizerProcessControlFlow::Continue) => {
+                    continue
+                }
+                | Ok(HTMLTokenizerProcessControlFlow::Emit) => break,
                 | Err((err, state)) => {
                     log::error!("[HTMLParserError]: {err}");
                     match state {
-                        | HTMLTokenizerProcess::Continue => continue,
-                        | HTMLTokenizerProcess::Emit => break,
+                        | HTMLTokenizerProcessControlFlow::Continue => {
+                            continue
+                        }
+                        | HTMLTokenizerProcessControlFlow::Emit => break,
                     }
                 }
             }
@@ -4742,11 +4750,12 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "a".into(),
                 self_closing_flag: false,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![(
                     "href".into(),
                     "?a=b&c=d&a0b=c&copy=1&noti=n&not=in&notin=&notin;&not;&;& &".into()
                 )],
-                is_end_token: false
+                is_end: false
             }))
         );
     }
@@ -4773,8 +4782,9 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![("id".into(), "foo".into())],
-                is_end_token: false
+                is_end: false
             }))
         );
 
@@ -4786,8 +4796,9 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "input".into(),
                 self_closing_flag: true,
+                self_closing_flag_acknowledge: false,
                 attributes: vec![("value".into(), "Hello World".into())],
-                is_end_token: false
+                is_end: false
             }))
         );
     }

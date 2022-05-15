@@ -24,6 +24,7 @@ pub type NamedCharacterReferencesEntities =
 pub struct NamedCharacterReferences(NamedCharacterReferencesEntities);
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 #[derive(Deserialize)]
 pub struct NamedCharacterReferenceEntity {
     pub codepoints: Vec<u32>,
@@ -46,5 +47,32 @@ impl NamedCharacterReferences {
                 .expect("Les entités références des caractères nommés");
 
         named_character_references.0
+    }
+}
+
+// ---- //
+// Test //
+// ---- //
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_use_case() {
+        let entities = NamedCharacterReferences::entities();
+
+        let entity = entities.get("&AElig");
+
+        assert_eq!(
+            entity,
+            Some(&NamedCharacterReferenceEntity {
+                characters: String::from('\u{00C6}'),
+                codepoints: vec![198]
+            })
+        );
+
+        let entity = entities.get("&test");
+        assert_eq!(entity, None);
     }
 }
