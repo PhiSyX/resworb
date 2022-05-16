@@ -2,9 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::collections::HashMap;
-
-use dom::node::{Element, Node};
+use dom::node::Node;
 use html_elements::tag_names;
 use infra::structure::tree::TreeNode;
 
@@ -132,6 +130,21 @@ impl StackOfOpenElements {
                 break;
             }
             self.elements.pop();
+        }
+    }
+
+    pub fn remove_first_tag_matching<P>(&mut self, predicate: P)
+    where
+        P: Fn(&TreeNode<Node>) -> bool,
+    {
+        let maybe_head_element = self
+            .elements
+            .iter()
+            .rev()
+            .enumerate()
+            .find(|(_, node)| predicate(node));
+        if let Some((idx, _)) = maybe_head_element {
+            self.elements.remove(idx);
         }
     }
 
