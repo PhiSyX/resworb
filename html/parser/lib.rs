@@ -10,10 +10,7 @@ mod state;
 mod token;
 mod tokenizer;
 
-use std::{
-    borrow::{Borrow, BorrowMut},
-    ops::Deref,
-};
+use std::{borrow::BorrowMut, ops::Deref};
 
 use dom::node::{
     CommentNode, Document, DocumentNode, DocumentType, Node, QuirksMode,
@@ -21,7 +18,6 @@ use dom::node::{
 };
 use html_elements::{
     interface::IsOneOfTagsInterface, tag_attributes, tag_names,
-    HTMLScriptElement,
 };
 use infra::{
     self, namespace::Namespace, primitive::codepoint::CodePoint,
@@ -193,7 +189,9 @@ where
                 self.handle_in_head_insertion_mode(token)
             }
             | InsertionMode::InHeadNoscript => todo!(),
-            | InsertionMode::AfterHead => todo!(),
+            | InsertionMode::AfterHead => {
+                self.handle_after_head_insertion_mode(token)
+            }
             | InsertionMode::InBody => todo!(),
             | InsertionMode::Text => todo!(),
             | InsertionMode::InTable => todo!(),
@@ -1539,6 +1537,189 @@ where
             | _ => {
                 self.stack_of_open_elements.pop();
                 self.insertion_mode.switch_to(InsertionMode::AfterHead);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+        }
+    }
+
+    fn handle_after_head_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // U+0009 CHARACTER TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            //
+            // Insérer le caractère.
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                self.insert_character(ch);
+            }
+
+            // A comment token
+            //
+            // Insérer un commentaire.
+            | HTMLToken::Comment(comment) => {
+                self.insert_comment(comment);
+            }
+
+            // A DOCTYPE token
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::DOCTYPE(_) => {
+                self.parse_error(token);
+                /* Ignore */
+            }
+
+            // A start tag whose tag name is "html"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::html == name => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // A start tag whose tag name is "body"
+            //
+            // Insérer un élément HTML pour le jeton.
+            // Définir le drapeau frameset-ok à "not ok".
+            // Passer le mode d'insertion à "in body".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::body == name => {
+                self.insert_html_element(tag_token);
+                self.frameset_ok = false;
+                self.insertion_mode.switch_to(InsertionMode::InBody);
+            }
+
+            // A start tag whose tag name is "frameset"
+            //
+            // Insérer un élément HTML pour le jeton.
+            // Passer le mode d'insertion à "in frameset".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::frameset == name => {
+                self.insert_html_element(tag_token);
+                self.insertion_mode.switch_to(InsertionMode::InFrameset);
+            }
+
+            // A start tag whose tag name is one of:
+            // "base", "basefont", "bgsound", "link", "meta", "noframes",
+            // "script", "style", "template", "title"
+            //
+            // Erreur d'analyse.
+            // Pousser le nœud pointé par le pointeur de l'élément "head"
+            // sur la pile des éléments ouverts.
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in head".
+            // Retirer le noeud pointé par le pointeur de l'élément "head"
+            // de la pile des éléments ouverts. (Il se peut que ce ne soit
+            // pas le nœud actuel à ce stade).
+            //
+            // Note: le pointeur de l'élément de tête ne peut pas être nul
+            // à ce stade.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([
+                tag_names::base,
+                tag_names::basefont,
+                tag_names::bgsound,
+                tag_names::link,
+                tag_names::meta,
+                tag_names::noframes,
+                tag_names::script,
+                tag_names::style,
+                tag_names::template,
+                tag_names::title,
+            ]) =>
+            {
+                self.parse_error(token.clone());
+                if let Some(head) = self.head_element.as_ref() {
+                    self.stack_of_open_elements.put(head.clone());
+                }
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+
+                self.stack_of_open_elements.remove_first_tag_matching(
+                    |node| {
+                        if let Some(head) = self.head_element.as_ref() {
+                            return node == head;
+                        }
+                        false
+                    },
+                );
+
+                assert!(matches!(self.head_element, Some(_)));
+            }
+
+            // An end tag whose tag name is "template"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in head".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::template == name => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+
+            // An end tag whose tag name is one of: "body", "html", "br"
+            // Agir comme décrit dans l'entrée "Anything else" ci-dessous.
+            //
+            // A start tag whose tag name is "head"
+            // Any other end tag
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name, is_end, ..
+            }) if (!is_end && tag_names::head == name)
+                || (is_end
+                    && !name.is_one_of([
+                        tag_names::body,
+                        tag_names::html,
+                        tag_names::br,
+                    ])) =>
+            {
+                self.parse_error(token);
+                /* ignore */
+            }
+
+            // Anything else
+            //
+            // Insérer un élément HTML pour un jeton de balise de début
+            // "body" sans attributs.
+            // Passer le mode d'insertion sur "in body".
+            // Retraiter le jeton actuel.
+            | _ => {
+                let body_element =
+                    HTMLTagToken::start().with_name(tag_names::body);
+                self.insert_html_element(&body_element);
+                self.insertion_mode.switch_to(InsertionMode::InBody);
                 self.process_using_the_rules_for(
                     self.insertion_mode,
                     token,
