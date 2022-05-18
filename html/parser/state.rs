@@ -78,28 +78,10 @@ impl InsertionMode {
 }
 
 impl StackOfOpenElements {
-    /// Taille du vecteur de noeuds d'éléments.
-    pub fn len(&self) -> usize {
-        self.elements.len()
-    }
 
     /// Le nœud actuel est le nœud le plus bas de cette pile d'éléments
     /// ouverts.
     pub fn current_node(&self) -> Option<&TreeNode<Node>> {
-        self.elements.last()
-    }
-
-    /// Vérifie si le vecteur de noeuds d'éléments est vide.
-    pub fn is_empty(&self) -> bool {
-        self.elements.is_empty()
-    }
-
-    /// Premier élément du vecteur de noeuds d'éléments.
-    pub fn first(&self) -> Option<&TreeNode<Node>> {
-        self.elements.first()
-    }
-
-    pub fn last(&self) -> Option<&TreeNode<Node>> {
         self.elements.last()
     }
 
@@ -125,11 +107,6 @@ impl StackOfOpenElements {
         node_index: usize,
     ) -> Option<&TreeNode<Node>> {
         self.elements.get(node_index - 1)
-    }
-
-    /// Retire le dernier élément du vecteur de noeud.
-    pub fn pop(&mut self) -> Option<TreeNode<Node>> {
-        self.elements.pop()
     }
 
     pub fn pop_until_tag(&mut self, tag_name: tag_names) {
@@ -232,6 +209,21 @@ impl Default for InsertionMode {
         Self::Initial
     }
 }
+
+impl ops::Deref for StackOfOpenElements {
+    type Target = Vec<TreeNode<Node>>;
+
+    fn deref(&self) -> &Self::Target {
+        self.elements.as_ref()
+    }
+}
+
+impl ops::DerefMut for StackOfOpenElements {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.elements.as_mut()
+    }
+}
+
 impl ops::Deref for ListOfActiveFormattingElements {
     type Target = Vec<Entry>;
 

@@ -1960,6 +1960,60 @@ where
                     token,
                 );
             }
+
+            // A start tag whose tag name is "body"
+            //
+            // Erreur d'analyse.
+            // Si le deuxième élément de la pile d'éléments ouverts n'est
+            // pas un élément body, si la pile d'éléments ouverts ne
+            // comporte qu'un seul nœud ou s'il existe un élément de modèle
+            // sur la pile d'éléments ouverts, nous devons ignorer le
+            // jeton (cas du fragment). Sinon, nous devons définir le
+            // drapeau frameset-ok sur "not ok" ; ensuite, pour chaque
+            // attribut du jeton, nous devons vérifier si l'attribut est
+            // déjà présent sur l'élément body (le deuxième élément) de la
+            // pile d'éléments ouverts, et si ce n'est pas le
+            // cas, nous devons ajouter l'attribut et sa valeur
+            // correspondante à cet élément.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                ref attributes,
+                is_end: false,
+                ..
+            }) if tag_names::body == name => {
+                if self.stack_of_open_elements.len() == 1 {
+                    return;
+                }
+
+                let element = unsafe {
+                    self.stack_of_open_elements.get_unchecked(1)
+                }
+                .element_ref();
+                if tag_names::body != element.local_name() {
+                    return;
+                }
+
+                if self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_names::template)
+                {
+                    return;
+                }
+
+                self.frameset_ok = false;
+
+                let body_element = unsafe {
+                    self.stack_of_open_elements.get_unchecked(1)
+                }
+                .element_ref();
+
+                attributes.iter().for_each(|attribute| {
+                    if !body_element.has_attribute(&attribute.0) {
+                        body_element
+                            .set_attribute(&attribute.0, &attribute.1);
+                    }
+                });
+            }
             | _ => todo!(),
         }
     }
