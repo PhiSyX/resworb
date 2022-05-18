@@ -1884,6 +1884,13 @@ where
                     self.frameset_ok = false;
                 }
             }
+
+            // A comment token
+            //
+            // Insérer un commentaire.
+            | HTMLToken::Comment(comment) => {
+                self.insert_comment(comment);
+            }
             | _ => todo!(),
         }
     }
