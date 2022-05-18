@@ -2407,6 +2407,48 @@ where
 
                 self.insert_html_element(tag_token);
             }
+
+            // A start tag whose tag name is one of:
+            // "pre", "listing"
+            //
+            // Si la pile d'éléments ouverts comporte un élément p dans la
+            // portée du bouton, alors nous devons fermer un élément p.
+            // Insérer un élément HTML pour le jeton.
+            // Si le jeton suivant est un jeton de caractère U+000A LINE
+            // FEED (LF), nous devons ignorer ce jeton et passer au
+            // suivant. (Les sauts de ligne au début des
+            // pré-blocs sont ignorés par convenance pour les auteurs).
+            // Définir le drapeau frameset-ok sur "not ok".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([tag_names::pre, tag_names::listing]) => {
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::p,
+                    StackOfOpenElements::scoped_elements_with::<10>([
+                        tag_names::button,
+                    ]),
+                ) {
+                    close_p_element(self, token.clone());
+                }
+
+                self.insert_html_element(tag_token);
+
+                match self.tokenizer.next_token() {
+                    | Some(HTMLToken::Character('\n')) => {}
+                    | Some(next) => self.process_using_the_rules_for(
+                        self.insertion_mode,
+                        next,
+                    ),
+                    | _ => {}
+                };
+
+                self.frameset_ok = false;
+            }
+
             | _ => todo!(),
         }
     }
