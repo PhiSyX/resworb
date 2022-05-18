@@ -2844,12 +2844,6 @@ mod tests {
 
     #[test]
     fn test_initial_insertion_mode() {
-        // Whitespace
-        let mut parser = test_the_str!(" ");
-        let token = parser.tokenizer.next_token().unwrap();
-        parser.handle_initial_insertion_mode(token);
-        assert_eq!(parser.insertion_mode, InsertionMode::Initial);
-
         // Comment token
 
         let mut parser = test_the_str!("<!-- Comment -->");
@@ -2867,6 +2861,8 @@ mod tests {
         let doc = parser.document.document_ref();
         let doctype = doc.get_doctype().clone().unwrap();
         assert_eq!(doctype.name, "html");
+        assert_eq!(doctype.public_id, "");
+        assert_eq!(doctype.system_id, "");
 
         // Anything else
 
@@ -2876,5 +2872,34 @@ mod tests {
         let doc = parser.document.document_ref();
         assert_eq!(doc.quirks_mode.borrow().clone(), QuirksMode::Yes);
         assert_eq!(parser.insertion_mode, InsertionMode::BeforeHTML);
+    }
+
+    #[test]
+    fn test_before_html_insertion_mode() {
+        // Comment
+
+        let mut parser = test_the_str!("<!-- comment -->");
+        let token = parser.tokenizer.next_token().unwrap();
+        parser.handle_before_html_insertion_mode(token);
+        let doc = parser.document.get_first_child().clone().unwrap();
+        assert!(doc.is_comment());
+
+        // Tag
+
+        let mut parser = test_the_str!("<html><head>");
+        // <html>
+        let token = parser.tokenizer.next_token().unwrap();
+        parser.handle_before_html_insertion_mode(token);
+        let doc = parser.document.get_first_child().clone().unwrap();
+        assert_eq!(tag_names::html, doc.element_ref().local_name());
+        assert_eq!(parser.insertion_mode, InsertionMode::BeforeHead);
+
+        // Anything else (<heap>)
+
+        let token = parser.tokenizer.next_token().unwrap();
+        parser.handle_before_html_insertion_mode(token);
+        let doc = parser.document.get_last_child().clone().unwrap();
+        assert_eq!(tag_names::html, doc.element_ref().local_name());
+        assert_ne!(tag_names::head, doc.element_ref().local_name());
     }
 }
