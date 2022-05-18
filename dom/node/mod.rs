@@ -125,6 +125,17 @@ impl Node {
         element.is_mathml_text_integration_point()
     }
 
+    /// Le noeud courant est un document de type [NodeType::COMMENT_NODE].
+    pub fn is_comment(&self) -> bool {
+        self.node_type == NodeType::COMMENT_NODE
+    }
+
+    /// Le noeud courant est un document de type
+    /// [NodeType::DOCUMENT_TYPE_NODE].
+    pub fn is_doctype(&self) -> bool {
+        self.node_type == NodeType::DOCUMENT_TYPE_NODE
+    }
+
     /// Le noeud courant est un document de type [NodeType::DOCUMENT_NODE].
     pub fn is_document(&self) -> bool {
         self.node_type == NodeType::DOCUMENT_NODE

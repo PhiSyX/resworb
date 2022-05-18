@@ -1132,7 +1132,7 @@ where
                 let is_parse_error = !doctype_data.is_html_name()
                     || !doctype_data.is_public_identifier_missing()
                     || !doctype_data.is_system_identifier_missing()
-                    || !doctype_data.is_about_legacy_compat();
+                        && !doctype_data.is_about_legacy_compat();
 
                 if is_parse_error {
                     self.parse_error(token);
@@ -1910,6 +1910,7 @@ where
             parser.stack_of_open_elements.pop_until_tag(tag_name);
         }
 
+        /// <https://html.spec.whatwg.org/multipage/parsing.html#special>
         fn is_special_tag(tag_name: tag_names, namespace: &str) -> bool {
             if namespace
                 .parse::<Namespace>()
@@ -2818,12 +2819,62 @@ where
 mod tests {
     use super::*;
 
+    macro_rules! load_fixture {
+        ($filename:literal) => {{
+            let document_node = DocumentNode::new();
+            let html_file = include_str!($filename);
+            HTMLParser::new(document_node, html_file.chars())
+        }};
+    }
+
+    macro_rules! test_the_str {
+        ($str:literal) => {{
+            let document_node = DocumentNode::new();
+            let html_file = $str;
+            HTMLParser::new(document_node, html_file.chars())
+        }};
+    }
+
     #[test]
     #[should_panic]
     fn test_parse_document() {
-        let document_node = DocumentNode::new();
-        let html_file = include_str!("crashtests/test.html");
-        let mut parser = HTMLParser::new(document_node, html_file.chars());
+        let mut parser = load_fixture!("crashtests/test.html");
         parser.run();
+    }
+
+    #[test]
+    fn test_initial_insertion_mode() {
+        // Whitespace
+        let mut parser = test_the_str!(" ");
+        let token = parser.tokenizer.next_token().unwrap();
+        parser.handle_initial_insertion_mode(token);
+        assert_eq!(parser.insertion_mode, InsertionMode::Initial);
+
+        // Comment token
+
+        let mut parser = test_the_str!("<!-- Comment -->");
+        let token = parser.tokenizer.next_token().unwrap();
+        parser.handle_initial_insertion_mode(token);
+        let node = parser.document.get_first_child().clone().unwrap();
+        assert!(node.is_comment());
+        assert!(!node.is_document());
+
+        // Doctype
+
+        let mut parser = test_the_str!("<!DOCTYPE html>");
+        let token = parser.tokenizer.next_token().unwrap();
+        parser.handle_initial_insertion_mode(token);
+        let doc = parser.document.document_ref();
+        let doctype = doc.get_doctype().clone().unwrap();
+        assert_eq!(doctype.name, "html");
+
+        // Anything else
+
+        let mut parser = test_the_str!("a");
+        let token = parser.tokenizer.next_token().unwrap();
+        parser.handle_initial_insertion_mode(token);
+        let doc = parser.document.document_ref();
+        assert_eq!(doc.quirks_mode.borrow().clone(), QuirksMode::Yes);
+        assert_eq!(parser.insertion_mode, InsertionMode::BeforeHTML);
     }
 }

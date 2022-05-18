@@ -5,7 +5,7 @@
 use core::ops;
 use std::{
     borrow::{Borrow, BorrowMut},
-    cell::RefCell,
+    cell::{Ref, RefCell},
 };
 
 use html_elements::tag_names;
@@ -34,7 +34,7 @@ pub struct DocumentNode {
 #[derive(PartialEq)]
 pub struct Document {
     doctype: RefCell<Option<DocumentType>>,
-    quirks_mode: RefCell<QuirksMode>,
+    pub quirks_mode: RefCell<QuirksMode>,
 }
 
 // ----------- //
@@ -115,6 +115,12 @@ impl Document {
                 )
             })
             .map_err(|_| DOMException::InvalidNodeTypeError)
+    }
+}
+
+impl Document {
+    pub fn get_doctype(&self) -> Ref<'_, Option<DocumentType>> {
+        self.doctype.borrow()
     }
 }
 

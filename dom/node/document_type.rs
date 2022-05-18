@@ -7,12 +7,13 @@
 // --------- //
 
 /// Les doctypes ont un nom associé, un ID public et un ID système.
+#[derive(Clone)]
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub struct DocumentType {
-    name: String,
-    public_id: String,
-    system_id: String,
+    pub name: String,
+    pub public_id: String,
+    pub system_id: String,
 }
 
 // -------------- //
