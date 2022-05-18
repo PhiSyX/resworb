@@ -118,6 +118,10 @@ impl Element {
         }
     }
 
+    pub fn has_attribute(&self, name: &str) -> bool {
+        self.attributes.borrow().contains_key(name)
+    }
+
     pub fn set_attribute(&self, name: &str, value: &str) {
         if name == "id" {
             *self.id.borrow_mut() = value.to_owned().into();

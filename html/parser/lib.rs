@@ -1899,6 +1899,37 @@ where
                 self.parse_error(token);
                 /* Ignore */
             }
+
+            // A start tag whose tag name is "html"
+            //
+            // Erreur d'analyse.
+            // S'il y a un élément template sur la pile des éléments
+            // ouverts, alors ignorer le jeton. Sinon, pour chaque attribut
+            // du jeton, on vérifie si l'attribut est déjà présent sur
+            // l'élément supérieur de la pile d'éléments ouverts. Si ce
+            // n'est pas le cas, ajoute l'attribut et sa valeur
+            // correspondante à cet élément.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                ref attributes,
+                is_end: false,
+                ..
+            }) if tag_names::html == name => {
+                self.parse_error(token.clone());
+                if self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_names::template)
+                {
+                    return;
+                }
+
+                attributes.iter().for_each(|attribute| {
+                    let element = self.current_node().element_ref();
+                    if !element.has_attribute(&attribute.0) {
+                        element.set_attribute(&attribute.0, &attribute.1);
+                    }
+                });
+            }
             | _ => todo!(),
         }
     }

@@ -114,6 +114,12 @@ impl StackOfOpenElements {
         })
     }
 
+    pub fn has_element_with_tag_name(&self, tag_name: tag_names) -> bool {
+        self.elements
+            .iter()
+            .any(|element| tag_name == element.element_ref().local_name())
+    }
+
     pub fn element_immediately_above(
         &self,
         node_index: usize,
