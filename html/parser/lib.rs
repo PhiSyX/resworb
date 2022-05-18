@@ -2067,6 +2067,63 @@ where
                 self.insert_html_element(tag_token);
                 self.insertion_mode.switch_to(InsertionMode::InFrameset);
             }
+
+            // An end-of-file token
+            //
+            // Si la pile des modes d'insertion template n'est pas vide,
+            // le jeton est traité selon les règles du mode d'insertion
+            // "in template".
+            | HTMLToken::EOF
+                if self.stack_of_template_insertion_modes.is_empty() =>
+            {
+                self.process_using_the_rules_for(
+                    InsertionMode::InTemplate,
+                    token,
+                );
+            }
+
+            // An end-of-file token
+            //
+            // Autrement, suivre les étapes suivantes :
+            //
+            //   1. Si un noeud de la pile d'éléments ouverts n'est pas un
+            // élément dd, un élément dt, un élément li, un élément
+            // optgroup, un élément option, un élément p, un élément rb, un
+            // élément rp, un élément rt, un élément rtc, un élément tbody,
+            // un élément td, un élément tfoot, un élément th, un élément
+            // thead, un élément tr, l'élément body ou l'élément html, il
+            // s'agit d'une erreur d'analyse.
+            //  2. Arrêter l'analyse.
+            | HTMLToken::EOF => {
+                if !self.stack_of_open_elements.iter().any(|node| {
+                    let local_name = node.element_ref().local_name();
+                    local_name.is_one_of([
+                        tag_names::dd,
+                        tag_names::dt,
+                        tag_names::li,
+                        tag_names::optgroup,
+                        tag_names::option,
+                        tag_names::p,
+                        tag_names::rb,
+                        tag_names::rp,
+                        tag_names::rt,
+                        tag_names::rtc,
+                        tag_names::tbody,
+                        tag_names::td,
+                        tag_names::tfoot,
+                        tag_names::th,
+                        tag_names::thead,
+                        tag_names::tr,
+                        tag_names::body,
+                        tag_names::html,
+                    ])
+                }) {
+                    self.parse_error(token);
+                    return;
+                }
+
+                self.stop_parsing = true;
+            }
             | _ => todo!(),
         }
     }
