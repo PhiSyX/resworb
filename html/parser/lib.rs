@@ -2353,6 +2353,60 @@ where
 
                 self.insert_html_element(tag_token);
             }
+
+            // A start tag whose tag name is one of:
+            // "h1", "h2", "h3", "h4", "h5", "h6"
+            //
+            // Si la pile d'éléments ouverts comporte un élément p dans la
+            // portée du bouton, alors nous devons fermer un élément p.
+            // Si le noeud actuel est un élément HTML dont le nom de balise
+            // est l'un des éléments "h1", "h2", "h3", "h4", "h5" ou "h6",
+            // il s'agit d'une erreur d'analyse ; retirez le noeud actuel
+            // de la pile des éléments ouverts.
+            // Insérez un élément HTML pour le jeton.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::h1,
+                tag_names::h2,
+                tag_names::h3,
+                tag_names::h4,
+                tag_names::h5,
+                tag_names::h6,
+            ]) =>
+            {
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::p,
+                    StackOfOpenElements::scoped_elements_with::<10>([
+                        tag_names::button,
+                    ]),
+                ) {
+                    close_p_element(self, token.clone());
+                }
+
+                if self
+                    .current_node()
+                    .element_ref()
+                    .local_name()
+                    .is_one_of([
+                        tag_names::h1,
+                        tag_names::h2,
+                        tag_names::h3,
+                        tag_names::h4,
+                        tag_names::h5,
+                        tag_names::h6,
+                    ])
+                {
+                    self.parse_error(token.clone());
+                    self.stack_of_open_elements.pop();
+                }
+
+                self.insert_html_element(tag_token);
+            }
             | _ => todo!(),
         }
     }
