@@ -57,6 +57,7 @@ where
     character_insertion_node: Option<TreeNode<Node>>,
     character_insertion_builder: String,
     head_element: Option<TreeNode<Node>>,
+    form_element: Option<TreeNode<Node>>,
 }
 
 struct AdjustedInsertionLocation {
@@ -93,6 +94,7 @@ where
             character_insertion_node: None,
             character_insertion_builder: String::new(),
             head_element: None,
+            form_element: None,
         }
     }
 }
@@ -2447,6 +2449,60 @@ where
                 };
 
                 self.frameset_ok = false;
+            }
+
+            // A start tag whose tag name is "form"
+            //
+            // Si le pointeur de l'élément form n'est pas null et qu'il n'y
+            // a pas d'élément template sur la pile des éléments ouverts,
+            // il s'agit d'une erreur d'analyse ; ignorer le jeton.
+            // Sinon :
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::form == name
+                && self.form_element.is_some()
+                && self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_names::template) =>
+            {
+                self.parse_error(token);
+            }
+
+            // A start tag whose tag name is "form"
+            //
+            // Si la pile d'éléments ouverts possède un élément p dans la
+            // portée du bouton, alors nous devons fermer un élément p.
+            // Insérez un élément HTML pour le jeton et, s'il n'y a pas
+            // d'élément template sur la pile d'éléments ouverts,
+            // définir le pointeur d'élément form pour qu'il pointe sur
+            // l'élément créé.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::form == name => {
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::p,
+                    StackOfOpenElements::scoped_elements_with::<10>([
+                        tag_names::button,
+                    ]),
+                ) {
+                    close_p_element(self, token.clone());
+                }
+
+                let element = self.insert_html_element(tag_token);
+                if !self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_names::template)
+                {
+                    self.form_element = element;
+                }
             }
 
             | _ => todo!(),
