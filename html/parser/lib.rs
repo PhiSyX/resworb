@@ -642,7 +642,7 @@ where
     /// Lorsque les étapes ci-dessous exigent que l'UA génère de manière
     /// exhaustive toutes les balises de fin implicites, alors, si le noeud
     /// actuel est un élément caption, un élément colgroup, un élément dd,
-    /// un élément dt, un élément li, un élément optgroup, un élément
+    /// un élément dt, un élément "li", un élément optgroup, un élément
     /// option, un élément p, un élément rb, un élément rp, un élément rt,
     /// un élément rtc, un élément tbody, un élément td, un élément tfoot,
     /// un élément th, un élément thead ou un élément tr, l'UA doit retirer
@@ -1903,6 +1903,104 @@ where
             parser.stack_of_open_elements.pop_until_tag(tag_name);
         }
 
+        fn is_special_tag(tag_name: &str, namespace: &str) -> bool {
+            if namespace
+                .parse::<Namespace>()
+                .ok()
+                .filter(|ns| Namespace::HTML.eq(ns))
+                .is_some()
+            {
+                return tag_name.is_one_of([
+                    tag_names::address,
+                    tag_names::applet,
+                    tag_names::area,
+                    tag_names::article,
+                    tag_names::aside,
+                    tag_names::base,
+                    tag_names::basefont,
+                    tag_names::bgsound,
+                    tag_names::blockquote,
+                    tag_names::body,
+                    tag_names::br,
+                    tag_names::button,
+                    tag_names::caption,
+                    tag_names::center,
+                    tag_names::col,
+                    tag_names::colgroup,
+                    tag_names::dd,
+                    tag_names::details,
+                    tag_names::dir,
+                    tag_names::div,
+                    tag_names::dl,
+                    tag_names::dt,
+                    tag_names::embed,
+                    tag_names::fieldset,
+                    tag_names::figcaption,
+                    tag_names::figure,
+                    tag_names::footer,
+                    tag_names::form,
+                    tag_names::frame,
+                    tag_names::frameset,
+                    tag_names::h1,
+                    tag_names::h2,
+                    tag_names::h3,
+                    tag_names::h4,
+                    tag_names::h5,
+                    tag_names::h6,
+                    tag_names::head,
+                    tag_names::header,
+                    tag_names::hgroup,
+                    tag_names::hr,
+                    tag_names::html,
+                    tag_names::iframe,
+                    tag_names::img,
+                    tag_names::input,
+                    tag_names::keygen,
+                    tag_names::li,
+                    tag_names::link,
+                    tag_names::listing,
+                    tag_names::main,
+                    tag_names::marquee,
+                    tag_names::menu,
+                    tag_names::meta,
+                    tag_names::nav,
+                    tag_names::noembed,
+                    tag_names::noframes,
+                    tag_names::noscript,
+                    tag_names::object,
+                    tag_names::ol,
+                    tag_names::p,
+                    tag_names::param,
+                    tag_names::plaintext,
+                    tag_names::pre,
+                    tag_names::script,
+                    tag_names::section,
+                    tag_names::select,
+                    tag_names::source,
+                    tag_names::style,
+                    tag_names::summary,
+                    tag_names::table,
+                    tag_names::tbody,
+                    tag_names::td,
+                    tag_names::template,
+                    tag_names::textarea,
+                    tag_names::tfoot,
+                    tag_names::th,
+                    tag_names::thead,
+                    tag_names::title,
+                    tag_names::tr,
+                    tag_names::track,
+                    tag_names::ul,
+                    tag_names::wbr,
+                    tag_names::xmp,
+                ]);
+            }
+
+            // todo: mathml, svg
+
+            false
+        }
+
         match token {
             // A character token that is U+0000 NULL
             //
@@ -2136,7 +2234,7 @@ where
             // Autrement, suivre les étapes suivantes :
             //
             //   1. Si un noeud de la pile d'éléments ouverts n'est pas un
-            // élément dd, un élément dt, un élément li, un élément
+            // élément dd, un élément dt, un élément "li", un élément
             // optgroup, un élément option, un élément p, un élément rb, un
             // élément rp, un élément rt, un élément rtc, un élément tbody,
             // un élément td, un élément tfoot, un élément th, un élément
@@ -2194,7 +2292,7 @@ where
             // An end tag whose tag name is "body"
             //
             // S'il existe un noeud dans la pile d'éléments ouverts qui
-            // n'est pas un élément dd, un élément dt, un élément li, un
+            // n'est pas un élément dd, un élément dt, un élément "li", un
             // élément optgroup, un élément option, un élément p, un
             // élément rb, un élément rp, un élément rt, un élément rtc, un
             // élément tbody, un élément td, un élément tfoot, un élément
@@ -2256,7 +2354,7 @@ where
             // An end tag whose tag name is "html"
             //
             // S'il existe un noeud dans la pile d'éléments ouverts
-            // qui n'est pas un élément dd, un élément dt, un élément li,
+            // qui n'est pas un élément dd, un élément dt, un élément "li",
             // un élément optgroup, un élément option, un élément p, un
             // élément rb, un élément rp, un élément rt, un élément rtc, un
             // élément tbody, un élément td, un élément tfoot, un élément
@@ -2503,6 +2601,83 @@ where
                 {
                     self.form_element = element;
                 }
+            }
+
+            // A start tag whose tag name is "li"
+            //
+            // Suivre ces étapes :
+            //   1. Définir le drapeau frameset-ok à "not ok".
+            //   2. Initialiser un nœud comme étant le nœud actuel (le nœud
+            // le plus bas de la pile).
+            //   3. Dans une boucle : si le nœud est un élément "li", alors
+            // nous devons exécuter ces sous-étapes :
+            //      3.1. Générer des balises de fin implicites, sauf pour
+            // les éléments li.
+            //      3.2. Si le nœud actuel n'est pas un élément "li", il
+            // s'agit d'une erreur d'analyse.
+            //      3.3. Extraire des éléments de la pile d'éléments
+            // ouverts jusqu'à ce qu'un élément "li" ait été extrait de la
+            // pile.
+            //      3.4. Fin de la boucle.
+            //   4. Si le noeud est dans la catégorie spéciale, mais n'est
+            // pas un élément "address", "div" ou "p", alors nous devons
+            // passer à l'étape intitulée "done" ci-dessous.
+            //   5. Sinon, nous devons placer le nœud à l'entrée précédente
+            // dans la pile des éléments ouverts et retourner à la boucle
+            // étiquetée étape.
+            //   6. "Done" : Si la pile d'éléments ouverts a un élément p
+            // dans la portée du bouton, alors nous devons fermer un
+            // élément p.
+            //   7. Et enfin, insérer un élément HTML pour le jeton.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::li == name => {
+                const LI: tag_names = tag_names::li;
+
+                self.frameset_ok = false;
+
+                for node in self.stack_of_open_elements.iter() {
+                    let element = node.element_ref();
+                    let name = element.local_name();
+                    if LI == name {
+                        self.generate_implied_end_tags(LI);
+                        if LI
+                            == self
+                                .current_node()
+                                .element_ref()
+                                .local_name()
+                        {
+                            self.parse_error(token.clone());
+                        }
+                        self.stack_of_open_elements.pop_until_tag(LI);
+                        break;
+                    }
+
+                    if is_special_tag(&name, &element.namespace())
+                        && name.is_one_of([
+                            tag_names::address,
+                            tag_names::div,
+                            tag_names::p,
+                        ])
+                    {
+                        break;
+                    }
+                }
+
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::p,
+                    StackOfOpenElements::scoped_elements_with::<10>([
+                        tag_names::button,
+                    ]),
+                ) {
+                    close_p_element(self, token.clone());
+                }
+
+                self.insert_html_element(tag_token);
             }
 
             | _ => todo!(),
