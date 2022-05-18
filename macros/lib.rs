@@ -7,15 +7,17 @@
 #[macro_export]
 macro_rules! dd {
     ($expr: expr) => {{
-        println!(
-            "{} = {}::{:?}",
-            stringify!($expr),
-            std::any::type_name_of_val($expr)
-                .replace("core::option::", "")
-                .replace("char", "CodePoint")
-                .replace("resworb_html_parser::", ""),
-            $expr
-        );
+        if cfg!(debug_assertions) {
+            println!(
+                "{} = {}::{:?}",
+                stringify!($expr),
+                std::any::type_name_of_val($expr)
+                    .replace("core::option::", "")
+                    .replace("char", "CodePoint")
+                    .replace("resworb_html_parser::", ""),
+                $expr
+            );
+        }
         $expr
     }};
 }
