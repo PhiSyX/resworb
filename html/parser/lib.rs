@@ -49,7 +49,7 @@ where
     stack_of_open_elements: StackOfOpenElements,
     list_of_active_formatting_elements: ListOfActiveFormattingElements,
     foster_parenting: bool,
-    frameset_ok: bool,
+    frameset_ok_flag: FramesetOkFlag,
     parsing_fragment: bool,
     scripting_enabled: bool,
     stop_parsing: bool,
@@ -63,6 +63,12 @@ where
 struct AdjustedInsertionLocation {
     parent: Option<TreeNode<Node>>,
     insert_before_sibling: Option<TreeNode<Node>>,
+}
+
+#[derive(PartialEq)]
+enum FramesetOkFlag {
+    Ok,
+    NotOk,
 }
 
 // -------------- //
@@ -85,7 +91,7 @@ where
             stack_of_open_elements: StackOfOpenElements::default(),
             list_of_active_formatting_elements:
                 ListOfActiveFormattingElements::default(),
-            frameset_ok: true,
+            frameset_ok_flag: FramesetOkFlag::Ok,
             foster_parenting: false,
             parsing_fragment: false,
             scripting_enabled: true,
@@ -246,7 +252,7 @@ where
             // Insérer le caractère du jeton.
             | HTMLToken::Character(ch) => {
                 self.insert_character(ch);
-                self.frameset_ok = false;
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
             }
 
             // A comment token
@@ -439,10 +445,10 @@ where
     ///      2.1.3. S'il y en a un dernier template et qu'il n'y a pas de
     /// dernière table, ou s'il y en a une, mais que le dernier template
     /// est plus bas (plus récemment ajouté) que la dernière table dans la
-    /// pile des éléments ouverts, alors : laissez l'emplacement
-    /// d'insertion ajusté à l'intérieur du contenu du template du dernier
-    /// template, après son dernier enfant (s'il y en a), et abandonnez ces
-    /// étapes.
+    /// pile des éléments ouverts, alors : nous devons laisser
+    /// l'emplacement d'insertion ajusté à l'intérieur du contenu du
+    /// template du dernier template, après son dernier enfant (s'il y
+    /// en a), et abandonner ces étapes.
     ///
     ///      2.1.4. S'il n'y a pas de dernier table, alors l'emplacement
     /// d'insertion ajusté se trouve à l'intérieur du premier élément de la
@@ -822,7 +828,7 @@ where
     /// pour le nouvel élément.
     ///   10. Si l'entrée pour le nouvel élément dans la liste des éléments
     /// de formatage actifs n'est pas la dernière entrée de la liste,
-    /// revenez à l'étape intitulée Avancer.
+    /// revener à l'étape intitulée Avancer.
     ///
     /// Cela a pour effet de rouvrir tous les éléments de mise en forme qui
     /// ont été ouverts dans le body, cell ou caption courant (selon le
@@ -1155,9 +1161,9 @@ where
             // Si le document n'est pas un document iframe srcdoc, il
             // s'agit d'une erreur d'analyse syntaxique ; si l'analyseur
             // syntaxique ne peut pas changer le drapeau de mode est faux,
-            // mettez le document en mode quirks. Dans tous les
-            // cas, passez le mode d'insertion à "before html", puis
-            // retraitez le jeton.
+            // nous devons mettre le document en mode quirks. Et dans tous
+            // les cas, passer le mode d'insertion à "before
+            // html", puis retraiter le jeton.
             | _ => {
                 self.parse_error(token);
                 self.document.get_mut().set_quirks_mode(QuirksMode::Yes);
@@ -1437,7 +1443,8 @@ where
             //   1. Si l'élément possède un attribut charset, et que
             // l'obtention d'un encodage à partir de sa valeur donne un
             // encodage, et que la confiance est actuellement provisoire,
-            // alors changez l'encodage pour l'encodage résultant.
+            // alors nous devons changer l'encodage pour l'encodage
+            // résultant.
             //
             //   2. Sinon, si l'élément possède un attribut http-equiv dont
             // la valeur est une correspondance ASCII insensible à la casse
@@ -1603,7 +1610,7 @@ where
             // mise en forme actifs.
             // Définir le drapeau frameset-ok à "not ok".
             // Passer le mode d'insertion sur "in template".
-            // Poussez "in template" sur la pile des modes d'insertion
+            // Pousser "in template" sur la pile des modes d'insertion
             // de template afin qu'il soit le nouveau mode d'insertion de
             // template actuel.
             | HTMLToken::Tag(
@@ -1616,7 +1623,7 @@ where
                 self.insert_html_element(tag_token);
                 self.list_of_active_formatting_elements
                     .insert_marker_at_end();
-                self.frameset_ok = false;
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
                 self.stack_of_template_insertion_modes
                     .push(InsertionMode::InTemplate);
             }
@@ -1750,7 +1757,7 @@ where
                 },
             ) if tag_names::body == name => {
                 self.insert_html_element(tag_token);
-                self.frameset_ok = false;
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
                 self.insertion_mode.switch_to(InsertionMode::InBody);
             }
 
@@ -1903,7 +1910,7 @@ where
             parser.stack_of_open_elements.pop_until_tag(tag_name);
         }
 
-        fn is_special_tag(tag_name: &str, namespace: &str) -> bool {
+        fn is_special_tag(tag_name: tag_names, namespace: &str) -> bool {
             if namespace
                 .parse::<Namespace>()
                 .ok()
@@ -2028,7 +2035,7 @@ where
                 self.insert_character(ch);
 
                 if !ch.is_ascii_whitespace() {
-                    self.frameset_ok = false;
+                    self.frameset_ok_flag = FramesetOkFlag::NotOk;
                 }
             }
 
@@ -2147,7 +2154,7 @@ where
                     return;
                 }
 
-                self.frameset_ok = false;
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
 
                 let body_element = unsafe {
                     self.stack_of_open_elements.get_unchecked(1)
@@ -2198,7 +2205,7 @@ where
                     return;
                 }
 
-                if !self.frameset_ok {
+                if self.frameset_ok_flag == FramesetOkFlag::NotOk {
                     return;
                 }
 
@@ -2461,9 +2468,9 @@ where
             // portée du bouton, alors nous devons fermer un élément p.
             // Si le noeud actuel est un élément HTML dont le nom de balise
             // est l'un des éléments "h1", "h2", "h3", "h4", "h5" ou "h6",
-            // il s'agit d'une erreur d'analyse ; retirez le noeud actuel
+            // il s'agit d'une erreur d'analyse ; retirer le noeud actuel
             // de la pile des éléments ouverts.
-            // Insérez un élément HTML pour le jeton.
+            // Insérer un élément HTML pour le jeton.
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -2546,7 +2553,7 @@ where
                     | _ => {}
                 };
 
-                self.frameset_ok = false;
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
             }
 
             // A start tag whose tag name is "form"
@@ -2574,7 +2581,7 @@ where
             //
             // Si la pile d'éléments ouverts possède un élément p dans la
             // portée du bouton, alors nous devons fermer un élément p.
-            // Insérez un élément HTML pour le jeton et, s'il n'y a pas
+            // Insérer un élément HTML pour le jeton et, s'il n'y a pas
             // d'élément template sur la pile d'éléments ouverts,
             // définir le pointeur d'élément form pour qu'il pointe sur
             // l'élément créé.
@@ -2618,7 +2625,6 @@ where
             //      3.3. Extraire des éléments de la pile d'éléments
             // ouverts jusqu'à ce qu'un élément "li" ait été extrait de la
             // pile.
-            //      3.4. Fin de la boucle.
             //   4. Si le noeud est dans la catégorie spéciale, mais n'est
             // pas un élément "address", "div" ou "p", alors nous devons
             // passer à l'étape intitulée "done" ci-dessous.
@@ -2638,12 +2644,14 @@ where
             ) if tag_names::li == name => {
                 const LI: tag_names = tag_names::li;
 
-                self.frameset_ok = false;
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
 
                 for node in self.stack_of_open_elements.iter() {
                     let element = node.element_ref();
                     let name = element.local_name();
-                    if LI == name {
+                    let tag_name = name.parse::<tag_names>().unwrap();
+
+                    if LI == tag_name {
                         self.generate_implied_end_tags(LI);
                         if LI
                             == self
@@ -2657,7 +2665,96 @@ where
                         break;
                     }
 
-                    if is_special_tag(&name, &element.namespace())
+                    if is_special_tag(tag_name, &element.namespace())
+                        && name.is_one_of([
+                            tag_names::address,
+                            tag_names::div,
+                            tag_names::p,
+                        ])
+                    {
+                        break;
+                    }
+                }
+
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::p,
+                    StackOfOpenElements::scoped_elements_with::<10>([
+                        tag_names::button,
+                    ]),
+                ) {
+                    close_p_element(self, token.clone());
+                }
+
+                self.insert_html_element(tag_token);
+            }
+
+            // A start tag whose tag name is one of: "dd", "dt"
+            //
+            // Suivre ces étapes :
+            //   1. Définir le drapeau frameset-ok à "not ok".
+            //   2. Initialise le nœud comme étant le nœud actuel (le nœud
+            // le plus bas de la pile).
+            //   3. "Dans une boucle" : Si le noeud est un élément dd,
+            // alors nous devons exécuter ces sous-étapes :
+            //      3.1. Générer des balises de fin implicites, sauf pour
+            // les éléments dd.
+            //      3.2. Si le nœud actuel n'est pas un élément dd, il
+            // s'agit d'une erreur d'analyse.
+            //      3.3. Extraire des éléments de la pile d'éléments
+            // ouverts jusqu'à ce qu'un élément dd ait été extrait de la
+            // pile.
+            //   4. Si le noeud est un élément dt, alors nous devons
+            // exécuter ces sous-étapes :
+            //      4.1. Générer des balises de fin implicites, sauf pour
+            // les éléments dt.
+            //      4.2. Si le nœud actuel n'est pas un élément dt, il
+            // s'agit d'une erreur d'analyse.
+            //      4.3. Extraire des éléments de la pile d'éléments
+            // ouverts jusqu'à ce qu'un élément dt ait été extrait de la
+            // pile.
+            //   5. Si le noeud est dans la catégorie spéciale, mais n'est
+            // pas un élément address, div ou  p, alors nous devons passer
+            // à l'étape intitulée "done" ci-dessous.
+            //   6. Sinon, nous devons placer le nœud à l'entrée précédente
+            // dans la pile des éléments ouverts et retourner à l'étape
+            // "Dans une Boucle".
+            //   7. "Done" : si la pile d'éléments ouverts a un élément p
+            // dans la portée du bouton, alors nous devons fermer un
+            // élément p.
+            //   8. Et enfin, insérer un élément HTML pour le jeton.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([tag_names::dd, tag_names::dt]) => {
+                const DD: tag_names = tag_names::dd;
+                const DT: tag_names = tag_names::dt;
+
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
+
+                for node in self.stack_of_open_elements.iter() {
+                    let element = node.element_ref();
+                    let name = element.local_name();
+                    let tag_name = name.parse::<tag_names>().unwrap();
+
+                    if DD == tag_name || DT == tag_name {
+                        self.generate_implied_end_tags(tag_name);
+                        if tag_name
+                            == self
+                                .current_node()
+                                .element_ref()
+                                .local_name()
+                        {
+                            self.parse_error(token.clone());
+                        }
+                        self.stack_of_open_elements
+                            .pop_until_tag(tag_name);
+                        break;
+                    }
+
+                    if is_special_tag(tag_name, &element.namespace())
                         && name.is_one_of([
                             tag_names::address,
                             tag_names::div,
