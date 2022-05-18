@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-#![feature(type_name_of_val)]
+#![feature(explicit_generic_args_with_impl_trait, type_name_of_val)]
 
 mod codepoint;
 mod error;
@@ -612,6 +612,28 @@ where
             character_insertion_node
                 .set_data(&self.character_insertion_builder);
             self.character_insertion_builder.clear();
+        }
+    }
+
+    fn generate_implied_end_tags(&mut self, tag_name: tag_names) {
+        let node = self.current_node();
+        let element = node.element_ref();
+        let name = element.local_name();
+        while tag_name != name
+            && name.is_one_of([
+                tag_names::dd,
+                tag_names::dt,
+                tag_names::li,
+                tag_names::optgroup,
+                tag_names::option,
+                tag_names::p,
+                tag_names::rb,
+                tag_names::rp,
+                tag_names::rt,
+                tag_names::rtc,
+            ])
+        {
+            self.stack_of_open_elements.pop();
         }
     }
 
@@ -1854,6 +1876,31 @@ where
     }
 
     fn handle_in_body_insertion_mode(&mut self, token: HTMLToken) {
+        /// Lorsque les étapes ci-dessous indiquent que l'agent utilisateur
+        /// doit fermer un élément p, cela signifie que l'agent
+        /// utilisateur doit exécuter les étapes suivantes :
+        ///   1. Générer des balises de fin implicites, sauf pour les
+        /// éléments p.
+        ///   2. Si le nœud actuel n'est pas un élément p, il s'agit d'une
+        /// erreur d'analyse.
+        ///   3. Extraire des éléments de la pile des éléments ouverts
+        /// jusqu'à ce qu'un élément p ait été extrait de la pile.
+        fn close_p_element<C>(parser: &mut HTMLParser<C>, token: HTMLToken)
+        where
+            C: Iterator<Item = CodePoint>,
+        {
+            let tag_name = tag_names::p;
+
+            parser.generate_implied_end_tags(tag_name);
+
+            if tag_name != parser.current_node().element_ref().local_name()
+            {
+                parser.parse_error(token);
+            }
+
+            parser.stack_of_open_elements.pop_until_tag(tag_name);
+        }
+
         match token {
             // A character token that is U+0000 NULL
             //
@@ -2251,6 +2298,60 @@ where
                     self.insertion_mode,
                     token,
                 );
+            }
+
+            // A start tag whose tag name is one of:
+            // "address", "article", "aside", "blockquote", "center",
+            // "details", "dialog", "dir", "div", "dl", "fieldset",
+            // "figcaption", "figure", "footer", "header", "hgroup",
+            // "main", "menu", "nav", "ol", "p", "section", "summary", "ul"
+            //
+            // Si la pile d'éléments ouverts comporte un élément p dans la
+            // portée du bouton, alors nous devons fermer l'élément p.
+            // Insérer un élément HTML pour le jeton.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::address,
+                tag_names::article,
+                tag_names::aside,
+                tag_names::blockquote,
+                tag_names::center,
+                tag_names::details,
+                tag_names::dialog,
+                tag_names::dir,
+                tag_names::div,
+                tag_names::dl,
+                tag_names::fieldset,
+                tag_names::figcaption,
+                tag_names::figure,
+                tag_names::footer,
+                tag_names::header,
+                tag_names::hgroup,
+                tag_names::main,
+                tag_names::menu,
+                tag_names::nav,
+                tag_names::ol,
+                tag_names::p,
+                tag_names::section,
+                tag_names::summary,
+                tag_names::ul,
+            ]) =>
+            {
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::p,
+                    StackOfOpenElements::scoped_elements_with::<10>([
+                        tag_names::button,
+                    ]),
+                ) {
+                    close_p_element(self, token.clone());
+                }
+
+                self.insert_html_element(tag_token);
             }
             | _ => todo!(),
         }

@@ -186,6 +186,26 @@ impl StackOfOpenElements {
     pub fn put(&mut self, element: TreeNode<Node>) {
         self.elements.push(element);
     }
+
+    // <https://github.com/rust-lang/rust/issues/83701>
+    pub fn scoped_elements_with<const N: usize>(
+        list: impl IntoIterator<Item = tag_names>,
+    ) -> [tag_names; N] {
+        let mut elements: [tag_names; N] = [tag_names::var; N];
+
+        Self::SCOPE_ELEMENTS
+            .into_iter()
+            .enumerate()
+            .for_each(|(i, t)| {
+                elements[i] = t;
+            });
+
+        list.into_iter().enumerate().for_each(|(i, t)| {
+            elements[i] = t;
+        });
+
+        elements
+    }
 }
 
 impl ListOfActiveFormattingElements {
