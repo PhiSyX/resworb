@@ -78,6 +78,36 @@ impl InsertionMode {
 }
 
 impl StackOfOpenElements {
+    ///   - applet
+    ///   - caption
+    ///   - html
+    ///   - table
+    ///   - td
+    ///   - th
+    ///   - marquee
+    ///   - object
+    ///   - template
+    ///   - MathML mi
+    ///   - MathML mo
+    ///   - MathML mn
+    ///   - MathML ms
+    ///   - MathML mtext
+    ///   - MathML annotation-xml
+    ///   - SVG foreignObject
+    ///   - SVG desc
+    ///   - SVG title
+    pub const SCOPE_ELEMENTS: [tag_names; 9] = [
+        tag_names::applet,
+        tag_names::caption,
+        tag_names::html,
+        tag_names::table,
+        tag_names::td,
+        tag_names::th,
+        tag_names::marquee,
+        tag_names::object,
+        tag_names::template,
+        // todo: ajouter les éléments manquants MathML & SVG
+    ];
 
     /// Le nœud actuel est le nœud le plus bas de cette pile d'éléments
     /// ouverts.
@@ -93,6 +123,23 @@ impl StackOfOpenElements {
     ) -> Option<(usize, &TreeNode<Node>)> {
         self.elements.iter().enumerate().rfind(|(_, element)| {
             tag_name == element.element_ref().local_name()
+        })
+    }
+
+    /// On dit que la pile d'éléments ouverts a un élément particulier dans
+    /// son champ d'application lorsqu'elle a cet élément dans le champ
+    /// d'application spécifique composé des types d'éléments suivants :
+    /// Voir la constante: [Self::SCOPE_ELEMENTS].
+    pub fn has_element_in_scope<const N: usize>(
+        &self,
+        tag_name: tag_names,
+        list: [tag_names; N],
+    ) -> bool {
+        self.elements.iter().rev().any(|node| {
+            let element = node.element_ref();
+            let name = element.local_name();
+            tag_name == name
+                || !list.into_iter().any(|tag_name| tag_name == name)
         })
     }
 
