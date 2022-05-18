@@ -2562,13 +2562,11 @@ where
             // a pas d'élément template sur la pile des éléments ouverts,
             // il s'agit d'une erreur d'analyse ; ignorer le jeton.
             // Sinon :
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::form == name
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::form == name
                 && self.form_element.is_some()
                 && self
                     .stack_of_open_elements
@@ -2775,6 +2773,36 @@ where
                 }
 
                 self.insert_html_element(tag_token);
+            }
+
+            // A start tag whose tag name is "plaintext"
+            //
+            // Si la pile d'éléments ouverts comporte un élément p dans la
+            // portée du bouton, alors nous devons fermer un élément p.
+            // Insérer un élément HTML pour le jeton.
+            // Passer le tokenizer à l'état PLAINTEXT.
+            //
+            // Note: Une fois qu'une balise de début avec le nom de balise
+            // "plaintext" a été vue, ce sera le dernier jeton vu autre que
+            // les jetons de caractères (et le jeton de fin de fichier),
+            // car il n'y a aucun moyen de sortir de l'état PLAINTEXT.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::plaintext == name => {
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::p,
+                    StackOfOpenElements::scoped_elements_with::<10>([
+                        tag_names::button,
+                    ]),
+                ) {
+                    close_p_element(self, token.clone());
+                }
+                self.insert_html_element(tag_token);
+                self.tokenizer.switch_state_to("plaintext");
             }
 
             | _ => todo!(),
