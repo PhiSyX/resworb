@@ -2186,6 +2186,72 @@ where
 
                 self.insertion_mode.switch_to(InsertionMode::AfterBody);
             }
+
+            // An end tag whose tag name is "html"
+            //
+            // Si la pile d'éléments ouverts n'a pas d'élément body dans sa
+            // portée, il s'agit d'une erreur d'analyse ; ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::html == name
+                && self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::body,
+                    StackOfOpenElements::SCOPE_ELEMENTS,
+                ) =>
+            {
+                self.parse_error(token);
+            }
+
+            // An end tag whose tag name is "html"
+            //
+            // S'il existe un noeud dans la pile d'éléments ouverts
+            // qui n'est pas un élément dd, un élément dt, un élément li,
+            // un élément optgroup, un élément option, un élément p, un
+            // élément rb, un élément rp, un élément rt, un élément rtc, un
+            // élément tbody, un élément td, un élément tfoot, un élément
+            // th, un élément thead, un élément tr, l'élément body ou
+            // l'élément html, il s'agit d'une erreur d'analyse.
+            // Passer le mode d'insertion à "after body".
+            // Retraiter le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::html == name => {
+                if self.stack_of_open_elements.iter().any(|node| {
+                    let element = node.element_ref();
+                    let name = element.local_name();
+                    !name.is_one_of([
+                        tag_names::dd,
+                        tag_names::dt,
+                        tag_names::li,
+                        tag_names::optgroup,
+                        tag_names::option,
+                        tag_names::p,
+                        tag_names::rb,
+                        tag_names::rp,
+                        tag_names::rt,
+                        tag_names::rtc,
+                        tag_names::tbody,
+                        tag_names::td,
+                        tag_names::tfoot,
+                        tag_names::th,
+                        tag_names::thead,
+                        tag_names::tr,
+                        tag_names::body,
+                        tag_names::html,
+                    ])
+                }) {
+                    self.parse_error(token.clone());
+                }
+                self.insertion_mode.switch_to(InsertionMode::AfterBody);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
             | _ => todo!(),
         }
     }
