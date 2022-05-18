@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use core::ops;
+
 use dom::node::Node;
 use html_elements::tag_names;
 use infra::structure::tree::TreeNode;
@@ -59,8 +61,10 @@ pub struct ListOfActiveFormattingElements {
 // Énumération //
 // ----------- //
 
+#[derive(PartialEq)]
 pub enum Entry {
     Marker,
+    Element(TreeNode<Node>),
 }
 
 // -------------- //
@@ -157,15 +161,40 @@ impl StackOfOpenElements {
 impl ListOfActiveFormattingElements {
     pub fn clear_up_to_the_last_marker(&mut self) {
         while let Some(entry) = self.entries.pop() {
-            match entry {
-                | Entry::Marker => break,
-                | _ => continue,
+            if entry.is_marker() {
+                break;
             }
         }
     }
 
     pub fn insert_marker_at_end(&mut self) {
         self.entries.push(Entry::Marker);
+    }
+}
+
+impl Entry {
+    pub fn is_element(&self) -> bool {
+        matches!(self, Self::Element(_))
+    }
+
+    pub fn is_marker(&self) -> bool {
+        matches!(self, Self::Marker)
+    }
+
+    pub fn element(&self) -> Option<&TreeNode<Node>> {
+        match self {
+            | Entry::Marker => None,
+            | Entry::Element(node) => Some(node),
+        }
+    }
+
+    pub fn element_unchecked(&self) -> &TreeNode<Node> {
+        match self {
+            | Entry::Marker => {
+                panic!("N'est pas une entrée de type Entry::Element.")
+            }
+            | Entry::Element(node) => node,
+        }
     }
 }
 
@@ -195,5 +224,18 @@ impl Default for InsertionMode {
     /// Initialement, le mode d'insertion est "initial".
     fn default() -> Self {
         Self::Initial
+    }
+}
+impl ops::Deref for ListOfActiveFormattingElements {
+    type Target = Vec<Entry>;
+
+    fn deref(&self) -> &Self::Target {
+        self.entries.as_ref()
+    }
+}
+
+impl ops::DerefMut for ListOfActiveFormattingElements {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.entries.as_mut()
     }
 }

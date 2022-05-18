@@ -770,6 +770,129 @@ where
         }
     }
 
+    /// Lorsque les étapes ci-dessous exigent que l'UA reconstruise les
+    /// éléments de mise en forme actifs, l'UA doit effectuer les étapes
+    /// suivantes :
+    ///   1. S'il n'y a aucune entrée dans la liste des éléments de
+    /// formatage actifs, alors il n'y a rien à reconstruire ; stopper
+    /// l'algorithme.
+    ///   2. Si la dernière entrée (la plus récemment ajoutée) dans la
+    /// liste des éléments de mise en forme actifs est un marqueur, ou si
+    /// c'est un élément qui se trouve dans la pile des éléments ouverts,
+    /// alors il n'y a rien à reconstruire ; stopper l'algorithme.
+    ///   3. Laisser entry être le dernier élément (le plus récemment
+    /// ajouté) dans la liste des éléments de formatage actifs.
+    ///   4. `rewind` : s'il n'y a aucune entrée avant l'entrée dans la
+    /// liste des éléments de mise en forme actifs, nous devons passer à
+    /// l'étape intitulée `create`.
+    ///   5. Laisser entry être l'entrée antérieure à entry dans la liste
+    /// des éléments de mise en forme actifs.
+    ///   6. Si l'entrée n'est ni un marqueur ni un élément qui se trouve
+    /// également dans la pile des éléments ouverts, nous devons passer à
+    /// l'étape intitulée `rewind`.
+    ///   7. `advance` : l'entrée est l'élément qui suit l'entrée dans la
+    /// liste des éléments de mise en forme actifs.
+    ///   8. `create` : insérer un élément HTML pour le jeton pour lequel
+    /// l'entrée de l'élément a été créée, pour obtenir un nouvel élément.
+    ///   9. Remplacer l'entrée pour l'élément dans la liste par une entrée
+    /// pour le nouvel élément.
+    ///   10. Si l'entrée pour le nouvel élément dans la liste des éléments
+    /// de formatage actifs n'est pas la dernière entrée de la liste,
+    /// revenez à l'étape intitulée Avancer.
+    ///
+    /// Cela a pour effet de rouvrir tous les éléments de mise en forme qui
+    /// ont été ouverts dans le body, cell ou caption courant (selon le
+    /// plus jeune) et qui n'ont pas été explicitement fermés.
+    ///
+    /// Note: La liste des éléments de formatage actifs est toujours
+    /// constituée d'éléments dans l'ordre chronologique, l'élément le
+    /// moins récemment ajouté étant le premier et l'élément le plus
+    /// récemment ajouté le dernier (sauf pendant l'exécution des étapes 7
+    /// à 10 de l'algorithme ci-dessus, bien sûr).
+    fn reconstruct_active_formatting_elements(&mut self) {
+        if self.list_of_active_formatting_elements.is_empty() {
+            return;
+        }
+
+        let size = self.list_of_active_formatting_elements.len();
+
+        let (mut entry, mut idx) = if let Some(last) =
+            self.list_of_active_formatting_elements.last_mut()
+        {
+            if last.is_marker() {
+                return;
+            }
+
+            if let Some(node) = last.element() {
+                if self.stack_of_open_elements.contains(node) {
+                    return;
+                }
+            }
+
+            (last, size - 1)
+        } else {
+            log::info!("Ne devrait jamais tomber dans cette condition.");
+            return;
+        };
+
+        'main: loop {
+            // Rewind
+            'rewind: loop {
+                if idx == 0 {
+                    break 'rewind /* continue in 'create */;
+                }
+
+                idx -= 1;
+                entry = unsafe {
+                    self.list_of_active_formatting_elements
+                        .get_unchecked_mut(idx)
+                }
+                .borrow_mut();
+
+                if !entry.is_marker()
+                    && !self
+                        .stack_of_open_elements
+                        .contains(entry.element_unchecked())
+                {
+                    continue 'rewind;
+                }
+            }
+
+            'create: loop {
+                let element = self
+                    .list_of_active_formatting_elements
+                    .get(idx)
+                    .and_then(|entry| entry.element())
+                    .unwrap_or_else(|| {
+                        panic!("L'élément à index {}", idx)
+                    });
+
+                let element = {
+                    let tag_token = HTMLTagToken::start()
+                        .with_name(element.element_ref().local_name());
+                    self.insert_html_element(&tag_token)
+                }
+                .unwrap();
+
+                self.list_of_active_formatting_elements
+                    .get(idx)
+                    .replace(&Entry::Element(element));
+
+                if idx == size - 1 {
+                    break 'create; /* continue in 'advance */
+                }
+            }
+
+            'advance: loop {
+                idx += 1;
+                entry = unsafe {
+                    self.list_of_active_formatting_elements
+                        .get_unchecked_mut(idx)
+                };
+            }
+        }
+    }
+
     /// <https://html.spec.whatwg.org/multipage/parsing.html#reset-the-insertion-mode-appropriately>
     fn reset_insertion_mode_appropriately(&mut self) {
         for (index, node) in self
@@ -1740,6 +1863,27 @@ where
                 /* Ignore */
             }
 
+            // U+0009 CHARACTER TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            //
+            // Reconstruire les éléments de mise en forme actifs, s'il y en
+            // a.
+            // Insérer le caractère du jeton.
+            //
+            // Any other character token
+            //
+            // Définir l'indicateur frameset-ok à "not ok".
+            | HTMLToken::Character(ch) => {
+                self.reconstruct_active_formatting_elements();
+                self.insert_character(ch);
+
+                if !ch.is_ascii_whitespace() {
+                    self.frameset_ok = false;
+                }
+            }
             | _ => todo!(),
         }
     }
