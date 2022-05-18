@@ -2014,6 +2014,59 @@ where
                     }
                 });
             }
+
+            // A start tag whose tag name is "frameset"
+            //
+            // Erreur d'analyse.
+            // Si la pile d'éléments ouverts ne comporte qu'un seul nœud,
+            // ou si le deuxième élément de la pile d'éléments ouverts
+            // n'est pas un élément body, nous devons ignorer le jeton
+            // (cas du fragment).
+            // Si le drapeau frameset-ok est défini sur "not ok", nous
+            // devons ignorer le jeton.
+            // Sinon, nous devons exécuter les étapes suivantes :
+            //   1. Retirer le deuxième élément de la pile des éléments
+            // ouverts de son nœud parent, s'il en a un.
+            //   2. Retirer tous les noeuds à partir du bas de la pile
+            // d'éléments ouverts, du noeud actuel jusqu'à l'élément html
+            // racine, mais sans l'inclure.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::frameset == name => {
+                self.parse_error(token.clone());
+
+                if self.stack_of_open_elements.len() == 1 {
+                    return;
+                }
+
+                let element = unsafe {
+                    self.stack_of_open_elements.get_unchecked(1)
+                }
+                .element_ref();
+                if tag_names::body != element.local_name() {
+                    return;
+                }
+
+                if !self.frameset_ok {
+                    return;
+                }
+
+                let second_element = self.stack_of_open_elements.remove(1);
+                second_element.detach_node();
+
+                while tag_names::html
+                    != self.current_node().element_ref().local_name()
+                {
+                    self.stack_of_open_elements.pop();
+                }
+
+                self.insert_html_element(tag_token);
+                self.insertion_mode.switch_to(InsertionMode::InFrameset);
+            }
             | _ => todo!(),
         }
     }

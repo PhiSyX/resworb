@@ -76,6 +76,39 @@ impl<T> TreeNode<T> {
         self.last_child.replace(child.into());
     }
 
+    pub fn detach_node(&self) {
+        if let Some(prev_node) = self.previous_sibling() {
+            prev_node.next_sibling.replace(self.next_sibling());
+        }
+
+        if let Some(next_node) = self.next_sibling() {
+            next_node
+                .prev_sibling
+                .replace(self.prev_sibling.borrow().clone());
+        }
+
+        if let Some(parent) = self.parent_node() {
+            let first_child = parent
+                .get_first_child()
+                .to_owned()
+                .expect("Le premier enfant");
+            let last_child = parent
+                .get_last_child()
+                .to_owned()
+                .expect("Le dernier enfant");
+
+            if Rc::ptr_eq(self, &first_child) {
+                parent.first_child.replace(self.next_sibling());
+            } else if Rc::ptr_eq(self, &last_child) {
+                parent.last_child.replace(self.previous_sibling());
+            }
+        }
+
+        self.parent.replace(None);
+        self.prev_sibling.replace(None);
+        self.next_sibling.replace(None);
+    }
+
     /// Récupère le premier enfant de l'arbre.
     pub fn get_first_child(&self) -> Ref<'_, Option<TreeNode<T>>> {
         self.first_child.borrow()
@@ -106,6 +139,10 @@ impl<T> TreeNode<T> {
                 }
             }
         }
+    }
+
+    pub fn next_sibling(&self) -> Option<Self> {
+        self.next_sibling.borrow().clone()
     }
 
     /// Un objet qui participe à un arbre a un parent, qui est soit null
