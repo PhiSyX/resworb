@@ -135,11 +135,6 @@ impl StackOfOpenElements {
         tag_name: tag_names,
         list: [tag_names; N],
     ) -> bool {
-        let tag_name: tag_names = tag_name
-            .try_into()
-            .ok()
-            .expect("Devrait être un nom de balise valide.");
-
         self.elements.iter().rev().any(|node| {
             let element = node.element_ref();
             let name = element.local_name();

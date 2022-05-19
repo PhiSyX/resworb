@@ -31,16 +31,6 @@ pub struct DocumentFragment {}
 // -------------- //
 
 impl DocumentFragmentNode {
-    fn new(fragment: DocumentFragment) -> Self {
-        let tree = TreeNode::new(
-            Node::builder()
-                .set_data(Self::document_fragment(fragment))
-                .set_type(NodeType::DOCUMENT_FRAGMENT_NODE)
-                .build(),
-        );
-        Self { tree }
-    }
-
     pub fn document_fragment(fragment: DocumentFragment) -> NodeData {
         NodeData::DocumentFragment {
             fragment: fragment.into(),
