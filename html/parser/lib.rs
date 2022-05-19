@@ -3142,6 +3142,78 @@ where
                 self.stack_of_open_elements.pop_until_tag(tag_name);
             }
 
+            // An end tag whose tag name is one of:
+            // "h1", "h2", "h3", "h4", "h5", "h6"
+            //
+            // Si la pile d'éléments ouverts ne contient pas d'élément HTML
+            // dont le nom de balise est l'un des suivants : "h1", "h2",
+            // "h3", "h4", "h5" ou "h6", il s'agit d'une erreur d'analyse ;
+            // ignorez le jeton.
+            // Sinon, exécutez ces étapes :
+            //   1. Génère des balises de fin implicites.
+            //   2. Si le nœud actuel n'est pas un élément HTML ayant le
+            // même nom de balise que celui du jeton, il s'agit
+            // d'une erreur d'analyse.
+            //   3. Extraire des éléments de la pile des éléments ouverts
+            // jusqu'à ce qu'un élément HTML dont le nom de balise est l'un
+            // de "h1", "h2", "h3", "h4", "h5" ou "h6" ait été extrait de
+            // la pile.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if name.is_one_of([
+                tag_names::h1,
+                tag_names::h2,
+                tag_names::h3,
+                tag_names::h4,
+                tag_names::h5,
+                tag_names::h6,
+            ]) =>
+            {
+                let tag_name: tag_names = name
+                    .parse()
+                    .expect("Devrait être un nom de balise valide");
+
+                if [
+                    tag_names::h1,
+                    tag_names::h2,
+                    tag_names::h3,
+                    tag_names::h4,
+                    tag_names::h5,
+                    tag_names::h6,
+                ]
+                .into_iter()
+                .all(|heading| {
+                    !self.stack_of_open_elements.has_element_in_scope(
+                        heading,
+                        StackOfOpenElements::SCOPE_ELEMENTS,
+                    )
+                }) {
+                    self.parse_error(token.clone());
+                    return;
+                }
+
+                self.generate_implied_end_tags();
+
+                if tag_name
+                    != self.current_node().element_ref().local_name()
+                {
+                    self.parse_error(token.clone());
+                }
+
+                loop {
+                    let popped_node = self.stack_of_open_elements.pop();
+                    if let Some(popped_node) = popped_node {
+                        if tag_name
+                            == popped_node.element_ref().local_name()
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+
             | _ => todo!(),
         }
     }
