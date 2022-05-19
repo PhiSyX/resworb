@@ -623,11 +623,21 @@ where
         }
     }
 
-    fn generate_implied_end_tags(&mut self, tag_name: tag_names) {
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#generate-implied-end-tags>
+    fn generate_implied_end_tags(&mut self) {
+        self.generate_implied_end_tags_with_predicate(|name| {
+            !name.is_empty()
+        });
+    }
+
+    fn generate_implied_end_tags_with_predicate(
+        &mut self,
+        predicate: impl Fn(&str) -> bool,
+    ) {
         let node = self.current_node();
         let element = node.element_ref();
         let name = element.local_name();
-        while tag_name != name
+        while predicate(&name)
             && name.is_one_of([
                 tag_names::dd,
                 tag_names::dt,
@@ -643,6 +653,15 @@ where
         {
             self.stack_of_open_elements.pop();
         }
+    }
+
+    fn generate_implied_end_tags_except_for(
+        &mut self,
+        exception: tag_names,
+    ) {
+        self.generate_implied_end_tags_with_predicate(|name| {
+            exception != name
+        });
     }
 
     /// Lorsque les étapes ci-dessous exigent que l'UA génère de manière
@@ -1900,7 +1919,7 @@ where
         {
             let tag_name = tag_names::p;
 
-            parser.generate_implied_end_tags(tag_name);
+            parser.generate_implied_end_tags_except_for(tag_name);
 
             if tag_name != parser.current_node().element_ref().local_name()
             {
@@ -2651,7 +2670,7 @@ where
                     let tag_name = name.parse::<tag_names>().unwrap();
 
                     if LI == tag_name {
-                        self.generate_implied_end_tags(LI);
+                        self.generate_implied_end_tags_except_for(LI);
                         if LI
                             == self
                                 .current_node()
@@ -2739,7 +2758,9 @@ where
                     let tag_name = name.parse::<tag_names>().unwrap();
 
                     if DD == tag_name || DT == tag_name {
-                        self.generate_implied_end_tags(tag_name);
+                        self.generate_implied_end_tags_except_for(
+                            tag_name,
+                        );
                         if tag_name
                             == self
                                 .current_node()
@@ -2804,6 +2825,41 @@ where
                 }
                 self.insert_html_element(tag_token);
                 self.tokenizer.switch_state_to("plaintext");
+            }
+
+            // A start tag whose tag name is "button"
+            //
+            // 1. Si la pile d'éléments ouverts contient un élément bouton,
+            // exécutez ces sous-étapes :
+            //    1.1. Erreur d'analyse.
+            //    1.2. Générer des balises de fin implicites.
+            //    1.3. Extraire des éléments de la pile d'éléments ouverts
+            // jusqu'à ce qu'un élément de bouton ait été extrait de la
+            // pile.
+            // 2. Reconstruire les éléments de mise en forme actifs, s'il y
+            // en a.
+            // 3. Insérer un élément HTML pour le jeton.
+            // 4. Définir l'indicateur frameset-ok à "not ok".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::button == name => {
+                const BUTTON: tag_names = tag_names::button;
+                if self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(BUTTON)
+                {
+                    self.parse_error(token.clone());
+                    self.generate_implied_end_tags();
+                    self.stack_of_open_elements.pop_until_tag(BUTTON);
+                }
+
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element(tag_token);
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
             }
 
             | _ => todo!(),
