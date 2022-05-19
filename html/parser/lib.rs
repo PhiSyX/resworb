@@ -3057,6 +3057,44 @@ where
                 close_p_element(self, token);
             }
 
+            // An end tag whose tag name is "li"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément "li"
+            // dans la portée de l'élément de liste, il s'agit d'une erreur
+            // d'analyse ; ignorer le jeton.
+            //
+            // Sinon, nous devons exécuter ces étapes :
+            //   1. Générer des balises de fin implicites, sauf pour les
+            // éléments li.
+            //   2. Si le noeud actuel n'est pas un élément li, il s'agit
+            // d'une erreur d'analyse.
+            //   3. Retirer les éléments de la pile des éléments ouverts
+            // jusqu'à ce qu'un élément li ait été retiré de la
+            // pile.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::li == name => {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::li,
+                    StackOfOpenElements::SCOPE_ELEMENTS,
+                ) {
+                    self.parse_error(token.clone());
+                    return;
+                }
+
+                self.generate_implied_end_tags_except_for(tag_names::li);
+
+                if tag_names::li
+                    != self.current_node().element_ref().local_name()
+                {
+                    self.parse_error(token.clone());
+                }
+
+                self.stack_of_open_elements.pop_until_tag(tag_names::li);
+            }
+
             | _ => todo!(),
         }
     }
