@@ -3095,6 +3095,49 @@ where
                 self.stack_of_open_elements.pop_until_tag(tag_names::li);
             }
 
+            // An end tag whose tag name is one of: "dd", "dt"
+            //
+            // Si la pile d'éléments ouverts ne contient pas d'élément HTML
+            // ayant le même nom de balise que celui du jeton, il s'agit
+            // d'une erreur d'analyse ; ignorer le jeton.
+            //
+            // Sinon, exécutez ces étapes :
+            //   1. Générer les balises de fin implicites, sauf pour les
+            // éléments HTML ayant le même nom de balise que le jeton.
+            //   2. Si le noeud actuel n'est pas un élément HTML ayant le
+            // même nom de balise que celui du jeton, il s'agit d'une
+            // erreur d'analyse.
+            //   3. Retirer les éléments de la pile des éléments ouverts
+            // jusqu'à ce qu'un élément HTML ayant le même nom de balise
+            // que le jeton ait été retiré de la pile.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::dd == name || tag_names::dt == name => {
+                let tag_name = name
+                    .parse()
+                    .expect("Devrait être un nom de balise valide");
+
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_name,
+                    StackOfOpenElements::SCOPE_ELEMENTS,
+                ) {
+                    self.parse_error(token.clone());
+                    return;
+                }
+
+                self.generate_implied_end_tags_except_for(tag_name);
+
+                if tag_name
+                    != self.current_node().element_ref().local_name()
+                {
+                    self.parse_error(token.clone());
+                }
+
+                self.stack_of_open_elements.pop_until_tag(tag_name);
+            }
+
             | _ => todo!(),
         }
     }
