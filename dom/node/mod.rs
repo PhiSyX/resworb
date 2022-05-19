@@ -29,7 +29,7 @@ mod text;
 /// 4.14. Interface Comment
 mod comment;
 
-use core::cell::RefCell;
+use std::sync::RwLock;
 
 use html_elements::HTMLScriptElement;
 use infra::structure::tree::{TreeNode, TreeNodeWeak};
@@ -53,13 +53,13 @@ pub use self::{
 /// 4.4. Interface Node
 #[derive(Debug)]
 pub struct Node {
-    owner_document: RefCell<Option<TreeNodeWeak<Self>>>,
+    owner_document: RwLock<Option<TreeNodeWeak<Self>>>,
     node_data: Option<NodeData>,
     node_type: NodeType,
 }
 
 pub(crate) struct NodeBuilder {
-    owner_document: RefCell<Option<TreeNodeWeak<Node>>>,
+    owner_document: RwLock<Option<TreeNodeWeak<Node>>>,
     node_data: Option<NodeData>,
     node_type: NodeType,
 }
@@ -186,7 +186,7 @@ impl Node {
     pub fn set_document(&self, document: &TreeNode<Node>) {
         let document_weak: TreeNodeWeak<Node> =
             TreeNodeWeak::from(document);
-        self.owner_document.replace(Some(document_weak));
+        self.owner_document.write().unwrap().replace(document_weak);
     }
 }
 
@@ -227,7 +227,7 @@ impl NodeBuilder {
 
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
-        self.node_data == other.node_data
-            && self.node_type == other.node_type
+        self.node_type == other.node_type
+            && self.node_data == other.node_data
     }
 }

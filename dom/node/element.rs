@@ -2,17 +2,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use core::fmt;
+use core::{fmt, str};
 use std::{
-    cell::{Ref, RefCell},
     collections::HashMap,
-    str::FromStr,
+    sync::{RwLock, RwLockReadGuard},
 };
 
 use html_elements::{
     interface::HTMLElementInterface, tag_names, HTMLScriptElement,
 };
-use infra::namespace::Namespace;
+use infra::{namespace::Namespace, primitive::string::DOMString};
 
 use super::{document_fragment::DocumentFragmentNode, DocumentNode};
 
@@ -21,11 +20,11 @@ use super::{document_fragment::DocumentFragmentNode, DocumentNode};
 // --------- //
 
 #[derive(Debug)]
-#[derive(PartialEq)]
 pub struct Element {
     inner: HTMLElement,
-    pub attributes: RefCell<HashMap<String, String>>,
-    pub id: RefCell<Option<String>>,
+    // todo: changer en NamedNodeMap (cf. https://dom.spec.whatwg.org/#namednodemap)
+    pub attributes: RwLock<HashMap<DOMString, DOMString>>,
+    pub id: RwLock<Option<String>>,
 }
 
 // ----------- //
@@ -79,11 +78,13 @@ impl Element {
         self.inner.to_string()
     }
 
-    pub fn content(&self) -> Option<Ref<'_, DocumentFragmentNode>> {
+    pub fn content(
+        &self,
+    ) -> Option<RwLockReadGuard<DocumentFragmentNode>> {
         assert!(matches!(self.inner, HTMLElement::ScriptingTemplate(_)));
 
         if let HTMLElement::ScriptingTemplate(el) = &self.inner {
-            return Some(el.content.borrow());
+            return el.content.read().ok();
         }
 
         None
@@ -119,18 +120,20 @@ impl Element {
     }
 
     pub fn has_attribute(&self, name: &str) -> bool {
-        self.attributes.borrow().contains_key(name)
+        let dom_string = DOMString::new(name);
+        self.attributes.read().unwrap().contains_key(&dom_string)
     }
 
     pub fn set_attribute(&self, name: &str, value: &str) {
         if name == "id" {
-            *self.id.borrow_mut() = value.to_owned().into();
+            *self.id.write().unwrap() = value.to_owned().into();
             return;
         }
 
         self.attributes
-            .borrow_mut()
-            .insert(name.to_owned(), value.to_owned());
+            .write()
+            .unwrap()
+            .insert(DOMString::new(name), DOMString::new(value));
     }
 }
 
@@ -138,7 +141,16 @@ impl Element {
 // Implémentation // -> Interface
 // -------------- //
 
-impl FromStr for HTMLElement {
+impl PartialEq for Element {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+            && *self.attributes.read().unwrap()
+                == *other.attributes.read().unwrap()
+            && *self.id.read().unwrap() == *other.id.read().unwrap()
+    }
+}
+
+impl str::FromStr for HTMLElement {
     type Err = &'static str;
 
     fn from_str(local_name: &str) -> Result<Self, Self::Err> {

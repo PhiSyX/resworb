@@ -2,8 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use core::{borrow::Borrow, ops};
-use std::{borrow::BorrowMut, cell::RefCell};
+use core::ops;
+use std::{
+    borrow::{Borrow, BorrowMut},
+    sync::RwLock,
+};
 
 use super::{TreeNode, TreeNodeWeak};
 
@@ -15,13 +18,13 @@ use super::{TreeNode, TreeNodeWeak};
 pub struct Node<T> {
     data: T,
 
-    pub(crate) parent: RefCell<Option<TreeNodeWeak<T>>>,
+    pub(crate) parent: RwLock<Option<TreeNodeWeak<T>>>,
 
-    pub(crate) first_child: RefCell<Option<TreeNode<T>>>,
-    pub(crate) last_child: RefCell<Option<TreeNode<T>>>,
+    pub(crate) first_child: RwLock<Option<TreeNode<T>>>,
+    pub(crate) last_child: RwLock<Option<TreeNode<T>>>,
 
-    pub(crate) prev_sibling: RefCell<Option<TreeNodeWeak<T>>>,
-    pub(crate) next_sibling: RefCell<Option<TreeNode<T>>>,
+    pub(crate) prev_sibling: RwLock<Option<TreeNodeWeak<T>>>,
+    pub(crate) next_sibling: RwLock<Option<TreeNode<T>>>,
 }
 
 // ----------- //

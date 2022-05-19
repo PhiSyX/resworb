@@ -10,7 +10,7 @@ mod state;
 mod token;
 mod tokenizer;
 
-use std::{borrow::BorrowMut, ops::Deref, rc::Rc};
+use std::{borrow::BorrowMut, ops::Deref, sync::Arc};
 
 use dom::node::{
     CommentNode, Document, DocumentNode, DocumentType, Node, QuirksMode,
@@ -728,9 +728,13 @@ where
     fn insert_character(&mut self, ch: CodePoint) {
         let maybe_node = self.find_character_insertion_node();
 
-        if maybe_node == self.character_insertion_node {
-            self.character_insertion_builder.push(ch);
-            return;
+        if let (Some(a), Some(b)) =
+            (maybe_node.as_ref(), self.character_insertion_node.as_ref())
+        {
+            if Arc::ptr_eq(a, b) {
+                self.character_insertion_builder.push(ch);
+                return;
+            }
         }
 
         if self.character_insertion_node.is_none() {
@@ -2995,7 +2999,7 @@ where
 
                 if let Some(node) = maybe_node {
                     self.stack_of_open_elements.remove_first_tag_matching(
-                        |first_node| Rc::ptr_eq(first_node, &node),
+                        |first_node| Arc::ptr_eq(first_node, &node),
                     );
                 }
             }
@@ -3192,9 +3196,9 @@ mod tests {
         parser.handle_initial_insertion_mode(token);
         let doc = parser.document.document_ref();
         let doctype = doc.get_doctype().clone().unwrap();
-        assert_eq!(doctype.name, "html");
-        assert_eq!(doctype.public_id, "");
-        assert_eq!(doctype.system_id, "");
+        assert_eq!(doctype.name.to_string(), "html".to_string());
+        assert_eq!(doctype.public_id.to_string(), "".to_string());
+        assert_eq!(doctype.system_id.to_string(), "".to_string());
 
         // Anything else
 
@@ -3202,7 +3206,7 @@ mod tests {
         let token = parser.tokenizer.next_token().unwrap();
         parser.handle_initial_insertion_mode(token);
         let doc = parser.document.document_ref();
-        assert_eq!(doc.quirks_mode.borrow().clone(), QuirksMode::Yes);
+        assert_eq!(*doc.quirks_mode.read().unwrap(), QuirksMode::Yes);
         assert_eq!(parser.insertion_mode, InsertionMode::BeforeHTML);
     }
 
