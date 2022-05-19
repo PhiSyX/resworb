@@ -10,7 +10,7 @@ mod state;
 mod token;
 mod tokenizer;
 
-use std::{borrow::BorrowMut, ops::Deref};
+use std::{borrow::BorrowMut, ops::Deref, rc::Rc};
 
 use dom::node::{
     CommentNode, Document, DocumentNode, DocumentType, Node, QuirksMode,
@@ -2933,6 +2933,102 @@ where
                 }
 
                 self.stack_of_open_elements.pop_until_tag(tag_name);
+            }
+
+            // An end tag whose tag name is "form"
+            //
+            // S'il n'y a pas d'élément template sur la pile des éléments
+            // ouverts, nous devons exécuter ces sous-étapes :
+            //   1. Laisser node être l'élément sur lequel le pointeur
+            // d'élément form est placé, soit null s'il n'est pas placé sur
+            // un élément.
+            //   2. Définit le pointeur de l'élément form à null.
+            //   3. Si node est null ou si la pile d'éléments ouverts n'a
+            // pas node dans son champ d'application, alors il s'agit d'une
+            // erreur d'analyse ; retourner et ignorer le jeton.
+            //   4. Générer des balises de fin implicites.
+            //   5. Si le nœud actuel n'est pas un noeud, il s'agit d'une
+            // erreur d'analyse.
+            //   6. Extraire le noeud de la pile des éléments ouverts.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::form == name
+                && !self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_names::template) =>
+            {
+                let maybe_node = self.form_element.take();
+                match &maybe_node {
+                    | Some(node) => {
+                        let element_name = node
+                            .element_ref()
+                            .local_name()
+                            .parse()
+                            .expect(
+                                "devrait être un nom de balise valide.",
+                            );
+                        if !self
+                            .stack_of_open_elements
+                            .has_element_in_scope(
+                                element_name,
+                                StackOfOpenElements::SCOPE_ELEMENTS,
+                            )
+                        {
+                            self.parse_error(token.clone());
+                            return;
+                        }
+                    }
+                    | None => {
+                        self.parse_error(token.clone());
+                        return;
+                    }
+                };
+
+                self.generate_implied_end_tags();
+                if self.stack_of_open_elements.current_node()
+                    == maybe_node.as_ref()
+                {
+                    self.parse_error(token.clone());
+                }
+
+                if let Some(node) = maybe_node {
+                    self.stack_of_open_elements.remove_first_tag_matching(
+                        |first_node| Rc::ptr_eq(first_node, &node),
+                    );
+                }
+            }
+
+            // An end tag whose tag name is "form"
+            //
+            // S'il existe un élément template sur la pile des éléments
+            // ouverts, nous devons exécuter ces sous-étapes à la place :
+            //   1. Si la pile d'éléments ouverts ne contient pas d'élément
+            // form, il s'agit d'une erreur d'analyse ; retourner
+            // et ignorer le jeton.
+            //   2. Générer des balises de fin implicites.
+            //   3. Si le noeud actuel n'est pas un élément form, alors
+            // il s'agit d'une erreur d'analyse.
+            //   4. Extraire des éléments de la pile des éléments ouverts
+            // jusqu'à ce qu'un élément form ait été extrait de la pile.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::form == name
+                && self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_names::template) =>
+            {
+                self.generate_implied_end_tags();
+                if tag_names::form
+                    != self.current_node().element_ref().local_name()
+                {
+                    self.parse_error(token);
+                }
+
+                self.stack_of_open_elements.pop_until_tag(tag_names::form);
             }
 
             | _ => todo!(),
