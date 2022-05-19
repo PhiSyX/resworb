@@ -3031,6 +3031,32 @@ where
                 self.stack_of_open_elements.pop_until_tag(tag_names::form);
             }
 
+            // An end tag whose tag name is "p"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément p
+            // dans la portée du bouton, il s'agit d'une erreur d'analyse ;
+            // insérer un élément HTML pour un jeton de balise de début "p"
+            // sans attributs.
+            // Fermer un élément p.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::p == name => {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::p,
+                    StackOfOpenElements::scoped_elements_with::<10>([
+                        tag_names::button,
+                    ]),
+                ) {
+                    let p = HTMLTagToken::start().with_name(tag_names::p);
+                    self.parse_error(token.clone());
+                    self.insert_html_element(&p);
+                }
+
+                close_p_element(self, token);
+            }
+
             | _ => todo!(),
         }
     }
