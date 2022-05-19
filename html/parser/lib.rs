@@ -2862,6 +2862,79 @@ where
                 self.frameset_ok_flag = FramesetOkFlag::NotOk;
             }
 
+            // An end tag whose tag name is one of:
+            // "address", "article", "aside", "blockquote", "button",
+            // "center", "details", "dialog", "dir", "div", "dl",
+            // "fieldset", "figcaption", "figure", "footer", "header",
+            // "hgroup", "listing", "main", "menu", "nav", "ol", "pre",
+            // "section", "summary", "ul"
+            //
+            // Si la pile d'éléments ouverts ne contient pas d'élément HTML
+            // ayant le même nom de balise que celui du jeton, il s'agit
+            // d'une erreur d'analyse ; ignorer le jeton.
+            // Sinon, suivre ces étapes:
+            //   1. Générer des balises de fin implicites.
+            //   2. Si le nœud actuel n'est pas un élément HTML ayant le
+            // même nom de balise que celui du jeton, il s'agit d'une
+            // erreur d'analyse.
+            //   3. Extraire les éléments de la pile des éléments ouverts
+            // jusqu'à ce qu'un élément HTML ayant le même nom de balise
+            // que le jeton ait été retiré de la pile.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if name.is_one_of([
+                tag_names::address,
+                tag_names::article,
+                tag_names::aside,
+                tag_names::blockquote,
+                tag_names::button,
+                tag_names::center,
+                tag_names::details,
+                tag_names::dialog,
+                tag_names::dir,
+                tag_names::div,
+                tag_names::dl,
+                tag_names::fieldset,
+                tag_names::figcaption,
+                tag_names::figure,
+                tag_names::footer,
+                tag_names::header,
+                tag_names::hgroup,
+                tag_names::listing,
+                tag_names::main,
+                tag_names::menu,
+                tag_names::nav,
+                tag_names::ol,
+                tag_names::pre,
+                tag_names::section,
+                tag_names::summary,
+                tag_names::ul,
+            ]) =>
+            {
+                let tag_name = name
+                    .parse::<tag_names>()
+                    .expect("devrait être un nom de balise valide.");
+                if !self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_name)
+                {
+                    self.parse_error(token.clone());
+                    return;
+                }
+
+                self.generate_implied_end_tags();
+                if !self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_name)
+                {
+                    self.parse_error(token.clone());
+                }
+
+                self.stack_of_open_elements.pop_until_tag(tag_name);
+            }
+
             | _ => todo!(),
         }
     }
