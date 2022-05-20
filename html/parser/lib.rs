@@ -3320,6 +3320,14 @@ where
                     insertion_location.append_child(comment.to_owned());
                 }
             }
+
+            // A DOCTYPE token
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::DOCTYPE(_) => {
+                self.parse_error(token);
+                /* Ignore */
+            }
             // Anything else
             //
             // Erreur d'analyse. Passer le mode d'insertion à "in body" et
