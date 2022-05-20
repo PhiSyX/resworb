@@ -3375,6 +3375,34 @@ where
                 self.run_adoption_agency_algorithm(token.clone());
             }
 
+            // A start tag whose tag name is one of: "applet", "marquee",
+            // "object"
+            //
+            // Reconstruire les éléments de mise en forme actifs, s'il y en
+            // a.
+            // Insérer un élément HTML pour le jeton.
+            // Insérer un marqueur à la fin de la liste des éléments de
+            // mise en forme actifs.
+            // Définir l'indicateur frameset-ok à "not ok".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::applet,
+                tag_names::marquee,
+                tag_names::object,
+            ]) =>
+            {
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element(tag_token);
+                self.list_of_active_formatting_elements
+                    .push(Entry::Marker);
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
