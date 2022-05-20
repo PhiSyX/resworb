@@ -223,7 +223,9 @@ where
             }
             | InsertionMode::InFrameset => todo!(),
             | InsertionMode::AfterFrameset => todo!(),
-            | InsertionMode::AfterAfterBody => todo!(),
+            | InsertionMode::AfterAfterBody => {
+                self.handle_after_after_body_insertion_mode(token);
+            }
             | InsertionMode::AfterAfterFrameset => todo!(),
         }
     }
@@ -3372,6 +3374,26 @@ where
                 self.stop_parsing = true;
             }
 
+            // Anything else
+            //
+            // Erreur d'analyse. Passer le mode d'insertion à "in body" et
+            // retraiter le jeton.
+            | _ => {
+                self.parse_error(token.clone());
+                self.insertion_mode.switch_to(InsertionMode::InBody);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+        }
+    }
+
+    fn handle_after_after_body_insertion_mode(
+        &mut self,
+        token: HTMLToken,
+    ) {
+        match token {
             // Anything else
             //
             // Erreur d'analyse. Passer le mode d'insertion à "in body" et
