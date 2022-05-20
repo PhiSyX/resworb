@@ -3305,6 +3305,21 @@ where
                     token,
                 );
             }
+
+            // A comment token
+            //
+            // Insérer un commentaire comme dernier enfant du premier
+            // élément de la pile d'éléments ouverts (l'élément html).
+            | HTMLToken::Comment(comment) => {
+                let maybe_insertion_location =
+                    self.stack_of_open_elements.first();
+                if let Some(insertion_location) = maybe_insertion_location
+                {
+                    let comment =
+                        CommentNode::new(&self.document, comment);
+                    insertion_location.append_child(comment.to_owned());
+                }
+            }
             // Anything else
             //
             // Erreur d'analyse. Passer le mode d'insertion à "in body" et
