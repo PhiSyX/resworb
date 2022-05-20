@@ -3529,6 +3529,35 @@ where
                 self.frameset_ok_flag = FramesetOkFlag::NotOk;
             }
 
+            // A start tag whose tag name is "input"
+            //
+            // Reconstruire les éléments de mise en forme actifs, s'il y en
+            // en a.
+            // Insérer un élément HTML pour le jeton. Retirer immédiatement
+            // le nœud actuel de la pile des éléments ouverts.
+            // Faire savoir que le drapeau self-closing du jeton, s'il est
+            // activé.
+            // Si le jeton n'a pas d'attribut avec le nom "type", ou s'il
+            // en a un, mais que la valeur de cet attribut n'est pas une
+            // correspondance ASCII insensible à la casse pour la chaîne
+            // "hidden", alors nous devons mettre le drapeau frameset-ok à
+            // "not ok".
+            | HTMLToken::Tag(mut tag_token) => {
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element(&tag_token);
+                self.stack_of_open_elements.pop();
+                tag_token.set_acknowledge_self_closing_flag();
+                if !tag_token.attributes.iter().any(|(name, value)| {
+                    if name == "type" {
+                        value.eq_ignore_ascii_case("hidden")
+                    } else {
+                        false
+                    }
+                }) {
+                    self.frameset_ok_flag = FramesetOkFlag::NotOk;
+                }
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
