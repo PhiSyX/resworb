@@ -3328,6 +3328,42 @@ where
                 self.parse_error(token);
                 /* Ignore */
             }
+
+            // A start tag whose tag name is "html"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::html == name => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // An end tag whose tag name is "html"
+            //
+            // Si l'analyseur a été créé dans le cadre de l'algorithme
+            // d'analyse des fragments HTML, il s'agit d'une erreur
+            // d'analyse ; ignorer le jeton (cas du fragment).
+            // Sinon, nous devons passer le mode d'insertion sur
+            // "after after body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::html == name => {
+                if self.parsing_fragment {
+                    self.parse_error(token);
+                    return;
+                }
+
+                self.insertion_mode
+                    .switch_to(InsertionMode::AfterAfterBody);
+            }
             // Anything else
             //
             // Erreur d'analyse. Passer le mode d'insertion à "in body" et
