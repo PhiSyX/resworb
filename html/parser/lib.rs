@@ -1919,7 +1919,7 @@ where
         }
     }
 
-    fn handle_in_body_insertion_mode(&mut self, token: HTMLToken) {
+    fn handle_in_body_insertion_mode(&mut self, mut token: HTMLToken) {
         // Sera utilisé dans plusieurs endroit dans le code.
         fn handle_any_other_end_tag<C>(
             parser: &mut HTMLParser<C>,
@@ -3485,6 +3485,48 @@ where
                 self.insert_html_element(tag_token);
                 self.frameset_ok_flag = FramesetOkFlag::NotOk;
                 self.insertion_mode.switch_to(InsertionMode::InTable);
+            }
+
+            // An end tag whose tag name is "br"
+            //
+            // Erreur d'analyse. Supprimer les attributs du jeton, et
+            // agir comme décrit dans l'entrée suivante ; c'est-à-dire
+            // agir comme s'il s'agissait d'un jeton de balise de début
+            // "br" sans attributs, plutôt que du jeton de balise de fin
+            // qu'il est en réalité.
+            //
+            // A start tag whose tag name is one of: "area", "br", "embed",
+            // "img", "keygen", "wbr"
+            //
+            // Reconstruire les éléments de mise en forme actifs, s'il y en
+            // a.
+            // Insérer un élément HTML pour le jeton. Retirer immédiatement
+            // le nœud actuel de la pile des éléments ouverts.
+            // Faire savoir que le drapeau self-closing du jeton, s'il
+            // est activé.
+            // Définir l'indicateur frameset-ok à "not ok".
+            | HTMLToken::Tag(ref mut tag_token)
+                if (tag_token.is_end
+                    && tag_names::br == tag_token.name)
+                    || !tag_token.is_end
+                        && tag_token.name.is_one_of([
+                            tag_names::area,
+                            tag_names::br,
+                            tag_names::embed,
+                            tag_names::img,
+                            tag_names::keygen,
+                            tag_names::wbr,
+                        ]) =>
+            {
+                if tag_token.is_end && tag_names::br == tag_token.name {
+                    tag_token.attributes.clear();
+                }
+
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element(tag_token);
+                self.stack_of_open_elements.pop();
+                tag_token.set_acknowledge_self_closing_flag();
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
             }
 
             // todo: les autres cas de balises de début et de fin
