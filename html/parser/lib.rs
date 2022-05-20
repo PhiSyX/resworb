@@ -3403,6 +3403,58 @@ where
                 self.frameset_ok_flag = FramesetOkFlag::NotOk;
             }
 
+            // An end tag token whose tag name is one of: "applet",
+            // "marquee", "object"
+            //
+            // Si la pile d'éléments ouverts ne contient pas d'élément HTML
+            // ayant le même nom de balise que celui du jeton, il s'agit
+            // d'une erreur d'analyse ; ignorer le jeton.
+            //
+            // Sinon, nous devons exécuter ces étapes :
+            //   1. Générer un élément de fin de balise.
+            //   2. Si le nœud actuel n'est pas un élément HTML ayant le
+            // même nom de balise que celui du jeton, il s'agit d'une
+            // erreur d'analyse.
+            //   3. Retirer les éléments de la pile des éléments ouverts
+            // jusqu'à ce qu'un élément HTML ayant le même nom de balise
+            // que le jeton ait été retiré de la pile.
+            //   4. Effacer la liste des éléments de mise en forme actifs
+            // jusqu'au dernier marqueur.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if name.is_one_of([
+                tag_names::applet,
+                tag_names::marquee,
+                tag_names::object,
+            ]) =>
+            {
+                let tag_name = name
+                    .parse()
+                    .expect("Devrait être un nom de balise valide");
+
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_name,
+                    StackOfOpenElements::SCOPE_ELEMENTS,
+                ) {
+                    self.parse_error(token.clone());
+                    return;
+                }
+
+                self.generate_implied_end_tags();
+
+                let cnode = self.current_node();
+                let element = cnode.element_ref();
+                if element.tag_name() != tag_name {
+                    self.parse_error(token.clone());
+                }
+
+                self.stack_of_open_elements.pop_until_tag(tag_name);
+                self.list_of_active_formatting_elements
+                    .clear_up_to_the_last_marker();
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
