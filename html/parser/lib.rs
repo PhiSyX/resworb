@@ -1074,6 +1074,12 @@ where
         assert!(self.parsing_fragment);
         self.insertion_mode.switch_to(InsertionMode::InBody);
     }
+
+    /// TODO:
+    /// https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm
+    fn run_adoption_agency_algorithm(&mut self, token: HTMLToken) {
+        unimplemented!()
+    }
 }
 
 impl<C> HTMLParser<C>
@@ -3298,6 +3304,41 @@ where
             ]) =>
             {
                 self.reconstruct_active_formatting_elements();
+                let element = self.insert_html_element(tag_token);
+                if let Some(element) = element {
+                    self.list_of_active_formatting_elements
+                        .push(Entry::Element(element));
+                }
+            }
+
+            // A start tag whose tag name is "nobr"
+            //
+            // Reconstruire les éléments de mise en forme actifs, s'il y en
+            // a.
+            // Si la pile d'éléments ouverts comporte un élément nobr dans
+            // sa portée, il s'agit d'une erreur d'analyse ; exécuter
+            // l'algorithme de l'agence d'adoption pour le jeton, puis
+            // reconstruisez à nouveau les éléments de formatage actifs, le
+            // cas échéant.
+            // Insérer un élément HTML pour le jeton. Pousser cet élément
+            // dans la liste des éléments de formatage actifs.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::nobr == name => {
+                self.reconstruct_active_formatting_elements();
+
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::nobr,
+                    StackOfOpenElements::SCOPE_ELEMENTS,
+                ) {
+                    self.run_adoption_agency_algorithm(token.clone());
+                    self.reconstruct_active_formatting_elements();
+                }
+
                 let element = self.insert_html_element(tag_token);
                 if let Some(element) = element {
                     self.list_of_active_formatting_elements
