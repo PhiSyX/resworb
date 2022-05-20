@@ -3488,6 +3488,9 @@ mod tests {
     fn test_parse_document() {
         let mut parser = load_fixture!("crashtests/test.html");
         parser.run();
+        panic!(
+            "[pour le test]: je veux paniquer même si tout fonctionne !"
+        );
     }
 
     #[test]
