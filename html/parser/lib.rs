@@ -3268,6 +3268,43 @@ where
                 }
             }
 
+            // A start tag whose tag name is one of: "b", "big", "code",
+            // "em", "font", "i", "s", "small", "strike", "strong", "tt",
+            // "u"
+            //
+            // Reconstruire les éléments de mise en forme actifs, s'il y en
+            // a.
+            // Insérez un élément HTML pour le jeton. Pousser cet élément
+            // dans la liste des éléments de formatage actifs.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::b,
+                tag_names::big,
+                tag_names::code,
+                tag_names::em,
+                tag_names::font,
+                tag_names::i,
+                tag_names::s,
+                tag_names::small,
+                tag_names::strike,
+                tag_names::strong,
+                tag_names::tt,
+                tag_names::u,
+            ]) =>
+            {
+                self.reconstruct_active_formatting_elements();
+                let element = self.insert_html_element(tag_token);
+                if let Some(element) = element {
+                    self.list_of_active_formatting_elements
+                        .push(Entry::Element(element));
+                }
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
