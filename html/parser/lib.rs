@@ -3346,6 +3346,35 @@ where
                 }
             }
 
+            // An end tag whose tag name is one of: "a", "b", "big",
+            // "code", "em", "font", "i", "nobr", "s", "small", "strike",
+            // "strong", "tt", "u"
+            //
+            // Exécuter l'algorithme de l'agence d'adoption pour le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if name.is_one_of([
+                tag_names::a,
+                tag_names::b,
+                tag_names::big,
+                tag_names::code,
+                tag_names::em,
+                tag_names::font,
+                tag_names::i,
+                tag_names::nobr,
+                tag_names::s,
+                tag_names::small,
+                tag_names::strike,
+                tag_names::strong,
+                tag_names::tt,
+                tag_names::u,
+            ]) =>
+            {
+                self.run_adoption_agency_algorithm(token.clone());
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
