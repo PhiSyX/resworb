@@ -121,6 +121,10 @@ impl Document {
     pub fn get_doctype(&self) -> RwLockReadGuard<Option<DocumentType>> {
         self.doctype.read().unwrap()
     }
+
+    pub fn isin_quirks_mode(&self) -> bool {
+        matches!(*self.quirks_mode.read().unwrap(), QuirksMode::Yes)
+    }
 }
 
 // &mut Self

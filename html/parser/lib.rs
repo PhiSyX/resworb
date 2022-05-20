@@ -3455,6 +3455,38 @@ where
                     .clear_up_to_the_last_marker();
             }
 
+            // A start tag whose tag name is "table"
+            //
+            // Si le document n'est pas en mode quirks mode et que la pile
+            // d'éléments ouverts comporte un élément p dans la portée du
+            // bouton, alors nous devons fermer un élément p.
+            // Insérer un élément HTML pour le jeton.
+            // Définir l'indicateur frameset-ok à "not ok".
+            // Passer au mode d'insertion "in table".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::table == name => {
+                let document = self.document.document_ref();
+                if !document.isin_quirks_mode()
+                    && self.stack_of_open_elements.has_element_in_scope(
+                        tag_names::p,
+                        StackOfOpenElements::scoped_elements_with::<10>([
+                            tag_names::button,
+                        ]),
+                    )
+                {
+                    close_p_element(self, token.clone());
+                }
+
+                self.insert_html_element(tag_token);
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
