@@ -65,6 +65,10 @@ struct AdjustedInsertionLocation {
     insert_before_sibling: Option<TreeNode<Node>>,
 }
 
+// ----------- //
+// Énumération //
+// ----------- //
+
 #[derive(PartialEq)]
 enum FramesetOkFlag {
     Ok,
@@ -404,7 +408,6 @@ where
             attributes.iter().for_each(|attribute| {
                 element
                     .element_ref()
-                    .borrow_mut()
                     .set_attribute(&attribute.0, &attribute.1);
             });
         }
@@ -851,7 +854,7 @@ where
     /// pour le nouvel élément.
     ///   10. Si l'entrée pour le nouvel élément dans la liste des éléments
     /// de formatage actifs n'est pas la dernière entrée de la liste,
-    /// revener à l'étape intitulée Avancer.
+    /// nous devons revenir à l'étape intitulée Avancer.
     ///
     /// Cela a pour effet de rouvrir tous les éléments de mise en forme qui
     /// ont été ouverts dans le body, cell ou caption courant (selon le
@@ -1575,7 +1578,6 @@ where
 
                 let script_element = element
                     .script_ref()
-                    .borrow_mut()
                     .set_parser_document(&self.document)
                     .set_non_blocking(false);
 
@@ -1908,6 +1910,54 @@ where
     }
 
     fn handle_in_body_insertion_mode(&mut self, token: HTMLToken) {
+        // Sera utilisé dans plusieurs endroit dans le code.
+        fn handle_any_other_end_tag<C>(
+            parser: &mut HTMLParser<C>,
+            token: &HTMLToken,
+        ) where
+            C: Iterator<Item = CodePoint>,
+        {
+            let tag_token = token.as_tag();
+
+            let mut index: Option<usize> = None;
+            for (idx, node) in
+                parser.stack_of_open_elements.iter().enumerate().rev()
+            {
+                let current_tag_name = node.element_ref().tag_name();
+                if tag_token.tag_name() == current_tag_name {
+                    if node == parser.current_node() {
+                        parser.parse_error(token.clone());
+                    }
+                    index = Some(idx);
+                    break;
+                }
+
+                if is_special_tag(
+                    current_tag_name,
+                    &node.element_ref().namespace(),
+                ) {
+                    parser.parse_error(token.clone());
+                    return;
+                }
+            }
+
+            let match_idx = match index {
+                | Some(idx) => idx,
+                | None => {
+                    parser.parse_error(token.clone());
+                    return;
+                }
+            };
+
+            parser.generate_implied_end_tags_except_for(
+                tag_token.tag_name(),
+            );
+
+            while parser.stack_of_open_elements.len() > match_idx {
+                parser.stack_of_open_elements.pop();
+            }
+        }
+
         /// Lorsque les étapes ci-dessous indiquent que l'agent utilisateur
         /// doit fermer un élément p, cela signifie que l'agent
         /// utilisateur doit exécuter les étapes suivantes :
@@ -3214,7 +3264,26 @@ where
                 }
             }
 
-            | _ => todo!(),
+            // todo: les autres cas de balises de début et de fin
+
+            // Any other start tag
+            //
+            // Reconstruire les éléments de mise en forme actifs, s'il y en
+            // a.
+            // Insérer un élément HTML pour le jeton.
+            //
+            // Note: Cet élément sera un élément ordinaire.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken { is_end: false, .. },
+            ) => {
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element(tag_token);
+            }
+
+            // Any other end tag
+            | HTMLToken::Tag(HTMLTagToken { is_end: true, .. }) => {
+                handle_any_other_end_tag(self, &token);
+            }
         }
     }
 }

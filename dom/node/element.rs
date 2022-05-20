@@ -78,6 +78,12 @@ impl Element {
         self.inner.to_string()
     }
 
+    pub fn tag_name(&self) -> tag_names {
+        self.local_name()
+            .parse()
+            .expect("Devrait être un nom de balise valide")
+    }
+
     pub fn content(
         &self,
     ) -> Option<RwLockReadGuard<DocumentFragmentNode>> {

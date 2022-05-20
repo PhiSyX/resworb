@@ -436,22 +436,16 @@ impl HTMLDoctypeToken {
 // --------- //
 
 impl HTMLToken {
-    pub fn into_start_tag(&mut self) -> &mut HTMLTagToken {
-        assert!(matches!(
-            self,
-            Self::Tag(HTMLTagToken { is_end: false, .. })
-        ));
+    pub fn as_tag(&self) -> &HTMLTagToken {
+        assert!(matches!(self, Self::Tag(HTMLTagToken { .. })));
         if let Self::Tag(tag) = self {
             return tag;
         }
         unreachable!()
     }
 
-    pub fn into_end_tag(&mut self) -> &mut HTMLTagToken {
-        assert!(matches!(
-            self,
-            Self::Tag(HTMLTagToken { is_end: true, .. })
-        ));
+    pub fn as_tag_mut(&mut self) -> &mut HTMLTagToken {
+        assert!(matches!(self, Self::Tag(HTMLTagToken { .. })));
         if let Self::Tag(tag) = self {
             return tag;
         }
@@ -568,6 +562,11 @@ impl HTMLTagToken {
         if *self_closing_flag {
             *self_closing_flag_acknowledge = true;
         }
+    }
+
+    pub fn tag_name(&self) -> tag_names {
+        let Self { name, .. } = self;
+        name.parse().expect("Devrait être un nom de balise valide")
     }
 }
 

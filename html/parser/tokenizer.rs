@@ -511,7 +511,7 @@ where
             self.temporary_buffer.clone().chars().for_each(|ch| {
                 self.change_current_token(|token| {
                     token
-                        .into_start_tag()
+                        .as_tag_mut()
                         .append_character_to_attribute_value(ch);
                 });
             });
@@ -2065,9 +2065,7 @@ where
                 .change_current_token(|token| {
                     let mut attribute = HTMLTagAttribute::default();
                     attribute.0 = HTMLTagAttributeName::from(ch);
-                    token
-                        .into_start_tag()
-                        .define_tag_attributes(attribute);
+                    token.as_tag_mut().define_tag_attributes(attribute);
                 })
                 .switch_state_to("attribute-name")
                 .and_emit_with_error(
@@ -2083,9 +2081,7 @@ where
             | Some(_) => self
                 .change_current_token(|token| {
                     let attribute = HTMLTagAttribute::default();
-                    token
-                        .into_start_tag()
-                        .define_tag_attributes(attribute);
+                    token.as_tag_mut().define_tag_attributes(attribute);
                 })
                 .reconsume("attribute-name")
                 .and_continue(),
@@ -2127,11 +2123,9 @@ where
             // l'attribut actuel.
             | Some(ch) if ch.is_ascii_uppercase() => self
                 .change_current_token(|token| {
-                    token
-                        .into_start_tag()
-                        .append_character_to_attribute_name(
-                            ch.to_ascii_lowercase(),
-                        );
+                    token.as_tag_mut().append_character_to_attribute_name(
+                        ch.to_ascii_lowercase(),
+                    );
                 })
                 .and_continue(),
 
@@ -2161,7 +2155,7 @@ where
             | Some(ch) => {
                 self.change_current_token(|token| {
                     token
-                        .into_start_tag()
+                        .as_tag_mut()
                         .append_character_to_attribute_name(ch);
                 });
 
@@ -2225,9 +2219,7 @@ where
             | Some(_) => self
                 .change_current_token(|token| {
                     let attribute = HTMLTagAttribute::default();
-                    token
-                        .into_start_tag()
-                        .define_tag_attributes(attribute);
+                    token.as_tag_mut().define_tag_attributes(attribute);
                 })
                 .reconsume("attribute-name")
                 .and_continue(),
@@ -2324,7 +2316,7 @@ where
             | Some('\0') => self
                 .change_current_token(|token| {
                     token
-                        .into_start_tag()
+                        .as_tag_mut()
                         .append_character_to_attribute_value(
                             char::REPLACEMENT_CHARACTER,
                         );
@@ -2346,7 +2338,7 @@ where
             | Some(ch) => self
                 .change_current_token(|token| {
                     token
-                        .into_start_tag()
+                        .as_tag_mut()
                         .append_character_to_attribute_value(ch);
                 })
                 .and_continue(),
@@ -2392,7 +2384,7 @@ where
             | Some('\0') => self
                 .change_current_token(|token| {
                     token
-                        .into_start_tag()
+                        .as_tag_mut()
                         .append_character_to_attribute_value(
                             char::REPLACEMENT_CHARACTER,
                         );
@@ -2424,7 +2416,7 @@ where
             | Some(ch) => {
                 self.change_current_token(|token| {
                     token
-                        .into_start_tag()
+                        .as_tag_mut()
                         .append_character_to_attribute_value(ch);
                 });
 
@@ -2498,7 +2490,7 @@ where
             // vrai. Passer à l'état `data`. Émettre le jeton actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.into_start_tag().set_self_closing_tag(true);
+                    token.as_tag_mut().set_self_closing_tag(true);
                 })
                 .switch_state_to("data")
                 .and_emit(),
@@ -4179,7 +4171,7 @@ where
                 if self.state.is_character_of_attribute() {
                     self.change_current_token(|token| {
                         token
-                            .into_start_tag()
+                            .as_tag_mut()
                             .append_character_to_attribute_value(ch);
                     })
                     .and_continue()
