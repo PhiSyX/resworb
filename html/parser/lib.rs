@@ -3291,6 +3291,20 @@ where
 
     fn handle_after_body_insertion_mode(&mut self, token: HTMLToken) {
         match token {
+            // U+0009 CHARACTER TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
             // Anything else
             //
             // Erreur d'analyse. Passer le mode d'insertion à "in body" et
