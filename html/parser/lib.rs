@@ -3871,7 +3871,35 @@ where
                 self.insert_html_element(tag_token);
             }
 
-            // todo: les autres cas de balises de début et de fin
+            // todo: A start tag whose tag name is one of: "math"
+            // todo: A start tag whose tag name is one of: "svg"
+
+            // A start tag whose tag name is one of: "caption", "col",
+            // "colgroup", "frame", "head", "tbody", "td", "tfoot", "th",
+            // "thead", "tr"
+            //
+            // Erreur d'analyse. Ignorer le token.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([
+                tag_names::caption,
+                tag_names::col,
+                tag_names::colgroup,
+                tag_names::frame,
+                tag_names::head,
+                tag_names::tbody,
+                tag_names::td,
+                tag_names::tfoot,
+                tag_names::th,
+                tag_names::thead,
+                tag_names::tr,
+            ]) =>
+            {
+                self.parse_error(&token);
+                /* Ignore */
+            }
 
             // Any other start tag
             //
