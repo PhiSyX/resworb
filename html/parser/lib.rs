@@ -3784,6 +3784,30 @@ where
                 });
             }
 
+            // A start tag whose tag name is one of: "optgroup", "option"
+            //
+            // Si le nœud actuel est un élément d'option, il est alors
+            // retiré de la pile des éléments ouverts.
+            // Reconstruire les éléments de mise en forme actifs, s'il y en
+            // a.
+            // Insérer un élément HTML pour le jeton.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name
+                .is_one_of([tag_names::optgroup, tag_names::option]) =>
+            {
+                let node = self.current_node();
+                if node.element_ref().tag_name() == tag_names::option {
+                    self.stack_of_open_elements.pop();
+                }
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element(tag_token);
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
