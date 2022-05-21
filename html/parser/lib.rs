@@ -3717,6 +3717,22 @@ where
                 self.parse_generic_element(tag_token, State::RAWTEXT);
             }
 
+            // A start tag whose tag name is "iframe"
+            //
+            // Définir l'indicateur frameset-ok à "not ok".
+            // Suivre l'algorithme générique d'analyse syntaxique des
+            // éléments de texte brut.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::iframe == name => {
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
+                self.parse_generic_element(tag_token, State::RAWTEXT);
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
