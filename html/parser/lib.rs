@@ -3542,7 +3542,10 @@ where
             // correspondance ASCII insensible à la casse pour la chaîne
             // "hidden", alors nous devons mettre le drapeau frameset-ok à
             // "not ok".
-            | HTMLToken::Tag(mut tag_token) => {
+            | HTMLToken::Tag(mut tag_token)
+                if !tag_token.is_end
+                    && tag_names::input == tag_token.name =>
+            {
                 self.reconstruct_active_formatting_elements();
                 self.insert_html_element(&tag_token);
                 self.stack_of_open_elements.pop();
