@@ -3561,6 +3561,26 @@ where
                 }
             }
 
+            // A start tag whose tag name is one of: "param", "source",
+            // "track"
+            //
+            // Insérer un élément HTML pour le jeton. Retirer immédiatement
+            // le nœud actuel de la pile des éléments ouverts.
+            // Faire savoir que le drapeau self-closing du jeton, s'il est
+            // activé.
+            | HTMLToken::Tag(mut tag_token)
+                if !tag_token.is_end
+                    && tag_token.name.is_one_of([
+                        tag_names::param,
+                        tag_names::source,
+                        tag_names::track,
+                    ]) =>
+            {
+                self.insert_html_element(&tag_token);
+                self.stack_of_open_elements.pop();
+                tag_token.set_acknowledge_self_closing_flag();
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
