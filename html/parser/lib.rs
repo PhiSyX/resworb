@@ -3752,6 +3752,38 @@ where
                 self.parse_generic_element(tag_token, State::RAWTEXT);
             }
 
+            // A start tag whose tag name is "select"
+            //
+            // Reconstruire les éléments de mise en forme actifs, s'il y en
+            // a.
+            // Insérer un élément HTML pour le jeton.
+            // Définir l'indicateur frameset-ok à "not ok".
+            // Si le mode d'insertion est l'un des suivants : "in table",
+            // "in caption", "in table body", "in row", ou "in cell",
+            // nous devons passer à "in select in table".
+            // Sinon, passer le mode d'insertion à "in select".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::select == name => {
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element(tag_token);
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
+                self.insertion_mode.switch_to(match self.insertion_mode {
+                    | InsertionMode::InTable
+                    | InsertionMode::InCaption
+                    | InsertionMode::InTableBody
+                    | InsertionMode::InRow
+                    | InsertionMode::InCell => {
+                        InsertionMode::InSelectInTable
+                    }
+                    | _ => InsertionMode::InSelect,
+                });
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
