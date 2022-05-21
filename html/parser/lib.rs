@@ -1075,10 +1075,227 @@ where
         self.insertion_mode.switch_to(InsertionMode::InBody);
     }
 
-    /// TODO:
     /// https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm
-    fn run_adoption_agency_algorithm(&mut self, token: &HTMLToken) {
-        unimplemented!()
+    fn run_adoption_agency_algorithm(
+        &mut self,
+        token: &HTMLToken,
+        is_special_tag: &impl Fn(tag_names, &str) -> bool,
+    ) -> bool {
+        let subject = token.as_tag().tag_name();
+
+        let cnode = self.current_node();
+        if cnode.element_ref().tag_name() == subject
+            && !self
+                .list_of_active_formatting_elements
+                .contains_element(cnode)
+        {
+            self.stack_of_open_elements.pop();
+            return false;
+        }
+
+        let mut outer_loop_counter = 0;
+        loop {
+            if outer_loop_counter >= 8 {
+                return false;
+            }
+
+            outer_loop_counter += 1;
+
+            let maybe_formatting_element = self
+                .list_of_active_formatting_elements
+                .last_element_before_marker(subject);
+
+            if maybe_formatting_element.is_none() {
+                return true;
+            }
+
+            let (formatting_element_idx, formatting_element) =
+                maybe_formatting_element.unwrap();
+
+            if !self.stack_of_open_elements.contains(&formatting_element) {
+                self.parse_error(token);
+                self.list_of_active_formatting_elements
+                    .remove(formatting_element_idx);
+                return false;
+            }
+
+            if self.stack_of_open_elements.contains(&formatting_element)
+                && !self.stack_of_open_elements.has_element_in_scope(
+                    formatting_element.element_ref().tag_name(),
+                    StackOfOpenElements::SCOPE_ELEMENTS,
+                )
+            {
+                self.parse_error(token);
+                return false;
+            }
+
+            if formatting_element.ne(self.current_node()) {
+                self.parse_error(token);
+            }
+
+            let maybe_furthest_block = self
+                .stack_of_open_elements
+                .iter()
+                .enumerate()
+                .rfind(|(_, el)| {
+                    if formatting_element.eq(el) {
+                        return false;
+                    }
+
+                    is_special_tag(
+                        el.element_ref().tag_name(),
+                        &el.element_ref().namespace().to_string(),
+                    )
+                })
+                .map(|(i, e)| (i, e.to_owned()));
+
+            if maybe_furthest_block.is_none() {
+                while formatting_element.ne(self.current_node()) {
+                    self.stack_of_open_elements.pop();
+                }
+
+                self.stack_of_open_elements.pop();
+
+                self.list_of_active_formatting_elements
+                    .remove_element(&formatting_element);
+                return false;
+            }
+
+            let (furthest_block_idx, furthest_block) =
+                maybe_furthest_block.unwrap();
+
+            let common_ancestor: Option<TreeNode<Node>> = {
+                let mut found_node = None;
+                for (index, element) in
+                    self.stack_of_open_elements.iter().rev().enumerate()
+                {
+                    if formatting_element.eq(element) {
+                        if index < self.stack_of_open_elements.len() - 1 {
+                            found_node =
+                                self.stack_of_open_elements.get(index - 1)
+                        }
+                        break;
+                    }
+                }
+                found_node.cloned()
+            };
+
+            let mut bookmark = self
+                .list_of_active_formatting_elements
+                .iter()
+                .rposition(|entry| match entry {
+                    | Entry::Element(el) => formatting_element.eq(el),
+                    | _ => false,
+                })
+                .unwrap();
+
+            let mut node;
+            let mut node_idx = furthest_block_idx;
+            let mut last_node = furthest_block.to_owned();
+
+            let mut inner_counter = 0;
+
+            loop {
+                inner_counter += 1;
+
+                node = unsafe {
+                    self.stack_of_open_elements.get_unchecked(node_idx)
+                }
+                .to_owned();
+                node_idx -= 1;
+
+                if formatting_element == node {
+                    break;
+                }
+
+                if inner_counter > 3
+                    && self
+                        .list_of_active_formatting_elements
+                        .contains_element(&node)
+                {
+                    self.list_of_active_formatting_elements
+                        .remove_element(&node);
+                    continue;
+                }
+
+                let node_formatting_index = {
+                    if let Some(index) = self
+                        .list_of_active_formatting_elements
+                        .position_of(&node)
+                    {
+                        index
+                    } else {
+                        self.stack_of_open_elements
+                            .remove_first_tag_matching(|n| node.eq(n));
+                        continue;
+                    }
+                };
+
+                let el = node.element_ref();
+                let tag_token =
+                    HTMLTagToken::start().with_name(el.local_name());
+                let node_el = self
+                    .create_element_for(
+                        &tag_token,
+                        el.namespace(),
+                        common_ancestor.as_ref(),
+                    )
+                    .expect("Devrait retourner un element valide");
+
+                self.stack_of_open_elements[node_idx] = node_el.to_owned();
+                self.list_of_active_formatting_elements
+                    [node_formatting_index] =
+                    Entry::Element(node_el.to_owned());
+
+                node = node_el;
+
+                if furthest_block.eq(&last_node) {
+                    bookmark = node_formatting_index + 1;
+                }
+
+                node.append_child(last_node.to_owned());
+
+                last_node = node;
+            }
+
+            let adjusted_insertion_location = self
+                .find_appropriate_place_for_inserting_node(
+                    common_ancestor.as_ref(),
+                );
+
+            if let Some(parent) = adjusted_insertion_location.parent {
+                parent.insert_before(
+                    last_node.to_owned(),
+                    adjusted_insertion_location
+                        .insert_before_sibling
+                        .as_ref(),
+                );
+            }
+
+            let el = node.element_ref();
+            let tag_token =
+                HTMLTagToken::start().with_name(el.local_name());
+            let node_el = self
+                .create_element_for(
+                    &tag_token,
+                    el.namespace(),
+                    Some(&furthest_block),
+                )
+                .expect("Devrait retourner un element valide");
+
+            furthest_block.foreach_child(|child| {
+                node_el.append_child(child.to_owned());
+            });
+
+            self.list_of_active_formatting_elements
+                .remove_element(&formatting_element);
+            self.list_of_active_formatting_elements[bookmark] =
+                Entry::Element(node_el.to_owned());
+            self.stack_of_open_elements
+                .remove_first_tag_matching(|n| formatting_element.eq(n));
+            self.stack_of_open_elements
+                .insert(furthest_block_idx + 1, node_el);
+        }
     }
 }
 
@@ -1951,7 +2168,7 @@ where
 
                 if is_special_tag(
                     current_tag_name,
-                    &node.element_ref().namespace(),
+                    &node.element_ref().namespace().to_string(),
                 ) {
                     parser.parse_error(token);
                     return;
@@ -2757,13 +2974,14 @@ where
                         break;
                     }
 
-                    if is_special_tag(tag_name, &element.namespace())
-                        && name.is_one_of([
-                            tag_names::address,
-                            tag_names::div,
-                            tag_names::p,
-                        ])
-                    {
+                    if is_special_tag(
+                        tag_name,
+                        &element.namespace().to_string(),
+                    ) && name.is_one_of([
+                        tag_names::address,
+                        tag_names::div,
+                        tag_names::p,
+                    ]) {
                         break;
                     }
                 }
@@ -2848,13 +3066,14 @@ where
                         break;
                     }
 
-                    if is_special_tag(tag_name, &element.namespace())
-                        && name.is_one_of([
-                            tag_names::address,
-                            tag_names::div,
-                            tag_names::p,
-                        ])
-                    {
+                    if is_special_tag(
+                        tag_name,
+                        &element.namespace().to_string(),
+                    ) && name.is_one_of([
+                        tag_names::address,
+                        tag_names::div,
+                        tag_names::p,
+                    ]) {
                         break;
                     }
                 }
@@ -3345,7 +3564,10 @@ where
                     tag_names::nobr,
                     StackOfOpenElements::SCOPE_ELEMENTS,
                 ) {
-                    self.run_adoption_agency_algorithm(&token);
+                    self.run_adoption_agency_algorithm(
+                        &token,
+                        &is_special_tag,
+                    );
                     self.reconstruct_active_formatting_elements();
                 }
 
@@ -3382,7 +3604,10 @@ where
                 tag_names::u,
             ]) =>
             {
-                self.run_adoption_agency_algorithm(&token);
+                self.run_adoption_agency_algorithm(
+                    &token,
+                    &is_special_tag,
+                );
             }
 
             // A start tag whose tag name is one of: "applet", "marquee",

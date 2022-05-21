@@ -126,6 +126,17 @@ impl<T> TreeNode<T> {
         *self.next_sibling.write().unwrap() = None;
     }
 
+    pub fn foreach_child<F>(&self, mut f: F)
+    where
+        F: FnMut(&Self),
+    {
+        let mut current_node = self.get_first_child().to_owned();
+        while let Some(node) = current_node {
+            f(&node);
+            current_node = node.next_sibling().to_owned();
+        }
+    }
+
     /// Récupère le premier enfant de l'arbre.
     pub fn get_first_child(&self) -> RwLockReadGuard<Option<TreeNode<T>>> {
         self.first_child.read().unwrap()

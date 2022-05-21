@@ -152,8 +152,10 @@ impl StackOfOpenElements {
     pub fn element_immediately_above(
         &self,
         node_index: usize,
-    ) -> Option<&TreeNode<Node>> {
-        self.elements.get(node_index - 1)
+    ) -> Option<(usize, &TreeNode<Node>)> {
+        self.elements
+            .get(node_index - 1)
+            .map(|node| (node_index - 1, node))
     }
 
     pub fn pop_until_tag(&mut self, tag_name: tag_names) {
@@ -206,6 +208,23 @@ impl StackOfOpenElements {
 
         elements
     }
+
+    pub fn topmost_special_node_below(
+        &self,
+        formatting_element: &TreeNode<Node>,
+        is_special_tag: impl Fn(tag_names, &str) -> bool,
+    ) -> Option<(usize, &TreeNode<Node>)> {
+        self.elements.iter().enumerate().rfind(|&(_, node)| {
+            if node == formatting_element {
+                return false;
+            }
+
+            is_special_tag(
+                node.element_ref().tag_name(),
+                &node.element_ref().namespace().to_string(),
+            )
+        })
+    }
 }
 
 impl ListOfActiveFormattingElements {
@@ -217,8 +236,55 @@ impl ListOfActiveFormattingElements {
         }
     }
 
+    pub fn contains_element(&self, element: &TreeNode<Node>) -> bool {
+        self.entries
+            .iter()
+            .any(|entry| Entry::Element(element.to_owned()).eq(entry))
+    }
+
     pub fn insert_marker_at_end(&mut self) {
         self.entries.push(Entry::Marker);
+    }
+
+    pub fn last_element_before_marker(
+        &self,
+        tag_name: tag_names,
+    ) -> Option<(usize, TreeNode<Node>)> {
+        self.entries
+            .iter()
+            .enumerate()
+            .rfind(|(_, entry)| {
+                if let Entry::Element(element) = entry {
+                    tag_name == element.element_ref().local_name()
+                } else {
+                    false
+                }
+            })
+            .and_then(|(idx, entry)| {
+                entry.element().map(|node| (idx, node.to_owned()))
+            })
+    }
+
+    pub fn remove_element(&mut self, element: &TreeNode<Node>) {
+        if let Some(idx) = self.entries.iter().position(|entry| {
+            if let Entry::Element(element_node) = entry {
+                element_node == element
+            } else {
+                false
+            }
+        }) {
+            self.entries.remove(idx);
+        }
+    }
+
+    pub fn position_of(&self, element: &TreeNode<Node>) -> Option<usize> {
+        self.entries.iter().enumerate().rposition(|(_, entry)| {
+            if let Entry::Element(element_ref) = entry {
+                element_ref == element
+            } else {
+                false
+            }
+        })
     }
 }
 
