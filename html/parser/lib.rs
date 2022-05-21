@@ -3597,6 +3597,37 @@ where
                 tag_token.set_acknowledge_self_closing_flag();
             }
 
+            // A start tag whose tag name is "hr"
+            //
+            // Si la pile des éléments ouverts a un élément p dans la
+            // portée du bouton, alors fermez un élément p.
+            // Insérer un élément HTML pour le jeton. Retirer immédiatement
+            // le nœud actuel de la pile des éléments ouverts.
+            // Faire savoir que le drapeau self-closing du jeton, s'il est
+            // activé.
+            // Définir l'indicateur frameset-ok à "not ok".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::hr == name => {
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::p,
+                    StackOfOpenElements::scoped_elements_with::<10>([
+                        tag_names::button,
+                    ]),
+                ) {
+                    close_p_element(self, &token);
+                }
+
+                self.insert_html_element(tag_token);
+                self.stack_of_open_elements.pop();
+                tag_token.set_acknowledge_self_closing_flag();
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
