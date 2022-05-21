@@ -572,9 +572,9 @@ where
                 } else {
                     let previous_element = self
                         .stack_of_open_elements
-                        .element_immediately_above(table_index);
-                    adjusted_insertion_location.parent =
-                        previous_element.cloned();
+                        .element_immediately_above(table_index)
+                        .map(|(_, p)| p.to_owned());
+                    adjusted_insertion_location.parent = previous_element;
                 }
             }
         } else {
@@ -965,9 +965,9 @@ where
             let last = index == 0;
 
             let node = if last && self.parsing_fragment {
-                self.context_element.clone().unwrap()
+                self.context_element.to_owned().unwrap()
             } else {
-                node.clone()
+                node.to_owned()
             };
 
             let element = node.element_ref();
@@ -1253,7 +1253,7 @@ where
                 let element = self
                     .create_element_for(tag_token, Namespace::HTML, None)
                     .expect("Un élément DOM HTMLHtmlElement");
-                self.document.append_child(element.clone());
+                self.document.append_child(element.to_owned());
                 self.stack_of_open_elements.put(element);
                 self.insertion_mode.switch_to(InsertionMode::BeforeHead);
             }
@@ -1293,7 +1293,7 @@ where
                 )
                 .expect("Un élément DOM HTMLHtmlElement");
                 element.set_document(self.document.deref());
-                self.document.append_child(element.clone());
+                self.document.append_child(element.to_owned());
                 self.stack_of_open_elements.put(element);
                 self.insertion_mode.switch_to(InsertionMode::BeforeHead);
                 self.process_using_the_rules_for(
@@ -1852,7 +1852,7 @@ where
             {
                 self.parse_error(&token);
                 if let Some(head) = self.head_element.as_ref() {
-                    self.stack_of_open_elements.put(head.clone());
+                    self.stack_of_open_elements.put(head.to_owned());
                 }
                 self.process_using_the_rules_for(
                     InsertionMode::InHead,
@@ -3642,7 +3642,7 @@ where
             ) if tag_names::image == name => {
                 self.parse_error(&token);
 
-                let mut tag_token = tag_token.clone();
+                let mut tag_token = tag_token.to_owned();
                 tag_token.name = tag_names::img.to_string();
                 token = HTMLToken::Tag(tag_token);
 
@@ -4131,7 +4131,7 @@ mod tests {
         let mut parser = test_the_str!("<!-- Comment -->");
         let token = parser.tokenizer.next_token().unwrap();
         parser.handle_initial_insertion_mode(token);
-        let node = parser.document.get_first_child().clone().unwrap();
+        let node = parser.document.get_first_child().to_owned().unwrap();
         assert!(node.is_comment());
         assert!(!node.is_document());
 
@@ -4141,7 +4141,7 @@ mod tests {
         let token = parser.tokenizer.next_token().unwrap();
         parser.handle_initial_insertion_mode(token);
         let doc = parser.document.document_ref();
-        let doctype = doc.get_doctype().clone().unwrap();
+        let doctype = doc.get_doctype().to_owned().unwrap();
         assert_eq!(doctype.name.to_string(), "html".to_string());
         assert_eq!(doctype.public_id.to_string(), "".to_string());
         assert_eq!(doctype.system_id.to_string(), "".to_string());
@@ -4163,7 +4163,7 @@ mod tests {
         let mut parser = test_the_str!("<!-- comment -->");
         let token = parser.tokenizer.next_token().unwrap();
         parser.handle_before_html_insertion_mode(token);
-        let doc = parser.document.get_first_child().clone().unwrap();
+        let doc = parser.document.get_first_child().to_owned().unwrap();
         assert!(doc.is_comment());
 
         // Tag
@@ -4172,7 +4172,7 @@ mod tests {
         // <html>
         let token = parser.tokenizer.next_token().unwrap();
         parser.handle_before_html_insertion_mode(token);
-        let doc = parser.document.get_first_child().clone().unwrap();
+        let doc = parser.document.get_first_child().to_owned().unwrap();
         assert_eq!(tag_names::html, doc.element_ref().local_name());
         assert_eq!(parser.insertion_mode, InsertionMode::BeforeHead);
 
@@ -4180,7 +4180,7 @@ mod tests {
 
         let token = parser.tokenizer.next_token().unwrap();
         parser.handle_before_html_insertion_mode(token);
-        let doc = parser.document.get_last_child().clone().unwrap();
+        let doc = parser.document.get_last_child().to_owned().unwrap();
         assert_eq!(tag_names::html, doc.element_ref().local_name());
         assert_ne!(tag_names::head, doc.element_ref().local_name());
     }

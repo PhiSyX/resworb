@@ -93,7 +93,7 @@ impl<T> TreeNode<T> {
 
         if let Some(next_node) = self.next_sibling() {
             *next_node.prev_sibling.write().unwrap() =
-                self.prev_sibling.write().unwrap().clone();
+                self.prev_sibling.write().unwrap().to_owned();
         }
 
         if let Some(parent) = self.parent_node() {
@@ -152,7 +152,7 @@ impl<T> TreeNode<T> {
                         .next_sibling
                         .write()
                         .unwrap()
-                        .replace(child.clone());
+                        .replace(child.to_owned());
                     child
                         .prev_sibling
                         .write()
@@ -163,14 +163,14 @@ impl<T> TreeNode<T> {
                     self.first_child
                         .write()
                         .unwrap()
-                        .replace(child.clone());
+                        .replace(child.to_owned());
                 }
             }
         }
     }
 
     pub fn next_sibling(&self) -> Option<Self> {
-        self.next_sibling.read().unwrap().clone()
+        self.next_sibling.read().unwrap().to_owned()
     }
 
     /// Un objet qui participe à un arbre a un parent, qui est soit null

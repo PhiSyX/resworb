@@ -96,7 +96,7 @@ where
         Option::from(
             self.peek_range(0..lookahead_offset)
                 .iter()
-                .filter_map(|mch| mch.clone())
+                .filter_map(|mch| mch.to_owned())
                 .collect::<R>(),
         )
     }
@@ -105,7 +105,7 @@ where
         self.fill_queue_max();
         self.queue.as_slice()[0..]
             .iter()
-            .filter_map(|mch| mch.clone())
+            .filter_map(|mch| mch.to_owned())
             .collect::<R>()
     }
 

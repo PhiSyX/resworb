@@ -424,7 +424,7 @@ where
     C: Iterator<Item = CodePoint>,
 {
     pub fn current_token(&mut self) -> Option<HTMLToken> {
-        if let Some(token) = self.token.clone() {
+        if let Some(token) = self.token.to_owned() {
             self.output_tokens.push_back(token);
         }
         self.pop_token()
@@ -508,7 +508,7 @@ where
 
     fn flush_temporary_buffer(&mut self) -> &mut Self {
         if self.state.is_character_of_attribute() {
-            self.temporary_buffer.clone().chars().for_each(|ch| {
+            self.temporary_buffer.to_owned().chars().for_each(|ch| {
                 self.change_current_token(|token| {
                     token
                         .as_tag_mut()
@@ -557,7 +557,7 @@ impl HTMLTokenizerState {
         let mut to: Cow<str> = Cow::default();
 
         if state == "return-state" {
-            if let Some(return_state) = self.returns.clone() {
+            if let Some(return_state) = self.returns.to_owned() {
                 to = Cow::from(return_state.to_string());
             }
         } else {
