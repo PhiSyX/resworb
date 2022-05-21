@@ -88,7 +88,7 @@ where
     pub fn next_input(&mut self) -> Option<I> {
         self.next().and_then(|item| {
             let some_item = Some(item);
-            self.current = some_item.clone();
+            self.current = some_item.to_owned();
             some_item
         })
     }
@@ -129,11 +129,11 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         if self.is_replayed {
             self.is_replayed = false;
-            return self.last_consumed_item.clone();
+            return self.last_consumed_item.to_owned();
         };
 
         self.last_consumed_item = self.iter.next();
-        self.last_consumed_item.clone()
+        self.last_consumed_item.to_owned()
     }
 }
 

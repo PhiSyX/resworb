@@ -2,17 +2,20 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use infra::primitive::string::DOMString;
+
 // --------- //
 // Structure //
 // --------- //
 
 /// Les doctypes ont un nom associé, un ID public et un ID système.
+#[derive(Clone)]
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub struct DocumentType {
-    name: String,
-    public_id: String,
-    system_id: String,
+    pub name: DOMString,
+    pub public_id: DOMString,
+    pub system_id: DOMString,
 }
 
 // -------------- //
@@ -27,12 +30,12 @@ impl DocumentType {
     pub fn new(name: Option<&String>) -> Self {
         Self {
             name: if let Some(x) = name {
-                x.to_owned()
+                DOMString::new(x)
             } else {
-                String::new()
+                Default::default()
             },
-            public_id: String::new(),
-            system_id: String::new(),
+            public_id: Default::default(),
+            system_id: Default::default(),
         }
     }
 }
@@ -40,9 +43,9 @@ impl DocumentType {
 impl DocumentType {
     pub fn set_name(&mut self, maybe_name: Option<&String>) -> &mut Self {
         self.name = if let Some(x) = maybe_name {
-            x.to_owned()
+            DOMString::new(x)
         } else {
-            String::new()
+            Default::default()
         };
         self
     }
@@ -52,9 +55,9 @@ impl DocumentType {
         maybe_pid: Option<&String>,
     ) -> &mut Self {
         self.public_id = if let Some(x) = maybe_pid {
-            x.to_owned()
+            DOMString::new(x)
         } else {
-            String::new()
+            Default::default()
         };
         self
     }
@@ -64,9 +67,9 @@ impl DocumentType {
         maybe_sid: Option<&String>,
     ) -> &mut Self {
         self.system_id = if let Some(x) = maybe_sid {
-            x.to_owned()
+            DOMString::new(x)
         } else {
-            String::new()
+            Default::default()
         };
         self
     }

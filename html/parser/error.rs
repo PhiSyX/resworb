@@ -636,7 +636,7 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![("id".into(), "".into())],
                 is_end: false
             }))
@@ -700,7 +700,7 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![],
                 is_end: false
             }))
@@ -802,7 +802,7 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![
                     ("id".into(), "foo".into()),
                     ("class".into(), "bar".into())
@@ -861,7 +861,7 @@ mod tests {
                 is_end: false,
                 name: "div".into(),
                 self_closing_flag: false,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![("foo<div".into(), "".into())]
             }))
         );
@@ -875,7 +875,7 @@ mod tests {
                 is_end: false,
                 name: "div".into(),
                 self_closing_flag: false,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![("id'bar'".into(), "".into())]
             }))
         );
@@ -893,7 +893,7 @@ mod tests {
                 is_end: false,
                 name: "div".into(),
                 self_closing_flag: false,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![("foo".into(), "b'ar'".into())]
             }))
         );
@@ -912,7 +912,7 @@ mod tests {
                 is_end: false,
                 name: "div".into(),
                 self_closing_flag: false,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![
                     ("foo".into(), "bar".into()),
                     (r#"="baz""#.into(), "".into())
@@ -950,7 +950,7 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![("id".into(), "foo".into())],
                 is_end: false
             }))

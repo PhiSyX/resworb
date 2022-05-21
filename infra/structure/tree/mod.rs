@@ -6,11 +6,10 @@ mod node;
 mod weak;
 
 use core::ops;
-use std::{cell::Ref, rc::Rc};
-
-pub use weak::TreeNodeWeak;
+use std::sync::{Arc, RwLockReadGuard};
 
 use self::node::Node;
+pub use self::weak::TreeNodeWeak;
 
 // --------- //
 // Structure //
@@ -21,7 +20,7 @@ use self::node::Node;
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub struct TreeNode<T> {
-    node_ref: Rc<Node<T>>,
+    node_ref: Arc<Node<T>>,
 }
 
 // -------------- //
@@ -31,12 +30,12 @@ pub struct TreeNode<T> {
 impl<T> TreeNode<T> {
     pub fn new(data: T) -> Self {
         Self {
-            node_ref: Rc::new(Node::new(data)),
+            node_ref: Arc::new(Node::new(data)),
         }
     }
 
-    fn new_node(rc: Rc<Node<T>>) -> Self {
-        Self { node_ref: rc }
+    fn new_node(arc: Arc<Node<T>>) -> Self {
+        Self { node_ref: arc }
     }
 
     /// Pour ajouter un noeud à un parent, il faut pré-insérer le noeud
@@ -54,36 +53,98 @@ impl<T> TreeNode<T> {
     pub fn append_child(&self, node: impl Into<Self>) {
         let child: Self = node.into();
 
-        assert!(child.parent.borrow().is_none());
+        assert!(child.parent.read().unwrap().is_none());
 
         if let Some(last_node) = self.get_last_child().as_ref() {
             last_node
                 .next_sibling
-                .borrow_mut()
+                .write()
+                .unwrap()
                 .replace(child.to_owned());
 
             child
                 .prev_sibling
-                .replace(TreeNodeWeak::from(&child).into());
+                .write()
+                .unwrap()
+                .replace(TreeNodeWeak::from(&child));
         }
 
-        child.parent.borrow_mut().replace(TreeNodeWeak::from(self));
+        child
+            .parent
+            .write()
+            .unwrap()
+            .replace(TreeNodeWeak::from(self));
 
         if self.get_first_child().is_none() {
-            self.first_child.replace(child.to_owned().into());
+            self.first_child.write().unwrap().replace(child.to_owned());
         }
 
-        self.last_child.replace(child.into());
+        self.last_child.write().unwrap().replace(child);
+    }
+
+    pub fn detach_node(&self) {
+        if let Some(prev_node) = self.previous_sibling() {
+            prev_node
+                .next_sibling
+                .write()
+                .unwrap()
+                .replace(self.next_sibling().unwrap());
+        }
+
+        if let Some(next_node) = self.next_sibling() {
+            *next_node.prev_sibling.write().unwrap() =
+                self.prev_sibling.write().unwrap().to_owned();
+        }
+
+        if let Some(parent) = self.parent_node() {
+            let first_child = parent
+                .get_first_child()
+                .to_owned()
+                .expect("Le premier enfant");
+            let last_child = parent
+                .get_last_child()
+                .to_owned()
+                .expect("Le dernier enfant");
+
+            if Arc::ptr_eq(self, &first_child) {
+                parent
+                    .first_child
+                    .write()
+                    .unwrap()
+                    .replace(self.next_sibling().unwrap());
+            } else if Arc::ptr_eq(self, &last_child) {
+                parent
+                    .last_child
+                    .write()
+                    .unwrap()
+                    .replace(self.previous_sibling().unwrap());
+            }
+        }
+
+        *self.parent.write().unwrap() = None;
+        *self.prev_sibling.write().unwrap() = None;
+        *self.next_sibling.write().unwrap() = None;
+    }
+
+    pub fn foreach_child<F>(&self, mut f: F)
+    where
+        F: FnMut(&Self),
+    {
+        let mut current_node = self.get_first_child().to_owned();
+        while let Some(node) = current_node {
+            f(&node);
+            current_node = node.next_sibling().to_owned();
+        }
     }
 
     /// Récupère le premier enfant de l'arbre.
-    pub fn get_first_child(&self) -> Ref<'_, Option<TreeNode<T>>> {
-        self.first_child.borrow()
+    pub fn get_first_child(&self) -> RwLockReadGuard<Option<TreeNode<T>>> {
+        self.first_child.read().unwrap()
     }
 
     /// Récupère le dernier enfant de l'arbre.
-    pub fn get_last_child(&self) -> Ref<'_, Option<TreeNode<T>>> {
-        self.last_child.borrow()
+    pub fn get_last_child(&self) -> RwLockReadGuard<Option<TreeNode<T>>> {
+        self.last_child.read().unwrap()
     }
 
     pub fn insert_before(&self, node: Self, maybe_child: Option<&Self>) {
@@ -92,36 +153,57 @@ impl<T> TreeNode<T> {
             return;
         }
 
-        assert!(node.parent.borrow().is_none());
+        assert!(node.parent.read().unwrap().is_none());
 
         if let Some(child) = maybe_child {
-            child.parent.replace(Some(self.into()));
+            child.parent.write().unwrap().replace(self.into());
             match child.previous_sibling() {
                 | Some(prev_sibling) => {
-                    prev_sibling.next_sibling.replace(Some(child.clone()));
-                    child.prev_sibling.replace(Some(prev_sibling.into()));
+                    prev_sibling
+                        .next_sibling
+                        .write()
+                        .unwrap()
+                        .replace(child.to_owned());
+                    child
+                        .prev_sibling
+                        .write()
+                        .unwrap()
+                        .replace(prev_sibling.into());
                 }
                 | None => {
-                    self.first_child.replace(Some(child.clone()));
+                    self.first_child
+                        .write()
+                        .unwrap()
+                        .replace(child.to_owned());
                 }
             }
         }
     }
 
+    pub fn next_sibling(&self) -> Option<Self> {
+        self.next_sibling.read().unwrap().to_owned()
+    }
+
     /// Un objet qui participe à un arbre a un parent, qui est soit null
     /// soit un objet.
     pub fn parent_node(&self) -> Option<Self> {
-        self.parent.borrow().as_deref().and_then(|node_weak| {
-            node_weak.upgrade().map(|node_ref| node_ref.into())
-        })
+        self.parent
+            .read()
+            .unwrap()
+            .as_deref()
+            .and_then(|node_weak| {
+                node_weak.upgrade().map(|node_ref| node_ref.into())
+            })
     }
 
     /// Le frère précédent d'un objet est son premier frère précédent ou
     /// null s'il n'a pas de frère précédent.
     pub fn previous_sibling(&self) -> Option<Self> {
-        self.prev_sibling.borrow().as_deref().and_then(|node_weak| {
-            node_weak.upgrade().map(|node_ref| node_ref.into())
-        })
+        self.prev_sibling.read().unwrap().as_deref().and_then(
+            |node_weak| {
+                node_weak.upgrade().map(|node_ref| node_ref.into())
+            },
+        )
     }
 }
 
@@ -129,8 +211,8 @@ impl<T> TreeNode<T> {
 // Implémentation // -> Interface
 // -------------- //
 
-impl<T> From<Rc<Node<T>>> for TreeNode<T> {
-    fn from(rc: Rc<Node<T>>) -> Self {
+impl<T> From<Arc<Node<T>>> for TreeNode<T> {
+    fn from(rc: Arc<Node<T>>) -> Self {
         Self::new_node(rc)
     }
 }
@@ -142,7 +224,7 @@ impl<T> Clone for TreeNode<T> {
 }
 
 impl<T> ops::Deref for TreeNode<T> {
-    type Target = Rc<Node<T>>;
+    type Target = Arc<Node<T>>;
 
     fn deref(&self) -> &Self::Target {
         &self.node_ref

@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use core::ops;
+
 use dom::node::Node;
 use html_elements::tag_names;
 use infra::structure::tree::TreeNode;
@@ -59,8 +61,10 @@ pub struct ListOfActiveFormattingElements {
 // Énumération //
 // ----------- //
 
+#[derive(PartialEq)]
 pub enum Entry {
     Marker,
+    Element(TreeNode<Node>),
 }
 
 // -------------- //
@@ -74,28 +78,40 @@ impl InsertionMode {
 }
 
 impl StackOfOpenElements {
-    /// Taille du vecteur de noeuds d'éléments.
-    pub fn len(&self) -> usize {
-        self.elements.len()
-    }
+    ///   - applet
+    ///   - caption
+    ///   - html
+    ///   - table
+    ///   - td
+    ///   - th
+    ///   - marquee
+    ///   - object
+    ///   - template
+    ///   - MathML mi
+    ///   - MathML mo
+    ///   - MathML mn
+    ///   - MathML ms
+    ///   - MathML mtext
+    ///   - MathML annotation-xml
+    ///   - SVG foreignObject
+    ///   - SVG desc
+    ///   - SVG title
+    pub const SCOPE_ELEMENTS: [tag_names; 9] = [
+        tag_names::applet,
+        tag_names::caption,
+        tag_names::html,
+        tag_names::table,
+        tag_names::td,
+        tag_names::th,
+        tag_names::marquee,
+        tag_names::object,
+        tag_names::template,
+        // todo: ajouter les éléments manquants MathML & SVG
+    ];
 
     /// Le nœud actuel est le nœud le plus bas de cette pile d'éléments
     /// ouverts.
     pub fn current_node(&self) -> Option<&TreeNode<Node>> {
-        self.elements.last()
-    }
-
-    /// Vérifie si le vecteur de noeuds d'éléments est vide.
-    pub fn is_empty(&self) -> bool {
-        self.elements.is_empty()
-    }
-
-    /// Premier élément du vecteur de noeuds d'éléments.
-    pub fn first(&self) -> Option<&TreeNode<Node>> {
-        self.elements.first()
-    }
-
-    pub fn last(&self) -> Option<&TreeNode<Node>> {
         self.elements.last()
     }
 
@@ -110,16 +126,36 @@ impl StackOfOpenElements {
         })
     }
 
+    /// On dit que la pile d'éléments ouverts a un élément particulier dans
+    /// son champ d'application lorsqu'elle a cet élément dans le champ
+    /// d'application spécifique composé des types d'éléments suivants :
+    /// Voir la constante: [Self::SCOPE_ELEMENTS].
+    pub fn has_element_in_scope<const N: usize>(
+        &self,
+        tag_name: tag_names,
+        list: [tag_names; N],
+    ) -> bool {
+        self.elements.iter().rev().any(|node| {
+            let element = node.element_ref();
+            let name = element.local_name();
+            tag_name == name
+                || !list.into_iter().any(|tag_name| tag_name == name)
+        })
+    }
+
+    pub fn has_element_with_tag_name(&self, tag_name: tag_names) -> bool {
+        self.elements
+            .iter()
+            .any(|element| tag_name == element.element_ref().local_name())
+    }
+
     pub fn element_immediately_above(
         &self,
         node_index: usize,
-    ) -> Option<&TreeNode<Node>> {
-        self.elements.get(node_index - 1)
-    }
-
-    /// Retire le dernier élément du vecteur de noeud.
-    pub fn pop(&mut self) -> Option<TreeNode<Node>> {
-        self.elements.pop()
+    ) -> Option<(usize, &TreeNode<Node>)> {
+        self.elements
+            .get(node_index - 1)
+            .map(|node| (node_index - 1, node))
     }
 
     pub fn pop_until_tag(&mut self, tag_name: tag_names) {
@@ -152,20 +188,129 @@ impl StackOfOpenElements {
     pub fn put(&mut self, element: TreeNode<Node>) {
         self.elements.push(element);
     }
+
+    // <https://github.com/rust-lang/rust/issues/83701>
+    pub fn scoped_elements_with<const N: usize>(
+        list: impl IntoIterator<Item = tag_names>,
+    ) -> [tag_names; N] {
+        let mut elements: [tag_names; N] = [tag_names::var; N];
+
+        Self::SCOPE_ELEMENTS
+            .into_iter()
+            .enumerate()
+            .for_each(|(i, t)| {
+                elements[i] = t;
+            });
+
+        list.into_iter().enumerate().for_each(|(i, t)| {
+            elements[i] = t;
+        });
+
+        elements
+    }
+
+    pub fn topmost_special_node_below(
+        &self,
+        formatting_element: &TreeNode<Node>,
+        is_special_tag: impl Fn(tag_names, &str) -> bool,
+    ) -> Option<(usize, &TreeNode<Node>)> {
+        self.elements.iter().enumerate().rfind(|&(_, node)| {
+            if node == formatting_element {
+                return false;
+            }
+
+            is_special_tag(
+                node.element_ref().tag_name(),
+                &node.element_ref().namespace().to_string(),
+            )
+        })
+    }
 }
 
 impl ListOfActiveFormattingElements {
     pub fn clear_up_to_the_last_marker(&mut self) {
         while let Some(entry) = self.entries.pop() {
-            match entry {
-                | Entry::Marker => break,
-                | _ => continue,
+            if entry.is_marker() {
+                break;
             }
         }
     }
 
+    pub fn contains_element(&self, element: &TreeNode<Node>) -> bool {
+        self.entries
+            .iter()
+            .any(|entry| Entry::Element(element.to_owned()).eq(entry))
+    }
+
     pub fn insert_marker_at_end(&mut self) {
         self.entries.push(Entry::Marker);
+    }
+
+    pub fn last_element_before_marker(
+        &self,
+        tag_name: tag_names,
+    ) -> Option<(usize, TreeNode<Node>)> {
+        self.entries
+            .iter()
+            .enumerate()
+            .rfind(|(_, entry)| {
+                if let Entry::Element(element) = entry {
+                    tag_name == element.element_ref().local_name()
+                } else {
+                    false
+                }
+            })
+            .and_then(|(idx, entry)| {
+                entry.element().map(|node| (idx, node.to_owned()))
+            })
+    }
+
+    pub fn remove_element(&mut self, element: &TreeNode<Node>) {
+        if let Some(idx) = self.entries.iter().position(|entry| {
+            if let Entry::Element(element_node) = entry {
+                element_node == element
+            } else {
+                false
+            }
+        }) {
+            self.entries.remove(idx);
+        }
+    }
+
+    pub fn position_of(&self, element: &TreeNode<Node>) -> Option<usize> {
+        self.entries.iter().enumerate().rposition(|(_, entry)| {
+            if let Entry::Element(element_ref) = entry {
+                element_ref == element
+            } else {
+                false
+            }
+        })
+    }
+}
+
+impl Entry {
+    pub fn is_element(&self) -> bool {
+        matches!(self, Self::Element(_))
+    }
+
+    pub fn is_marker(&self) -> bool {
+        matches!(self, Self::Marker)
+    }
+
+    pub fn element(&self) -> Option<&TreeNode<Node>> {
+        match self {
+            | Entry::Marker => None,
+            | Entry::Element(node) => Some(node),
+        }
+    }
+
+    pub fn element_unchecked(&self) -> &TreeNode<Node> {
+        match self {
+            | Entry::Marker => {
+                panic!("N'est pas une entrée de type Entry::Element.")
+            }
+            | Entry::Element(node) => node,
+        }
     }
 }
 
@@ -195,5 +340,33 @@ impl Default for InsertionMode {
     /// Initialement, le mode d'insertion est "initial".
     fn default() -> Self {
         Self::Initial
+    }
+}
+
+impl ops::Deref for StackOfOpenElements {
+    type Target = Vec<TreeNode<Node>>;
+
+    fn deref(&self) -> &Self::Target {
+        self.elements.as_ref()
+    }
+}
+
+impl ops::DerefMut for StackOfOpenElements {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.elements.as_mut()
+    }
+}
+
+impl ops::Deref for ListOfActiveFormattingElements {
+    type Target = Vec<Entry>;
+
+    fn deref(&self) -> &Self::Target {
+        self.entries.as_ref()
+    }
+}
+
+impl ops::DerefMut for ListOfActiveFormattingElements {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.entries.as_mut()
     }
 }

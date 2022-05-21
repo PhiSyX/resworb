@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::cell::RefCell;
+use std::sync::RwLock;
 
 use crate::interface::HTMLElementInterface;
 
@@ -12,9 +12,8 @@ use crate::interface::HTMLElementInterface;
 
 #[derive(Debug)]
 #[derive(Default)]
-#[derive(PartialEq)]
 pub struct HTMLTemplateElement<DocumentFragmentNode> {
-    pub content: RefCell<DocumentFragmentNode>,
+    pub content: RwLock<DocumentFragmentNode>,
 }
 
 // -------------- //
@@ -26,7 +25,7 @@ impl<DocumentFragment> HTMLTemplateElement<DocumentFragment> {
 
     pub fn new(content: DocumentFragment) -> Self {
         Self {
-            content: RefCell::new(content),
+            content: RwLock::new(content),
         }
     }
 }
@@ -40,5 +39,16 @@ impl<DocumentFragment> HTMLElementInterface
 {
     fn tag_name(&self) -> &'static str {
         Self::NAME
+    }
+}
+
+impl<DocumentFragment> PartialEq for HTMLTemplateElement<DocumentFragment>
+where
+    DocumentFragment: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.tag_name() == other.tag_name()
+            && *self.content.read().unwrap()
+                == *other.content.read().unwrap()
     }
 }

@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::cell::RefCell;
+use infra::primitive::string::DOMString;
 
 use super::{Comment, Text};
 
@@ -11,10 +11,9 @@ use super::{Comment, Text};
 // --------- //
 
 #[derive(Debug)]
-#[derive(PartialEq)]
 pub struct CharacterData {
     inner: CharacterDataInner,
-    data: RefCell<String>,
+    data: DOMString,
 }
 
 #[derive(Debug)]
@@ -37,6 +36,18 @@ impl CharacterData {
     }
 
     pub fn set_data(&self, data: &str) {
-        self.data.replace(data.to_owned());
+        let dom_string = DOMString::new(data);
+        self.data.write(dom_string);
+    }
+}
+
+// -------------- //
+// Implémentation // -> Interface
+// -------------- //
+
+impl PartialEq for CharacterData {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+            && *self.data.read() == *other.data.read()
     }
 }

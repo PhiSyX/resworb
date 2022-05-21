@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use std::sync::RwLock;
+
 use dom::node::QuirksMode;
 use html_elements::{
     interface::IsOneOfAttributesInterface, tag_attributes,
@@ -45,12 +47,10 @@ pub struct HTMLDoctypeToken {
 ///   - une liste d'attributs: chacun d'entre eux ayant un nom et une
 ///     valeur.
 #[derive(Debug)]
-#[derive(Clone)]
-#[derive(PartialEq)]
 pub struct HTMLTagToken {
     pub name: String,
     pub self_closing_flag: bool,
-    pub self_closing_flag_acknowledge: bool,
+    pub self_closing_flag_acknowledge: RwLock<bool>,
     pub attributes: Vec<HTMLTagAttribute>,
     pub is_end: bool,
 }
@@ -436,22 +436,16 @@ impl HTMLDoctypeToken {
 // --------- //
 
 impl HTMLToken {
-    pub fn into_start_tag(&mut self) -> &mut HTMLTagToken {
-        assert!(matches!(
-            self,
-            Self::Tag(HTMLTagToken { is_end: false, .. })
-        ));
+    pub fn as_tag(&self) -> &HTMLTagToken {
+        assert!(matches!(self, Self::Tag(HTMLTagToken { .. })));
         if let Self::Tag(tag) = self {
             return tag;
         }
         unreachable!()
     }
 
-    pub fn into_end_tag(&mut self) -> &mut HTMLTagToken {
-        assert!(matches!(
-            self,
-            Self::Tag(HTMLTagToken { is_end: true, .. })
-        ));
+    pub fn as_tag_mut(&mut self) -> &mut HTMLTagToken {
+        assert!(matches!(self, Self::Tag(HTMLTagToken { .. })));
         if let Self::Tag(tag) = self {
             return tag;
         }
@@ -492,7 +486,7 @@ impl HTMLTagToken {
         Self {
             name: String::new(),
             self_closing_flag: false,
-            self_closing_flag_acknowledge: false,
+            self_closing_flag_acknowledge: RwLock::new(false),
             attributes: vec![],
             is_end: false,
         }
@@ -506,7 +500,7 @@ impl HTMLTagToken {
         Self {
             name: String::new(),
             self_closing_flag: false,
-            self_closing_flag_acknowledge: false,
+            self_closing_flag_acknowledge: RwLock::new(false),
             attributes: vec![],
             is_end: true,
         }
@@ -559,15 +553,20 @@ impl HTMLTagToken {
         *self_closing_flag = to;
     }
 
-    pub fn set_acknowledge_self_closing_flag(&mut self) {
+    pub fn set_acknowledge_self_closing_flag(&self) {
         let Self {
             self_closing_flag,
             self_closing_flag_acknowledge,
             ..
         } = self;
         if *self_closing_flag {
-            *self_closing_flag_acknowledge = true;
+            *self_closing_flag_acknowledge.write().unwrap() = true;
         }
+    }
+
+    pub fn tag_name(&self) -> tag_names {
+        let Self { name, .. } = self;
+        name.parse().expect("Devrait être un nom de balise valide")
     }
 }
 
@@ -602,5 +601,33 @@ impl HTMLToken {
         } else {
             false
         }
+    }
+}
+
+// -------------- //
+// Implémentation // -> Interface
+// -------------- //
+
+impl Clone for HTMLTagToken {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            self_closing_flag: self.self_closing_flag,
+            self_closing_flag_acknowledge: RwLock::from(
+                *self.self_closing_flag_acknowledge.read().unwrap(),
+            ),
+            attributes: self.attributes.clone(),
+            is_end: self.is_end,
+        }
+    }
+}
+impl PartialEq for HTMLTagToken {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.self_closing_flag == other.self_closing_flag
+            && *self.self_closing_flag_acknowledge.read().unwrap()
+                == *other.self_closing_flag_acknowledge.read().unwrap()
+            && self.attributes == other.attributes
+            && self.is_end == other.is_end
     }
 }
