@@ -3733,6 +3733,25 @@ where
                 self.parse_generic_element(tag_token, State::RAWTEXT);
             }
 
+            // A start tag whose tag name is "noembed"
+            // A start tag whose tag name is "noscript", if the scripting
+            // flag is enabled
+            //
+            // Suivre l'algorithme générique d'analyse syntaxique des
+            // éléments de texte brut.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::noembed == name
+                || (tag_names::noscript == name
+                    && self.scripting_enabled) =>
+            {
+                self.parse_generic_element(tag_token, State::RAWTEXT);
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
