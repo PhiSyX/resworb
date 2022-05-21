@@ -3628,6 +3628,29 @@ where
                 self.frameset_ok_flag = FramesetOkFlag::NotOk;
             }
 
+            // A start tag whose tag name is "image"
+            //
+            // Erreur d'analyse. Changer le nom de balise du jeton en "img"
+            // et puis retraiter (ne demandez pas).
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::image == name => {
+                self.parse_error(&token);
+
+                let mut tag_token = tag_token.clone();
+                tag_token.name = tag_names::img.to_string();
+                token = HTMLToken::Tag(tag_token);
+
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
