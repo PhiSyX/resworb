@@ -704,33 +704,6 @@ where
         }
     }
 
-    /// L'algorithme générique d'analyse syntaxique des éléments de
-    /// texte brut et l'algorithme générique d'analyse syntaxique
-    /// des éléments RCDATA comportent les étapes suivantes. Ces
-    /// algorithmes sont toujours invoqués en réponse à un jeton de
-    /// balise de début.
-    ///
-    ///   1. Insertion d'un élément HTML pour le jeton.
-    ///   2. Si l'algorithme invoqué est l'algorithme générique
-    /// d'analyse syntaxique des éléments de texte brut, faire
-    /// passer le tokenizer à l'état RAWTEXT ; sinon, si
-    /// l'algorithme invoqué est l'algorithme générique d'analyse
-    /// syntaxique des éléments RCDATA, faire passer le tokenizer à
-    /// l'état RCDATA.
-    ///   3. Le mode d'insertion d'origine est le mode d'insertion
-    /// actuel.
-    ///   4. Ensuite, faire passer le mode d'insertion à "text".
-    fn parse_generic_element(
-        &mut self,
-        tag_token: &HTMLTagToken,
-        state: State,
-    ) {
-        self.insert_html_element(tag_token);
-        self.tokenizer.switch_state_to(state.to_string());
-        self.original_insertion_mode.switch_to(self.insertion_mode);
-        self.insertion_mode.switch_to(InsertionMode::Text);
-    }
-
     // <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character>
     fn insert_character(&mut self, ch: CodePoint) {
         let maybe_node = self.find_character_insertion_node();
@@ -828,6 +801,33 @@ where
             }
             | HTMLToken::EOF => log::error!("End Of File: inattendu"),
         }
+    }
+
+    /// L'algorithme générique d'analyse syntaxique des éléments de
+    /// texte brut et l'algorithme générique d'analyse syntaxique
+    /// des éléments RCDATA comportent les étapes suivantes. Ces
+    /// algorithmes sont toujours invoqués en réponse à un jeton de
+    /// balise de début.
+    ///
+    ///   1. Insertion d'un élément HTML pour le jeton.
+    ///   2. Si l'algorithme invoqué est l'algorithme générique
+    /// d'analyse syntaxique des éléments de texte brut, faire
+    /// passer le tokenizer à l'état RAWTEXT ; sinon, si
+    /// l'algorithme invoqué est l'algorithme générique d'analyse
+    /// syntaxique des éléments RCDATA, faire passer le tokenizer à
+    /// l'état RCDATA.
+    ///   3. Le mode d'insertion d'origine est le mode d'insertion
+    /// actuel.
+    ///   4. Ensuite, faire passer le mode d'insertion à "text".
+    fn parse_generic_element(
+        &mut self,
+        tag_token: &HTMLTagToken,
+        state: State,
+    ) {
+        self.insert_html_element(tag_token);
+        self.tokenizer.switch_state_to(state.to_string());
+        self.original_insertion_mode.switch_to(self.insertion_mode);
+        self.insertion_mode.switch_to(InsertionMode::Text);
     }
 
     /// Lorsque les étapes ci-dessous exigent que l'UA reconstruise les
@@ -3685,6 +3685,36 @@ where
                     .switch_to(self.insertion_mode);
                 self.frameset_ok_flag = FramesetOkFlag::NotOk;
                 self.insertion_mode.switch_to(InsertionMode::Text);
+            }
+
+            // A start tag whose tag name is "xmp"
+            //
+            // Si la pile des éléments ouverts a un élément p dans la
+            // portée du bouton, alors nous devons fermer un élément p.
+            // Reconstruire les éléments de mise en forme actifs, s'il y en
+            // a.
+            // Définir l'indicateur frameset-ok à "not ok".
+            // Suivre l'algorithme générique d'analyse syntaxique des
+            // éléments de texte brut.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::xmp == name => {
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::p,
+                    StackOfOpenElements::scoped_elements_with::<10>([
+                        tag_names::button,
+                    ]),
+                ) {
+                    close_p_element(self, &token);
+                }
+
+                self.reconstruct_active_formatting_elements();
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
+                self.parse_generic_element(tag_token, State::RAWTEXT);
             }
 
             // todo: les autres cas de balises de début et de fin
