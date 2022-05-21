@@ -2163,6 +2163,7 @@ where
                 ..
             }) if tag_names::html == name => {
                 self.parse_error(&token);
+
                 if self
                     .stack_of_open_elements
                     .has_element_with_tag_name(tag_names::template)
@@ -3649,6 +3650,41 @@ where
                     self.insertion_mode,
                     token,
                 );
+            }
+
+            // A start tag whose tag name is "textarea"
+            //
+            // 1. Insérer un élément HTML pour le jeton.
+            // 2. Si le jeton suivant est un jeton de caractère U+000A LINE
+            // FEED (LF), nous devons ignorer ce jeton et passer au
+            // suivant. (Les nouvelles lignes au début des
+            // éléments de la zone de texte sont ignorées par
+            // commodité pour les auteurs).
+            // 3. Faire passer le tokenizer à l'état "RCDATA".
+            // 4. Laisser le mode d'insertion d'origine être le mode
+            // d'insertion actuel.
+            // 5. Définir l'indicateur frameset-ok à "not ok".
+            // 6. Passez le mode d'insertion à "text".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::textarea == name => {
+                self.insert_html_element(tag_token);
+
+                if let Some(HTMLToken::Character('\n')) =
+                    self.tokenizer.next_token()
+                {
+                    self.tokenizer.next();
+                }
+
+                self.tokenizer.switch_state_to("rcdata");
+                self.original_insertion_mode
+                    .switch_to(self.insertion_mode);
+                self.frameset_ok_flag = FramesetOkFlag::NotOk;
+                self.insertion_mode.switch_to(InsertionMode::Text);
             }
 
             // todo: les autres cas de balises de début et de fin
