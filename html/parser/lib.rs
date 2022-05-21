@@ -3836,6 +3836,41 @@ where
                 self.insert_html_element(tag_token);
             }
 
+            // A start tag whose tag name is one of: "rp", "rt"
+            //
+            // Si la pile d'éléments ouverts a un élément ruby dans sa
+            // portée, alors génère des balises de fin implicites, sauf
+            // pour les éléments rtc. Si le noeud actuel n'est pas un
+            // élément rtc ou un élément ruby, ceci est une erreur
+            // d'analyse.
+            // Insérer un élément HTML pour le jeton.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([tag_names::rp, tag_names::rt]) => {
+                if self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::ruby,
+                    StackOfOpenElements::SCOPE_ELEMENTS,
+                ) {
+                    self.generate_implied_end_tags_except_for(
+                        tag_names::rtc,
+                    );
+
+                    let node = self.current_node();
+                    let node_name = node.element_ref().tag_name();
+                    if node_name != tag_names::rtc
+                        || node_name != tag_names::ruby
+                    {
+                        self.parse_error(&token);
+                    }
+                }
+
+                self.insert_html_element(tag_token);
+            }
+
             // todo: les autres cas de balises de début et de fin
 
             // Any other start tag
