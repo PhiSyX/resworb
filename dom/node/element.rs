@@ -96,16 +96,15 @@ impl Element {
         None
     }
 
-    pub fn namespace(&self) -> String {
-        self.inner.to_string()
+    pub fn namespace(&self) -> Namespace {
+        self.inner
+            .to_string()
+            .parse()
+            .expect("Devrait être un nom de namespace valide")
     }
 
     pub fn is_in_html_namespace(&self) -> bool {
-        self.namespace()
-            .parse::<Namespace>()
-            .ok()
-            .filter(|ns| Namespace::HTML.eq(ns))
-            .is_some()
+        self.namespace() == Namespace::HTML
     }
 
     // todo: fixme
