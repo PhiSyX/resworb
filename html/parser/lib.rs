@@ -240,7 +240,7 @@ where
             // Erreur d'analyse. Insérer un caractère U+FFFD REPLACEMENT
             // CHARACTER.
             | HTMLToken::Character('\0') => {
-                self.parse_error(token);
+                self.parse_error(&token);
                 self.insert_character(char::REPLACEMENT_CHARACTER);
             }
 
@@ -272,7 +272,7 @@ where
             //
             // Erreur d'analyse. Ignorer le jeton.
             | HTMLToken::DOCTYPE(_) => {
-                self.parse_error(token);
+                self.parse_error(&token);
                 /* ignore */
             }
 
@@ -354,7 +354,7 @@ where
                 || is_end
                     && name.is_one_of([tag_names::br, tag_names::p]) =>
             {
-                self.parse_error(token);
+                self.parse_error(&token);
 
                 while !self
                     .current_node()
@@ -810,10 +810,10 @@ where
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#parse-errors>
-    fn parse_error(&self, token: HTMLToken) {
+    fn parse_error(&self, token: &HTMLToken) {
         match token {
             | HTMLToken::Tag(HTMLTagToken { name, is_end, .. }) => {
-                if is_end {
+                if *is_end {
                     log::error!("Balise de fin inattendue: {name}");
                 } else {
                     log::error!("Balise de début inattendue: {name}");
@@ -1077,7 +1077,7 @@ where
 
     /// TODO:
     /// https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm
-    fn run_adoption_agency_algorithm(&mut self, token: HTMLToken) {
+    fn run_adoption_agency_algorithm(&mut self, token: &HTMLToken) {
         unimplemented!()
     }
 }
@@ -1171,7 +1171,7 @@ where
                         && !doctype_data.is_about_legacy_compat();
 
                 if is_parse_error {
-                    self.parse_error(token);
+                    self.parse_error(&token);
                     return;
                 }
 
@@ -1201,7 +1201,7 @@ where
             // les cas, passer le mode d'insertion à "before
             // html", puis retraiter le jeton.
             | _ => {
-                self.parse_error(token);
+                self.parse_error(&token);
                 self.document.get_mut().set_quirks_mode(QuirksMode::Yes);
                 self.insertion_mode.switch_to(InsertionMode::BeforeHTML);
             }
@@ -1214,7 +1214,7 @@ where
             //
             // Erreur d'analyse. Ignorer le jeton.
             | HTMLToken::DOCTYPE(_) => {
-                self.parse_error(token);
+                self.parse_error(&token);
                 /* ignore */
             }
 
@@ -1275,7 +1275,7 @@ where
                 tag_names::br,
             ]) =>
             {
-                self.parse_error(token);
+                self.parse_error(&token);
             }
 
             // Anything else
@@ -1325,7 +1325,7 @@ where
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE(_) => self.parse_error(token),
+            | HTMLToken::DOCTYPE(_) => self.parse_error(&token),
 
             // A start tag whose tag name is "html"
             //
@@ -1377,7 +1377,7 @@ where
                 tag_names::br,
             ]) =>
             {
-                self.parse_error(token);
+                self.parse_error(&token);
             }
 
             // Anything else
@@ -1426,7 +1426,7 @@ where
             //
             // Erreur d'analyse. Ignorer le jeton.
             | HTMLToken::DOCTYPE(_) => {
-                self.parse_error(token);
+                self.parse_error(&token);
                 /* ignore */
             }
 
@@ -1452,16 +1452,20 @@ where
             // le noeud actuel de la pile des éléments ouverts.
             // Accuser la réception du drapeau d'auto-fermeture du jeton,
             // s'il est activé.
-            | HTMLToken::Tag(mut tag_token)
-                if token.is_start_tag()
-                    && tag_token.name.is_one_of([
-                        tag_names::base,
-                        tag_names::basefont,
-                        tag_names::bgsound,
-                        tag_names::link,
-                    ]) =>
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::base,
+                tag_names::basefont,
+                tag_names::bgsound,
+                tag_names::link,
+            ]) =>
             {
-                self.insert_html_element(&tag_token);
+                self.insert_html_element(tag_token);
                 self.stack_of_open_elements.pop();
                 tag_token.set_acknowledge_self_closing_flag();
             }
@@ -1494,11 +1498,14 @@ where
             // Note: L'analyseur HTML spéculatif n'applique pas de manière
             // spéculative les déclarations de codage des caractères afin
             // de réduire la complexité de l'implémentation.
-            | HTMLToken::Tag(mut tag_token)
-                if token.is_start_tag()
-                    && tag_names::meta == tag_token.name =>
-            {
-                self.insert_html_element(&tag_token);
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::meta == name => {
+                self.insert_html_element(tag_token);
                 self.stack_of_open_elements.pop();
                 tag_token.set_acknowledge_self_closing_flag();
             }
@@ -1689,7 +1696,7 @@ where
                 ..
             }) if tag_names::template == name => {
                 if self.stack_of_template_insertion_modes.is_empty() {
-                    self.parse_error(token);
+                    self.parse_error(&token);
                     return;
                 }
 
@@ -1699,7 +1706,7 @@ where
                     self.current_node().element_ref().local_name();
 
                 if tag_names::template != element_name {
-                    self.parse_error(token);
+                    self.parse_error(&token);
                 }
 
                 self.stack_of_open_elements
@@ -1718,7 +1725,7 @@ where
             | HTMLToken::Tag(HTMLTagToken {
                 ref name, is_end, ..
             }) if (!is_end && tag_names::head == name) || is_end => {
-                self.parse_error(token)
+                self.parse_error(&token)
             }
 
             // Anything else
@@ -1760,7 +1767,7 @@ where
             //
             // Erreur d'analyse. Ignorer le jeton.
             | HTMLToken::DOCTYPE(_) => {
-                self.parse_error(token);
+                self.parse_error(&token);
                 /* Ignore */
             }
 
@@ -1843,7 +1850,7 @@ where
                 tag_names::title,
             ]) =>
             {
-                self.parse_error(token.clone());
+                self.parse_error(&token);
                 if let Some(head) = self.head_element.as_ref() {
                     self.stack_of_open_elements.put(head.clone());
                 }
@@ -1896,7 +1903,7 @@ where
                         tag_names::br,
                     ])) =>
             {
-                self.parse_error(token);
+                self.parse_error(&token);
                 /* ignore */
             }
 
@@ -1936,7 +1943,7 @@ where
                 let current_tag_name = node.element_ref().tag_name();
                 if tag_token.tag_name() == current_tag_name {
                     if node == parser.current_node() {
-                        parser.parse_error(token.clone());
+                        parser.parse_error(token);
                     }
                     index = Some(idx);
                     break;
@@ -1946,7 +1953,7 @@ where
                     current_tag_name,
                     &node.element_ref().namespace(),
                 ) {
-                    parser.parse_error(token.clone());
+                    parser.parse_error(token);
                     return;
                 }
             }
@@ -1954,7 +1961,7 @@ where
             let match_idx = match index {
                 | Some(idx) => idx,
                 | None => {
-                    parser.parse_error(token.clone());
+                    parser.parse_error(token);
                     return;
                 }
             };
@@ -1977,8 +1984,10 @@ where
         /// erreur d'analyse.
         ///   3. Extraire des éléments de la pile des éléments ouverts
         /// jusqu'à ce qu'un élément p ait été extrait de la pile.
-        fn close_p_element<C>(parser: &mut HTMLParser<C>, token: HTMLToken)
-        where
+        fn close_p_element<C>(
+            parser: &mut HTMLParser<C>,
+            token: &HTMLToken,
+        ) where
             C: Iterator<Item = CodePoint>,
         {
             let tag_name = tag_names::p;
@@ -2097,7 +2106,7 @@ where
             //
             // Erreur d'analyse. Ignorer le jeton.
             | HTMLToken::Character('\0') => {
-                self.parse_error(token);
+                self.parse_error(&token);
                 /* Ignore */
             }
 
@@ -2134,7 +2143,7 @@ where
             //
             // Erreur d'analyse. Ignorer le jeton.
             | HTMLToken::DOCTYPE(_) => {
-                self.parse_error(token);
+                self.parse_error(&token);
                 /* Ignore */
             }
 
@@ -2153,7 +2162,7 @@ where
                 is_end: false,
                 ..
             }) if tag_names::html == name => {
-                self.parse_error(token.clone());
+                self.parse_error(&token);
                 if self
                     .stack_of_open_elements
                     .has_element_with_tag_name(tag_names::template)
@@ -2275,7 +2284,7 @@ where
                     ..
                 },
             ) if tag_names::frameset == name => {
-                self.parse_error(token.clone());
+                self.parse_error(&token);
 
                 if self.stack_of_open_elements.len() == 1 {
                     return;
@@ -2356,7 +2365,7 @@ where
                         tag_names::html,
                     ])
                 }) {
-                    self.parse_error(token);
+                    self.parse_error(&token);
                     return;
                 }
 
@@ -2377,7 +2386,7 @@ where
                     StackOfOpenElements::SCOPE_ELEMENTS,
                 ) =>
             {
-                self.parse_error(token);
+                self.parse_error(&token);
             }
 
             // An end tag whose tag name is "body"
@@ -2419,7 +2428,7 @@ where
                         tag_names::html,
                     ])
                 }) {
-                    self.parse_error(token);
+                    self.parse_error(&token);
                 }
 
                 self.insertion_mode.switch_to(InsertionMode::AfterBody);
@@ -2439,7 +2448,7 @@ where
                     StackOfOpenElements::SCOPE_ELEMENTS,
                 ) =>
             {
-                self.parse_error(token);
+                self.parse_error(&token);
             }
 
             // An end tag whose tag name is "html"
@@ -2482,7 +2491,7 @@ where
                         tag_names::html,
                     ])
                 }) {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                 }
                 self.insertion_mode.switch_to(InsertionMode::AfterBody);
                 self.process_using_the_rules_for(
@@ -2539,7 +2548,7 @@ where
                         tag_names::button,
                     ]),
                 ) {
-                    close_p_element(self, token.clone());
+                    close_p_element(self, &token);
                 }
 
                 self.insert_html_element(tag_token);
@@ -2576,7 +2585,7 @@ where
                         tag_names::button,
                     ]),
                 ) {
-                    close_p_element(self, token.clone());
+                    close_p_element(self, &token);
                 }
 
                 if self
@@ -2592,7 +2601,7 @@ where
                         tag_names::h6,
                     ])
                 {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                     self.stack_of_open_elements.pop();
                 }
 
@@ -2623,7 +2632,7 @@ where
                         tag_names::button,
                     ]),
                 ) {
-                    close_p_element(self, token.clone());
+                    close_p_element(self, &token);
                 }
 
                 self.insert_html_element(tag_token);
@@ -2656,7 +2665,7 @@ where
                     .stack_of_open_elements
                     .has_element_with_tag_name(tag_names::template) =>
             {
-                self.parse_error(token);
+                self.parse_error(&token);
             }
 
             // A start tag whose tag name is "form"
@@ -2680,7 +2689,7 @@ where
                         tag_names::button,
                     ]),
                 ) {
-                    close_p_element(self, token.clone());
+                    close_p_element(self, &token);
                 }
 
                 let element = self.insert_html_element(tag_token);
@@ -2741,7 +2750,7 @@ where
                                 .element_ref()
                                 .local_name()
                         {
-                            self.parse_error(token.clone());
+                            self.parse_error(&token);
                         }
                         self.stack_of_open_elements.pop_until_tag(LI);
                         break;
@@ -2764,7 +2773,7 @@ where
                         tag_names::button,
                     ]),
                 ) {
-                    close_p_element(self, token.clone());
+                    close_p_element(self, &token);
                 }
 
                 self.insert_html_element(tag_token);
@@ -2831,7 +2840,7 @@ where
                                 .element_ref()
                                 .local_name()
                         {
-                            self.parse_error(token.clone());
+                            self.parse_error(&token);
                         }
                         self.stack_of_open_elements
                             .pop_until_tag(tag_name);
@@ -2855,7 +2864,7 @@ where
                         tag_names::button,
                     ]),
                 ) {
-                    close_p_element(self, token.clone());
+                    close_p_element(self, &token);
                 }
 
                 self.insert_html_element(tag_token);
@@ -2885,7 +2894,7 @@ where
                         tag_names::button,
                     ]),
                 ) {
-                    close_p_element(self, token.clone());
+                    close_p_element(self, &token);
                 }
                 self.insert_html_element(tag_token);
                 self.tokenizer.switch_state_to("plaintext");
@@ -2916,7 +2925,7 @@ where
                     .stack_of_open_elements
                     .has_element_with_tag_name(BUTTON)
                 {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                     self.generate_implied_end_tags();
                     self.stack_of_open_elements.pop_until_tag(BUTTON);
                 }
@@ -2984,7 +2993,7 @@ where
                     .stack_of_open_elements
                     .has_element_with_tag_name(tag_name)
                 {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                     return;
                 }
 
@@ -2993,7 +3002,7 @@ where
                     .stack_of_open_elements
                     .has_element_with_tag_name(tag_name)
                 {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                 }
 
                 self.stack_of_open_elements.pop_until_tag(tag_name);
@@ -3040,12 +3049,12 @@ where
                                 StackOfOpenElements::SCOPE_ELEMENTS,
                             )
                         {
-                            self.parse_error(token.clone());
+                            self.parse_error(&token);
                             return;
                         }
                     }
                     | None => {
-                        self.parse_error(token.clone());
+                        self.parse_error(&token);
                         return;
                     }
                 };
@@ -3054,7 +3063,7 @@ where
                 if self.stack_of_open_elements.current_node()
                     == maybe_node.as_ref()
                 {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                 }
 
                 if let Some(node) = maybe_node {
@@ -3089,7 +3098,7 @@ where
                 if tag_names::form
                     != self.current_node().element_ref().local_name()
                 {
-                    self.parse_error(token);
+                    self.parse_error(&token);
                 }
 
                 self.stack_of_open_elements.pop_until_tag(tag_names::form);
@@ -3114,11 +3123,11 @@ where
                     ]),
                 ) {
                     let p = HTMLTagToken::start().with_name(tag_names::p);
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                     self.insert_html_element(&p);
                 }
 
-                close_p_element(self, token);
+                close_p_element(self, &token);
             }
 
             // An end tag whose tag name is "li"
@@ -3144,7 +3153,7 @@ where
                     tag_names::li,
                     StackOfOpenElements::SCOPE_ELEMENTS,
                 ) {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                     return;
                 }
 
@@ -3153,7 +3162,7 @@ where
                 if tag_names::li
                     != self.current_node().element_ref().local_name()
                 {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                 }
 
                 self.stack_of_open_elements.pop_until_tag(tag_names::li);
@@ -3187,7 +3196,7 @@ where
                     tag_name,
                     StackOfOpenElements::SCOPE_ELEMENTS,
                 ) {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                     return;
                 }
 
@@ -3196,7 +3205,7 @@ where
                 if tag_name
                     != self.current_node().element_ref().local_name()
                 {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                 }
 
                 self.stack_of_open_elements.pop_until_tag(tag_name);
@@ -3250,7 +3259,7 @@ where
                         StackOfOpenElements::SCOPE_ELEMENTS,
                     )
                 }) {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                     return;
                 }
 
@@ -3259,7 +3268,7 @@ where
                 if tag_name
                     != self.current_node().element_ref().local_name()
                 {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                 }
 
                 loop {
@@ -3335,7 +3344,7 @@ where
                     tag_names::nobr,
                     StackOfOpenElements::SCOPE_ELEMENTS,
                 ) {
-                    self.run_adoption_agency_algorithm(token.clone());
+                    self.run_adoption_agency_algorithm(&token);
                     self.reconstruct_active_formatting_elements();
                 }
 
@@ -3372,7 +3381,7 @@ where
                 tag_names::u,
             ]) =>
             {
-                self.run_adoption_agency_algorithm(token.clone());
+                self.run_adoption_agency_algorithm(&token);
             }
 
             // A start tag whose tag name is one of: "applet", "marquee",
@@ -3438,7 +3447,7 @@ where
                     tag_name,
                     StackOfOpenElements::SCOPE_ELEMENTS,
                 ) {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                     return;
                 }
 
@@ -3447,7 +3456,7 @@ where
                 let cnode = self.current_node();
                 let element = cnode.element_ref();
                 if element.tag_name() != tag_name {
-                    self.parse_error(token.clone());
+                    self.parse_error(&token);
                 }
 
                 self.stack_of_open_elements.pop_until_tag(tag_name);
@@ -3479,7 +3488,7 @@ where
                         ]),
                     )
                 {
-                    close_p_element(self, token.clone());
+                    close_p_element(self, &token);
                 }
 
                 self.insert_html_element(tag_token);
@@ -3542,12 +3551,15 @@ where
             // correspondance ASCII insensible à la casse pour la chaîne
             // "hidden", alors nous devons mettre le drapeau frameset-ok à
             // "not ok".
-            | HTMLToken::Tag(mut tag_token)
-                if !tag_token.is_end
-                    && tag_names::input == tag_token.name =>
-            {
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::input == name => {
                 self.reconstruct_active_formatting_elements();
-                self.insert_html_element(&tag_token);
+                self.insert_html_element(tag_token);
                 self.stack_of_open_elements.pop();
                 tag_token.set_acknowledge_self_closing_flag();
                 if !tag_token.attributes.iter().any(|(name, value)| {
@@ -3568,15 +3580,19 @@ where
             // le nœud actuel de la pile des éléments ouverts.
             // Faire savoir que le drapeau self-closing du jeton, s'il est
             // activé.
-            | HTMLToken::Tag(mut tag_token)
-                if !tag_token.is_end
-                    && tag_token.name.is_one_of([
-                        tag_names::param,
-                        tag_names::source,
-                        tag_names::track,
-                    ]) =>
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::param,
+                tag_names::source,
+                tag_names::track,
+            ]) =>
             {
-                self.insert_html_element(&tag_token);
+                self.insert_html_element(tag_token);
                 self.stack_of_open_elements.pop();
                 tag_token.set_acknowledge_self_closing_flag();
             }
@@ -3640,7 +3656,7 @@ where
             //
             // Erreur d'analyse. Ignorer le jeton.
             | HTMLToken::DOCTYPE(_) => {
-                self.parse_error(token);
+                self.parse_error(&token);
                 /* Ignore */
             }
 
@@ -3672,7 +3688,7 @@ where
                 ..
             }) if tag_names::html == name => {
                 if self.parsing_fragment {
-                    self.parse_error(token);
+                    self.parse_error(&token);
                     return;
                 }
 
@@ -3692,7 +3708,7 @@ where
             // Erreur d'analyse. Passer le mode d'insertion à "in body" et
             // retraiter le jeton.
             | _ => {
-                self.parse_error(token.clone());
+                self.parse_error(&token);
                 self.insertion_mode.switch_to(InsertionMode::InBody);
                 self.process_using_the_rules_for(
                     self.insertion_mode,
@@ -3761,7 +3777,7 @@ where
             // Erreur d'analyse. Passer le mode d'insertion à "in body" et
             // retraiter le jeton.
             | _ => {
-                self.parse_error(token.clone());
+                self.parse_error(&token);
                 self.insertion_mode.switch_to(InsertionMode::InBody);
                 self.process_using_the_rules_for(
                     self.insertion_mode,
