@@ -4742,7 +4742,7 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "a".into(),
                 self_closing_flag: false,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![(
                     "href".into(),
                     "?a=b&c=d&a0b=c&copy=1&noti=n&not=in&notin=&notin;&not;&;& &".into()
@@ -4774,7 +4774,7 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "div".into(),
                 self_closing_flag: false,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![("id".into(), "foo".into())],
                 is_end: false
             }))
@@ -4788,7 +4788,7 @@ mod tests {
             Some(HTMLToken::Tag(HTMLTagToken {
                 name: "input".into(),
                 self_closing_flag: true,
-                self_closing_flag_acknowledge: false,
+                self_closing_flag_acknowledge: Default::default(),
                 attributes: vec![("value".into(), "Hello World".into())],
                 is_end: false
             }))
