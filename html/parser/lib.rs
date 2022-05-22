@@ -125,11 +125,11 @@ where
                 //    - Si la pile d'éléments ouverts est vide
                 //    - Si le nœud courant ajusté est un élément dans
                 //      l'espace de nom HTML
-                // TODO //   - Si le nœud courant ajusté est un point
+                //    - Si le nœud courant ajusté est un point
                 //      d'intégration de texte MathML et que le jeton est
                 //      une balise de début dont le nom de balise n'est ni
                 //      "mglyph" ni "malignmark"
-                // TODO //   - Si le nœud courant ajusté est un point
+                //    - Si le nœud courant ajusté est un point
                 //      d'intégration de texte MathML et que le jeton est
                 //      un jeton de caractère
                 // TODO //   - Si le nœud courant ajusté est un élément
@@ -1086,7 +1086,8 @@ where
     ) -> bool {
         let subject = token.as_tag().tag_name();
 
-        let cnode = self.current_node();
+        let cnode =
+            self.current_node().expect("adoption-agency-algorithm");
         if cnode.element_ref().tag_name() == subject
             && !self
                 .list_of_active_formatting_elements
@@ -2231,7 +2232,12 @@ where
 
             parser.generate_implied_end_tags_except_for(tag_name);
 
-            if tag_name != parser.current_node().element_ref().local_name()
+            if tag_name
+                != parser
+                    .current_node()
+                    .expect("Le noeud actuel")
+                    .element_ref()
+                    .local_name()
             {
                 parser.parse_error(token);
             }
@@ -2328,12 +2334,23 @@ where
                     tag_names::ul,
                     tag_names::wbr,
                     tag_names::xmp,
-                ]);
+                ]),
+                | Namespace::MathML => tag_name.is_one_of([
+                    tag_names::mi,
+                    tag_names::mo,
+                    tag_names::mn,
+                    tag_names::ms,
+                    tag_names::mtext,
+                    tag_names::annotationXml,
+                ]),
+                | Namespace::SVG => tag_name.is_one_of([
+                    tag_names::foreignObject,
+                    tag_names::desc,
+                    tag_names::title,
+                ]),
+
+                | _ => false,
             }
-
-            // todo: mathml, svg
-
-            false
         }
 
         match token {
@@ -2787,9 +2804,7 @@ where
             {
                 if self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
-                    StackOfOpenElements::scoped_elements_with::<10>([
-                        tag_names::button,
-                    ]),
+                    StackOfOpenElements::button_scope_elements(),
                 ) {
                     close_p_element(self, &token);
                 }
@@ -2824,9 +2839,7 @@ where
             {
                 if self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
-                    StackOfOpenElements::scoped_elements_with::<10>([
-                        tag_names::button,
-                    ]),
+                    StackOfOpenElements::button_scope_elements(),
                 ) {
                     close_p_element(self, &token);
                 }
@@ -2872,9 +2885,7 @@ where
             ) if name.is_one_of([tag_names::pre, tag_names::listing]) => {
                 if self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
-                    StackOfOpenElements::scoped_elements_with::<10>([
-                        tag_names::button,
-                    ]),
+                    StackOfOpenElements::button_scope_elements(),
                 ) {
                     close_p_element(self, &token);
                 }
@@ -2929,9 +2940,7 @@ where
             ) if tag_names::form == name => {
                 if self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
-                    StackOfOpenElements::scoped_elements_with::<10>([
-                        tag_names::button,
-                    ]),
+                    StackOfOpenElements::button_scope_elements(),
                 ) {
                     close_p_element(self, &token);
                 }
@@ -3017,9 +3026,7 @@ where
 
                 if self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
-                    StackOfOpenElements::scoped_elements_with::<10>([
-                        tag_names::button,
-                    ]),
+                    StackOfOpenElements::button_scope_elements(),
                 ) {
                     close_p_element(self, &token);
                 }
@@ -3112,9 +3119,7 @@ where
 
                 if self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
-                    StackOfOpenElements::scoped_elements_with::<10>([
-                        tag_names::button,
-                    ]),
+                    StackOfOpenElements::button_scope_elements(),
                 ) {
                     close_p_element(self, &token);
                 }
@@ -3142,9 +3147,7 @@ where
             ) if tag_names::plaintext == name => {
                 if self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
-                    StackOfOpenElements::scoped_elements_with::<10>([
-                        tag_names::button,
-                    ]),
+                    StackOfOpenElements::button_scope_elements(),
                 ) {
                     close_p_element(self, &token);
                 }
@@ -3348,7 +3351,11 @@ where
             {
                 self.generate_implied_end_tags();
                 if tag_names::form
-                    != self.current_node().element_ref().local_name()
+                    != self
+                        .current_node()
+                        .expect("Le noeud actuel")
+                        .element_ref()
+                        .local_name()
                 {
                     self.parse_error(&token);
                 }
@@ -3370,9 +3377,7 @@ where
             }) if tag_names::p == name => {
                 if !self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
-                    StackOfOpenElements::scoped_elements_with::<10>([
-                        tag_names::button,
-                    ]),
+                    StackOfOpenElements::button_scope_elements(),
                 ) {
                     let p = HTMLTagToken::start().with_name(tag_names::p);
                     self.parse_error(&token);
@@ -3753,9 +3758,7 @@ where
                 if !document.isin_quirks_mode()
                     && self.stack_of_open_elements.has_element_in_scope(
                         tag_names::p,
-                        StackOfOpenElements::scoped_elements_with::<10>([
-                            tag_names::button,
-                        ]),
+                        StackOfOpenElements::button_scope_elements(),
                     )
                 {
                     close_p_element(self, &token);
@@ -3885,9 +3888,7 @@ where
             ) if tag_names::hr == name => {
                 if self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
-                    StackOfOpenElements::scoped_elements_with::<10>([
-                        tag_names::button,
-                    ]),
+                    StackOfOpenElements::button_scope_elements(),
                 ) {
                     close_p_element(self, &token);
                 }
@@ -3974,9 +3975,7 @@ where
             ) if tag_names::xmp == name => {
                 if self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
-                    StackOfOpenElements::scoped_elements_with::<10>([
-                        tag_names::button,
-                    ]),
+                    StackOfOpenElements::button_scope_elements(),
                 ) {
                     close_p_element(self, &token);
                 }

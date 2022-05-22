@@ -105,14 +105,41 @@ impl Element {
         self.namespace() == Some(Namespace::HTML)
     }
 
-    // todo: fixme
     pub fn is_mathml_text_integration_point(&self) -> bool {
-        false
+        self.tag_name().is_one_of([
+            tag_names::mi,
+            tag_names::mo,
+            tag_names::mn,
+            tag_names::ms,
+            tag_names::mtext,
+        ])
     }
 
-    // todo: fixme
     pub fn is_html_text_integration_point(&self) -> bool {
-        false
+        if self.tag_name() == tag_names::annotationXml {
+            let attrs = self.attributes.read().unwrap();
+            let encoding_str: DOMString = "encoding".into();
+            let maybe_encoding = attrs.get(&encoding_str);
+            if let Some(encoding) = maybe_encoding {
+                let encoding_str: DOMString = "text/html".into();
+                if encoding_str.eq_ignore_ascii_case(encoding) {
+                    return true;
+                }
+
+                let encoding_str: DOMString =
+                    "application/xhtml+xml".into();
+                if encoding_str.eq_ignore_ascii_case(encoding) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        self.tag_name().is_one_of([
+            tag_names::foreignObject,
+            tag_names::desc,
+            tag_names::title,
+        ])
     }
 
     pub fn script(&self) -> &HTMLScriptElement<DocumentNode> {

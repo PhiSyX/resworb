@@ -96,7 +96,7 @@ impl StackOfOpenElements {
     ///   - SVG foreignObject
     ///   - SVG desc
     ///   - SVG title
-    pub const SCOPE_ELEMENTS: [tag_names; 9] = [
+    pub const SCOPE_ELEMENTS: [tag_names; 18] = [
         tag_names::applet,
         tag_names::caption,
         tag_names::html,
@@ -106,7 +106,15 @@ impl StackOfOpenElements {
         tag_names::marquee,
         tag_names::object,
         tag_names::template,
-        // todo: ajouter les éléments manquants MathML & SVG
+        tag_names::mi,
+        tag_names::mo,
+        tag_names::mn,
+        tag_names::ms,
+        tag_names::mtext,
+        tag_names::annotationXml,
+        tag_names::foreignObject,
+        tag_names::desc,
+        tag_names::title,
     ];
 
     /// Le nœud actuel est le nœud le plus bas de cette pile d'éléments
@@ -190,7 +198,7 @@ impl StackOfOpenElements {
     }
 
     // <https://github.com/rust-lang/rust/issues/83701>
-    pub fn scoped_elements_with<const N: usize>(
+    fn scoped_elements_with<const N: usize>(
         list: impl IntoIterator<Item = tag_names>,
     ) -> [tag_names; N] {
         let mut elements: [tag_names; N] = [tag_names::var; N];
@@ -207,6 +215,10 @@ impl StackOfOpenElements {
         });
 
         elements
+    }
+
+    pub fn button_scope_elements() -> [tag_names; 19] {
+        Self::scoped_elements_with::<19>([tag_names::button])
     }
 
     pub fn topmost_special_node_below(

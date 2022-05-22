@@ -86,6 +86,7 @@ where
 // ----------------------- //
 
 enumerate_html_tag_attributes! {
+    /* HTML */
     abbr
     accept
     accept_charset
@@ -110,7 +111,7 @@ enumerate_html_tag_attributes! {
     charset
     checked
     cite
-    class_
+    class
     clear
     code
     codetype
@@ -278,4 +279,171 @@ enumerate_html_tag_attributes! {
     vspace
     width
     wrap
+
+    /* MathML */
+    accent
+    accentunder
+    actiontype
+    // align
+    alignmentscope
+    altimg
+    bevelled
+    charalign
+    close
+    columnalign
+    columnlines
+    columnspacing
+    columnspan
+    columnwidth
+    crossout
+    decimalpoint
+    denomalign
+    depth
+    dir
+    display
+    displaystyle
+    edge
+    equalcolumns
+    equalrows
+    fence
+    // form
+    // frame
+    framespacing
+    groupalign
+    // height
+    // href
+    // id
+    indentalign
+    indentalignfirst
+    indentalignlast
+    indentshift
+    indentshiftfirst
+    indentshiftlast
+    indenttarget
+    infixlinebreakstyle
+    largeop
+    length
+    linebreak
+    linebreakmultchar
+    linebreakstyle
+    lineleading
+    linethickness
+    location
+    longdivstyle
+    lspace
+    lquote
+    mathbackground
+    mathcolor
+    mathsize
+    mathvariant
+    maxsize
+    minlabelspacing
+    minsize
+    movablelimits
+    notation
+    numalign
+    // open
+    overflow
+    position
+    rowalign
+    rowlines
+    rowspacing
+    // rowspan
+    rspace
+    rquote
+    scriptlevel
+    scriptminsize
+    scriptsizemultiplier
+    selection
+    separator
+    separators
+    shift
+    side
+    // src
+    stackalign
+    stretchy
+    subscriptshift
+    supscriptshift
+    symmetric
+    voffset
+    // width
+    xlinkHref
+    xmlns
+
+    /* SVG */
+    attributeName
+    attributeType
+    baseFrequency
+    baseProfile
+    calcMode
+    clipPathUnits
+    contentScriptType
+    contentStyleType
+    cx
+    cy
+    diffuseConstant
+    edgeMode
+    filterUnits
+    glyphRef
+    gradientTransform
+    gradientUnits
+    // height
+    kernelMatrix
+    kernelUnitLength
+    keyPoints
+    keySplines
+    keyTimes
+    lengthAdjust
+    limitingConeAngle
+    markerHeight
+    markerUnits
+    markerWidth
+    maskContentUnits
+    maskUnits
+    numOctaves
+    pathLength
+    patternContentUnits
+    patternTransform
+    patternUnits
+    points
+    pointsAtX
+    pointsAtY
+    pointsAtZ
+    preserveAlpha
+    preserveAspectRatio
+    primitiveUnits
+    r
+    refX
+    refY
+    repeatCount
+    repeatDur
+    requiredExtensions
+    rx
+    ry
+    requiredFeatures
+    specularConstant
+    specularExponent
+    spreadMethod
+    startOffset
+    stdDeviation
+    stitchTiles
+    surfaceScale
+    systemLanguage
+    tableValues
+    targetX
+    targetY
+    textLength
+    // version
+    viewBox
+    viewTarget
+    // width
+    x
+    x1
+    x2
+    xChannelSelector
+    y
+    y1
+    y2
+    yChannelSelector
+    zoomAndPan
 }

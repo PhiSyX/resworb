@@ -947,4 +947,124 @@ enumerate_html_tag_names! {
     /// l'intérieur de la page courante afin de permettre une navigation plus
     /// souple vers de nouvelles pages.
     portal
+
+    /* MathML */
+    // math
+    maction
+    maligngroup
+    malignmark
+    menclose
+    merror
+    mfenced
+    mfrac
+    mglyph
+    mi
+    mlabeledtr
+    mlongdiv
+    mmultiscripts
+    mn
+    mo
+    mover
+    mpadded
+    mphantom
+    mroot
+    mrow
+    ms
+    mscarries
+    mscarry
+    msgroup
+    msline
+    mspace
+    msqrt
+    msrow
+    mstack
+    mstyle
+    msub
+    msup
+    msubsup
+    mtable
+    mtd
+    mtext
+    mtr
+    munder
+    munderover
+    semantics
+    annotation
+    annotationXml
+
+    /* SVG */
+
+    // a
+    animate
+    animateMotion
+    animateTransform
+    circle
+    clipPath
+    colorProfile
+    defs
+    desc
+    discard
+    ellipse
+    feBlend
+    feColorMatrix
+    feComponentTransfer
+    feComposite
+    feConvolveMatrix
+    feDiffuseLighting
+    feDisplacementMap
+    feDistantLight
+    feDropShadow
+    feFlood
+    feFuncA
+    feFuncB
+    feFuncG
+    feFuncR
+    feGaussianBlur
+    feImage
+    feMerge
+    feMergeNode
+    feMorphology
+    feOffset
+    fePointLight
+    feSpecularLighting
+    feSpotLight
+    feTile
+    feTurbulence
+    filter
+    foreignObject
+    g
+    hatch
+    hatchpath
+    // image
+    line
+    linearGradient
+    marker
+    mask
+    mesh
+    meshgradient
+    meshpatch
+    meshrow
+    metadata
+    mpath
+    path
+    pattern
+    polygon
+    polyline
+    radialGradient
+    rect
+    // script
+    set
+    solidcolor
+    stop
+    // style
+    // svg
+    switch
+    symbol
+    text
+    textPath
+    // title
+    tspan
+    unknown
+    r#use
+    view
 }

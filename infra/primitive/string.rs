@@ -39,11 +39,28 @@ impl DOMString {
             .unwrap()
             .clone_from(&data.inner.read().unwrap());
     }
+
+    pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool {
+        (self.inner.read().unwrap())
+            .to_ascii_lowercase()
+            .eq_ignore_ascii_case(
+                &other.inner.read().unwrap().to_ascii_lowercase(),
+            )
+    }
 }
 
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
+
+impl<S> From<S> for DOMString
+where
+    S: AsRef<str>,
+{
+    fn from(s: S) -> Self {
+        Self::new(s.as_ref())
+    }
+}
 
 impl PartialEq for DOMString {
     fn eq(&self, other: &Self) -> bool {
