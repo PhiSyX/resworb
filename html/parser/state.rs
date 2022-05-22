@@ -6,7 +6,7 @@ use core::ops;
 
 use dom::node::Node;
 use html_elements::tag_names;
-use infra::structure::tree::TreeNode;
+use infra::{namespace::Namespace, structure::tree::TreeNode};
 
 // ----------- //
 // Énumération //
@@ -212,7 +212,7 @@ impl StackOfOpenElements {
     pub fn topmost_special_node_below(
         &self,
         formatting_element: &TreeNode<Node>,
-        is_special_tag: impl Fn(tag_names, &str) -> bool,
+        is_special_tag: impl Fn(tag_names, Namespace) -> bool,
     ) -> Option<(usize, &TreeNode<Node>)> {
         self.elements.iter().enumerate().rfind(|&(_, node)| {
             if node == formatting_element {
@@ -221,7 +221,9 @@ impl StackOfOpenElements {
 
             is_special_tag(
                 node.element_ref().tag_name(),
-                &node.element_ref().namespace().to_string(),
+                node.element_ref()
+                    .namespace()
+                    .expect("Devrait être un nom de namespace valide"),
             )
         })
     }

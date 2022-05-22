@@ -9,7 +9,8 @@ use std::{
 };
 
 use html_elements::{
-    interface::HTMLElementInterface, tag_names, HTMLScriptElement,
+    interface::{HTMLElementInterface, IsOneOfTagsInterface},
+    tag_names, HTMLScriptElement,
 };
 use infra::{namespace::Namespace, primitive::string::DOMString};
 
@@ -96,15 +97,12 @@ impl Element {
         None
     }
 
-    pub fn namespace(&self) -> Namespace {
-        self.inner
-            .to_string()
-            .parse()
-            .expect("Devrait être un nom de namespace valide")
+    pub fn namespace(&self) -> Option<Namespace> {
+        self.inner.to_string().parse().ok()
     }
 
     pub fn is_in_html_namespace(&self) -> bool {
-        self.namespace() == Namespace::HTML
+        self.namespace() == Some(Namespace::HTML)
     }
 
     // todo: fixme

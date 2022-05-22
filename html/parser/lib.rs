@@ -1142,9 +1142,12 @@ where
                         return false;
                     }
 
+                    let el = el.element_ref();
                     is_special_tag(
-                        el.element_ref().tag_name(),
-                        &el.element_ref().namespace().to_string(),
+                        el.tag_name(),
+                        el.namespace().expect(
+                            "Devrait être un espace de nom valide",
+                        ),
                     )
                 })
                 .map(|(i, e)| (i, e.to_owned()));
@@ -1237,7 +1240,9 @@ where
                 let node_el = self
                     .create_element_for(
                         &tag_token,
-                        el.namespace(),
+                        el.namespace().expect(
+                            "Devrait être un espace de nom valide",
+                        ),
                         common_ancestor.as_ref(),
                     )
                     .expect("Devrait retourner un element valide");
@@ -1278,7 +1283,8 @@ where
             let node_el = self
                 .create_element_for(
                     &tag_token,
-                    el.namespace(),
+                    el.namespace()
+                        .expect("Devrait être un espace de nom valide"),
                     Some(&furthest_block),
                 )
                 .expect("Devrait retourner un element valide");
@@ -2168,7 +2174,9 @@ where
 
                 if is_special_tag(
                     current_tag_name,
-                    &node.element_ref().namespace().to_string(),
+                    node.element_ref()
+                        .namespace()
+                        .expect("Devrait être un espace de nom valide"),
                 ) {
                     parser.parse_error(token);
                     return;
@@ -2976,7 +2984,9 @@ where
 
                     if is_special_tag(
                         tag_name,
-                        &element.namespace().to_string(),
+                        element.namespace().expect(
+                            "Devrait être un espace de nom valide",
+                        ),
                     ) && name.is_one_of([
                         tag_names::address,
                         tag_names::div,
@@ -3068,7 +3078,9 @@ where
 
                     if is_special_tag(
                         tag_name,
-                        &element.namespace().to_string(),
+                        element.namespace().expect(
+                            "Devrait être un espace de nom valide",
+                        ),
                     ) && name.is_one_of([
                         tag_names::address,
                         tag_names::div,

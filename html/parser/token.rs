@@ -6,11 +6,9 @@ use std::sync::RwLock;
 
 use dom::node::QuirksMode;
 use html_elements::{
-    interface::IsOneOfAttributesInterface, tag_attributes,
+    interface::IsOneOfAttributesInterface, tag_attributes, tag_names,
 };
 use infra::primitive::codepoint::CodePoint;
-
-use crate::tag_names;
 
 // ---- //
 // Type //
