@@ -110,9 +110,9 @@ impl Node {
         NodeBuilder::new()
     }
 
-    pub fn is_in_html_namespace(&self) -> bool {
+    pub fn isin_html_namespace(&self) -> bool {
         let element = self.element_ref();
-        element.is_in_html_namespace()
+        element.isin_html_namespace()
     }
 
     pub fn is_html_text_integration_point(&self) -> bool {

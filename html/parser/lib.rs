@@ -132,9 +132,9 @@ where
                 //    - Si le nœud courant ajusté est un point
                 //      d'intégration de texte MathML et que le jeton est
                 //      un jeton de caractère
-                // TODO //   - Si le nœud courant ajusté est un élément
-                //      MathML annotation-xml et que le jeton est une
-                //      balise de départ dont le nom de balise est "svg"
+                //    - Si le nœud courant ajusté est un élément MathML
+                //      annotation-xml et que le jeton est une balise de
+                //      départ dont le nom de balise est "svg"
                 //    - Si le nœud courant ajusté est un point
                 //      d'intégration HTML et que le jeton est une balise
                 //      de départ
@@ -150,7 +150,26 @@ where
                     if self.stack_of_open_elements.is_empty()
                         || self
                             .adjusted_current_node()
-                            .is_in_html_namespace()
+                            .isin_html_namespace()
+                        || self
+                            .adjusted_current_node()
+                            .is_mathml_text_integration_point()
+                            && token.is_start_tag()
+                            && !token.as_tag().name.is_one_of([
+                                tag_names::mglyph,
+                                tag_names::malignmark,
+                            ])
+                        || self
+                            .adjusted_current_node()
+                            .is_mathml_text_integration_point()
+                            && token.is_character()
+                        || self
+                            .adjusted_current_node()
+                            .element_ref()
+                            .tag_name()
+                            == tag_names::annotationXml
+                            && token.is_start_tag()
+                            && tag_names::svg == token.as_tag().name
                         || (self
                             .adjusted_current_node()
                             .is_html_text_integration_point()
@@ -365,13 +384,37 @@ where
                 while let Some(cnode) = maybe_cnode.as_ref() {
                     if !cnode.is_mathml_text_integration_point()
                         && !cnode.is_html_text_integration_point()
-                        && !cnode.is_in_html_namespace()
+                        && !cnode.isin_html_namespace()
                     {
                         self.stack_of_open_elements.pop();
                     }
                 }
 
-                todo!()
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            // Any other start tag
+            //
+            // Si le nœud courant ajusté est un élément de l'espace de noms
+            // MathML, ajustez les attributs MathML pour le jeton. (Cela
+            // corrige le cas des attributs MathML qui ne sont pas tous en
+            // minuscules).
+            // Si le nœud courant ajusté est un élément de l'espace de noms
+            // SVG, et que le nom de la balise du jeton est l'un de ceux de
+            // la première colonne du tableau suivant, changez le nom de la
+            // balise par le nom donné dans la cellule correspondante de la
+            // deuxième colonne. (Ceci règle le cas des éléments SVG qui ne
+            // sont pas tous en minuscules).
+            | HTMLToken::Tag(
+                mut tag_token @ HTMLTagToken {
+                    is_end: false,
+                    self_closing_flag,
+                    ..
+                },
+            ) => {
             }
 
             | _ => todo!(),

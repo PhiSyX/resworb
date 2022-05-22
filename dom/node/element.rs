@@ -101,7 +101,7 @@ impl Element {
         self.inner.to_string().parse().ok()
     }
 
-    pub fn is_in_html_namespace(&self) -> bool {
+    pub fn isin_html_namespace(&self) -> bool {
         self.namespace() == Some(Namespace::HTML)
     }
 
