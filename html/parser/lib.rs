@@ -356,15 +356,19 @@ where
             {
                 self.parse_error(&token);
 
-                while !self
-                    .current_node()
-                    .is_mathml_text_integration_point()
-                    && !self
-                        .current_node()
-                        .is_html_text_integration_point()
-                    && !self.current_node().is_in_html_namespace()
-                {
-                    self.stack_of_open_elements.pop();
+                let maybe_cnode = self.current_node().cloned();
+
+                if maybe_cnode.is_none() {
+                    return;
+                }
+
+                while let Some(cnode) = maybe_cnode.as_ref() {
+                    if !cnode.is_mathml_text_integration_point()
+                        && !cnode.is_html_text_integration_point()
+                        && !cnode.is_in_html_namespace()
+                    {
+                        self.stack_of_open_elements.pop();
+                    }
                 }
 
                 todo!()
@@ -384,7 +388,7 @@ where
         {
             self.context_element.as_ref().expect("Context Element")
         } else {
-            self.current_node()
+            self.current_node().expect("Le noeud actuel")
         }
     }
 
@@ -421,10 +425,8 @@ where
 
     /// Le nœud actuel est le nœud le plus bas de cette pile d'éléments
     /// ouverts.
-    fn current_node(&self) -> &TreeNode<Node> {
-        self.stack_of_open_elements
-            .current_node()
-            .expect("Le noeud actuel")
+    fn current_node(&self) -> Option<&TreeNode<Node>> {
+        self.stack_of_open_elements.current_node()
     }
 
     /// L'endroit approprié pour insérer un nœud, en utilisant
@@ -494,8 +496,7 @@ where
         &self,
         override_target: Option<&TreeNode<Node>>,
     ) -> AdjustedInsertionLocation {
-        let maybe_target =
-            override_target.or_else(|| Some(self.current_node()));
+        let maybe_target = override_target.or_else(|| self.current_node());
 
         let mut adjusted_insertion_location = AdjustedInsertionLocation {
             insert_before_sibling: None,
@@ -641,7 +642,7 @@ where
         &mut self,
         predicate: impl Fn(&str) -> bool,
     ) {
-        let node = self.current_node();
+        let node = self.current_node().expect("Le noeud actuel");
         let element = node.element_ref();
         let name = element.local_name();
         while predicate(&name)
@@ -680,27 +681,29 @@ where
     /// un élément th, un élément thead ou un élément tr, l'UA doit retirer
     /// le noeud actuel de la pile des éléments ouverts.
     fn generate_all_implied_end_tags_thoroughly(&mut self) {
-        while self.current_node().element_ref().local_name().is_one_of([
-            tag_names::caption,
-            tag_names::colgroup,
-            tag_names::dd,
-            tag_names::dt,
-            tag_names::li,
-            tag_names::optgroup,
-            tag_names::option,
-            tag_names::p,
-            tag_names::rb,
-            tag_names::rp,
-            tag_names::rt,
-            tag_names::rtc,
-            tag_names::tbody,
-            tag_names::td,
-            tag_names::tfoot,
-            tag_names::th,
-            tag_names::thead,
-            tag_names::tr,
-        ]) {
-            self.stack_of_open_elements.pop();
+        while let Some(cnode) = self.current_node() {
+            if cnode.element_ref().local_name().is_one_of([
+                tag_names::caption,
+                tag_names::colgroup,
+                tag_names::dd,
+                tag_names::dt,
+                tag_names::li,
+                tag_names::optgroup,
+                tag_names::option,
+                tag_names::p,
+                tag_names::rb,
+                tag_names::rp,
+                tag_names::rt,
+                tag_names::rtc,
+                tag_names::tbody,
+                tag_names::td,
+                tag_names::tfoot,
+                tag_names::th,
+                tag_names::thead,
+                tag_names::tr,
+            ]) {
+                self.stack_of_open_elements.pop();
+            }
         }
     }
 
@@ -979,12 +982,12 @@ where
                     .rev()
                 {
                     let ancestor_tag_name =
-                        ancestor.element_ref().local_name();
-                    if ancestor_tag_name == "template" {
+                        ancestor.element_ref().tag_name();
+                    if ancestor_tag_name == tag_names::template {
                         self.insertion_mode
                             .switch_to(InsertionMode::InSelect);
                         return;
-                    } else if ancestor_tag_name == "table" {
+                    } else if ancestor_tag_name == tag_names::table {
                         self.insertion_mode
                             .switch_to(InsertionMode::InSelectInTable);
                         return;
@@ -1079,7 +1082,7 @@ where
     fn run_adoption_agency_algorithm(
         &mut self,
         token: &HTMLToken,
-        is_special_tag: &impl Fn(tag_names, &str) -> bool,
+        is_special_tag: &impl Fn(tag_names, Namespace) -> bool,
     ) -> bool {
         let subject = token.as_tag().tag_name();
 
@@ -1129,7 +1132,9 @@ where
                 return false;
             }
 
-            if formatting_element.ne(self.current_node()) {
+            if formatting_element
+                .ne(self.current_node().expect("Le noeud actuel"))
+            {
                 self.parse_error(token);
             }
 
@@ -1153,7 +1158,9 @@ where
                 .map(|(i, e)| (i, e.to_owned()));
 
             if maybe_furthest_block.is_none() {
-                while formatting_element.ne(self.current_node()) {
+                while formatting_element
+                    .ne(self.current_node().expect("Le noeud actuel"))
+                {
                     self.stack_of_open_elements.pop();
                 }
 
@@ -1925,8 +1932,11 @@ where
 
                 self.generate_all_implied_end_tags_thoroughly();
 
-                let element_name =
-                    self.current_node().element_ref().local_name();
+                let element_name = self
+                    .current_node()
+                    .expect("Le noeud actuel")
+                    .element_ref()
+                    .local_name();
 
                 if tag_names::template != element_name {
                     self.parse_error(&token);
@@ -2165,7 +2175,9 @@ where
             {
                 let current_tag_name = node.element_ref().tag_name();
                 if tag_token.tag_name() == current_tag_name {
-                    if node == parser.current_node() {
+                    if node
+                        == parser.current_node().expect("Le noeud actuel")
+                    {
                         parser.parse_error(token);
                     }
                     index = Some(idx);
@@ -2228,14 +2240,12 @@ where
         }
 
         /// <https://html.spec.whatwg.org/multipage/parsing.html#special>
-        fn is_special_tag(tag_name: tag_names, namespace: &str) -> bool {
-            if namespace
-                .parse::<Namespace>()
-                .ok()
-                .filter(|ns| Namespace::HTML.eq(ns))
-                .is_some()
-            {
-                return tag_name.is_one_of([
+        fn is_special_tag(
+            tag_name: tag_names,
+            namespace: Namespace,
+        ) -> bool {
+            match namespace {
+                | Namespace::HTML => tag_name.is_one_of([
                     tag_names::address,
                     tag_names::applet,
                     tag_names::area,
@@ -2397,7 +2407,10 @@ where
                 }
 
                 attributes.iter().for_each(|attribute| {
-                    let element = self.current_node().element_ref();
+                    let element = self
+                        .current_node()
+                        .expect("Le noeud actuel")
+                        .element_ref();
                     if !element.has_attribute(&attribute.0) {
                         element.set_attribute(&attribute.0, &attribute.1);
                     }
@@ -2532,7 +2545,11 @@ where
                 second_element.detach_node();
 
                 while tag_names::html
-                    != self.current_node().element_ref().local_name()
+                    != self
+                        .current_node()
+                        .expect("Le noeud actuel")
+                        .element_ref()
+                        .local_name()
                 {
                     self.stack_of_open_elements.pop();
                 }
@@ -2816,6 +2833,7 @@ where
 
                 if self
                     .current_node()
+                    .expect("Le noeud actuel")
                     .element_ref()
                     .local_name()
                     .is_one_of([
@@ -2973,6 +2991,7 @@ where
                         if LI
                             == self
                                 .current_node()
+                                .expect("Le noeud actuel")
                                 .element_ref()
                                 .local_name()
                         {
@@ -3066,6 +3085,7 @@ where
                         if tag_name
                             == self
                                 .current_node()
+                                .expect("Le noeud actuel")
                                 .element_ref()
                                 .local_name()
                         {
@@ -3392,7 +3412,11 @@ where
                 self.generate_implied_end_tags_except_for(tag_names::li);
 
                 if tag_names::li
-                    != self.current_node().element_ref().local_name()
+                    != self
+                        .current_node()
+                        .expect("Le noeud actuel")
+                        .element_ref()
+                        .local_name()
                 {
                     self.parse_error(&token);
                 }
@@ -3435,7 +3459,11 @@ where
                 self.generate_implied_end_tags_except_for(tag_name);
 
                 if tag_name
-                    != self.current_node().element_ref().local_name()
+                    != self
+                        .current_node()
+                        .expect("Le noeud actuel")
+                        .element_ref()
+                        .local_name()
                 {
                     self.parse_error(&token);
                 }
@@ -3498,7 +3526,11 @@ where
                 self.generate_implied_end_tags();
 
                 if tag_name
-                    != self.current_node().element_ref().local_name()
+                    != self
+                        .current_node()
+                        .expect("Le noeud actuel")
+                        .element_ref()
+                        .local_name()
                 {
                     self.parse_error(&token);
                 }
@@ -3691,7 +3723,7 @@ where
 
                 self.generate_implied_end_tags();
 
-                let cnode = self.current_node();
+                let cnode = self.current_node().expect("Le noeud actuel");
                 let element = cnode.element_ref();
                 if element.tag_name() != tag_name {
                     self.parse_error(&token);
@@ -4037,8 +4069,8 @@ where
             ) if name
                 .is_one_of([tag_names::optgroup, tag_names::option]) =>
             {
-                let node = self.current_node();
-                if node.element_ref().tag_name() == tag_names::option {
+                let cnode = self.current_node().expect("Le noeud actuel");
+                if cnode.element_ref().tag_name() == tag_names::option {
                     self.stack_of_open_elements.pop();
                 }
                 self.reconstruct_active_formatting_elements();
@@ -4064,8 +4096,9 @@ where
                     StackOfOpenElements::SCOPE_ELEMENTS,
                 ) {
                     self.generate_implied_end_tags();
-                    let node = self.current_node();
-                    if node.element_ref().tag_name() != tag_names::ruby {
+                    let cnode =
+                        self.current_node().expect("Le noeud actuel");
+                    if cnode.element_ref().tag_name() != tag_names::ruby {
                         self.parse_error(&token);
                     }
                 }
@@ -4096,10 +4129,11 @@ where
                         tag_names::rtc,
                     );
 
-                    let node = self.current_node();
-                    let node_name = node.element_ref().tag_name();
-                    if node_name != tag_names::rtc
-                        || node_name != tag_names::ruby
+                    let cnode =
+                        self.current_node().expect("Le noeud actuel");
+                    let cnode_name = cnode.element_ref().tag_name();
+                    if cnode_name != tag_names::rtc
+                        || cnode_name != tag_names::ruby
                     {
                         self.parse_error(&token);
                     }
