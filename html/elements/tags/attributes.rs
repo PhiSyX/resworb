@@ -96,7 +96,7 @@ enumerate_html_tag_attributes! {
     allowfullscreen
     alt
     archive
-    Async
+    r#async
     autoplay
     axis
     background
@@ -105,7 +105,7 @@ enumerate_html_tag_attributes! {
     border
     cellpadding
     cellspacing
-    char_
+    r#char
     charoff
     charset
     checked
@@ -125,7 +125,7 @@ enumerate_html_tag_attributes! {
     data
     datetime
     declare
-    default_
+    r#default
     defer
     direction
     dirname
@@ -133,7 +133,7 @@ enumerate_html_tag_attributes! {
     download
     event
     face
-    for_
+    r#for
     form
     formnovalidate
     formtarget
@@ -156,7 +156,7 @@ enumerate_html_tag_attributes! {
     language
     link
     longdesc
-    Loop
+    r#loop
     marginheight
     marginwidth
     max
@@ -268,7 +268,7 @@ enumerate_html_tag_attributes! {
     target
     text
     title
-    Type
+    r#type
     usemap
     valign
     value

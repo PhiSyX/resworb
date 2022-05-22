@@ -14,6 +14,6 @@ pub use self::{
     document::HTMLHtmlElement,
     metadata::{HTMLHeadElement, HTMLTitleElement},
     scripting::{HTMLScriptElement, HTMLTemplateElement},
-    tags::{attributes::tag_attributes, names::tag_names},
+    tags::{tag_attributes, tag_names},
     text_level::HTMLAnchorElement,
 };
