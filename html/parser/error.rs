@@ -44,7 +44,7 @@ macro_rules! define_errors {
 /// Certaines erreurs d'analyse ont des codes spécifiques décrits dans le
 /// tableau ci-dessous, qui doivent être utilisés par les vérificateurs de
 /// conformité dans les rapports.
-pub enum HTMLParserError {
+pub(crate) enum HTMLParserError {
     $( $(#[$attr])* $enum ),*
 }
 
@@ -481,26 +481,25 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: Some("foo".into()),
-                system_identifier: None,
-                force_quirks_flag: true,
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_public_identifier("foo")
+                    .with_quirks_mode()
+            )),
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: Some(
-                    "-//W3C//DTD HTML 4.01//EN".into()
-                ),
-                system_identifier: Some("foo".into()),
-                force_quirks_flag: true,
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_public_identifier("-//W3C//DTD HTML 4.01//EN")
+                    .with_system_identifier("foo")
+                    .with_quirks_mode()
+            ))
         );
     }
 
@@ -533,12 +532,9 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: None,
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new().with_quirks_mode()
+            ))
         );
     }
 
@@ -597,12 +593,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_quirks_mode()
+            ))
         );
     }
 
@@ -633,13 +628,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                name: "div".into(),
-                self_closing_flag: false,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![("id".into(), "".into())],
-                is_end: false
-            }))
+            Some(HTMLToken::Tag(
+                HTMLTagToken::start()
+                    .with_name("div")
+                    .with_attributes([("id", "")])
+            ))
         );
     }
 
@@ -651,12 +644,9 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: None,
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new().with_quirks_mode()
+            ))
         );
     }
 
@@ -668,24 +658,22 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_quirks_mode()
+            ))
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_quirks_mode()
+            ))
         );
     }
 
@@ -697,13 +685,7 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                name: "div".into(),
-                self_closing_flag: false,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![],
-                is_end: false
-            }))
+            Some(HTMLToken::Tag(HTMLTagToken::start().with_name("div")))
         );
 
         html_tok.next_token();
@@ -720,24 +702,22 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_quirks_mode()
+            ))
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: None,
-                system_identifier: None,
-                force_quirks_flag: true
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_quirks_mode()
+            ))
         );
     }
 
@@ -749,26 +729,23 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: Some(
-                    "-//W3C//DTD HTML 4.01//EN".into()
-                ),
-                system_identifier: None,
-                force_quirks_flag: false
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_public_identifier("-//W3C//DTD HTML 4.01//EN")
+            ))
         );
 
         html_tok.next_token();
 
+        let s = "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd";
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: None,
-                system_identifier: Some("http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd".into()),
-                force_quirks_flag: false
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_system_identifier(s)
+            ))
         );
     }
 
@@ -780,14 +757,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: Some(
-                    "-//W3C//DTD HTML 4.01//EN".into()
-                ),
-                system_identifier: None,
-                force_quirks_flag: false
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_public_identifier("-//W3C//DTD HTML 4.01//EN")
+            ))
         );
     }
 
@@ -799,16 +773,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                name: "div".into(),
-                self_closing_flag: false,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![
-                    ("id".into(), "foo".into()),
-                    ("class".into(), "bar".into())
-                ],
-                is_end: false
-            }))
+            Some(HTMLToken::Tag(
+                HTMLTagToken::start()
+                    .with_name("div")
+                    .with_attributes([("id", "foo"), ("class", "bar")])
+            ))
         );
     }
 
@@ -821,14 +790,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(HTMLDoctypeToken {
-                name: Some("html".into()),
-                public_identifier: Some(
-                    "-//W3C//DTD HTML 4.01//EN".into()
-                ),
-                system_identifier: None,
-                force_quirks_flag: false
-            }))
+            Some(HTMLToken::DOCTYPE(
+                HTMLDoctypeToken::new()
+                    .with_name("html")
+                    .with_public_identifier("-//W3C//DTD HTML 4.01//EN")
+            ))
         );
     }
 
@@ -857,13 +823,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                is_end: false,
-                name: "div".into(),
-                self_closing_flag: false,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![("foo<div".into(), "".into())]
-            }))
+            Some(HTMLToken::Tag(
+                HTMLTagToken::start()
+                    .with_name("div")
+                    .with_attributes([("foo<div", "")])
+            ))
         );
 
         html_tok.next_token();
@@ -871,13 +835,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                is_end: false,
-                name: "div".into(),
-                self_closing_flag: false,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![("id'bar'".into(), "".into())]
-            }))
+            Some(HTMLToken::Tag(
+                HTMLTagToken::start()
+                    .with_name("div")
+                    .with_attributes([("id'bar'", "")])
+            ))
         );
     }
 
@@ -889,13 +851,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                is_end: false,
-                name: "div".into(),
-                self_closing_flag: false,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![("foo".into(), "b'ar'".into())]
-            }))
+            Some(HTMLToken::Tag(
+                HTMLTagToken::start()
+                    .with_name("div")
+                    .with_attributes([("foo", "b'ar'")])
+            ))
         );
     }
 
@@ -908,16 +868,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                is_end: false,
-                name: "div".into(),
-                self_closing_flag: false,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![
-                    ("foo".into(), "bar".into()),
-                    (r#"="baz""#.into(), "".into())
-                ]
-            }))
+            Some(HTMLToken::Tag(
+                HTMLTagToken::start()
+                    .with_name("div")
+                    .with_attributes([("foo", "bar"), (r#"="baz""#, "")])
+            ))
         );
     }
 
@@ -947,13 +902,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                name: "div".into(),
-                self_closing_flag: false,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![("id".into(), "foo".into())],
-                is_end: false
-            }))
+            Some(HTMLToken::Tag(
+                HTMLTagToken::start()
+                    .with_name("div")
+                    .with_attributes([("id", "foo")])
+            ))
         );
     }
 }

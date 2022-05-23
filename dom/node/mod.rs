@@ -38,7 +38,7 @@ pub use self::{
     attr::Attr,
     character_data::CharacterData,
     comment::{Comment, CommentNode},
-    document::{Document, DocumentNode, QuirksMode},
+    document::{CreateElementOptions, Document, DocumentNode, QuirksMode},
     document_fragment::{DocumentFragment, DocumentFragmentNode},
     document_type::DocumentType,
     element::Element,

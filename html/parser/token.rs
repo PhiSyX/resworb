@@ -2,13 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::sync::RwLock;
-
 use dom::node::QuirksMode;
 use html_elements::{
     interface::IsOneOfAttributesInterface, tag_attributes, tag_names,
 };
-use infra::primitive::codepoint::CodePoint;
+use infra::{namespace::Namespace, primitive::codepoint::CodePoint};
 
 // ---- //
 // Type //
@@ -16,7 +14,6 @@ use infra::primitive::codepoint::CodePoint;
 
 pub type HTMLTagAttributeName = String;
 pub type HTMLTagAttributeValue = String;
-pub type HTMLTagAttribute = (HTMLTagAttributeName, HTMLTagAttributeValue);
 
 // --------- //
 // Structure //
@@ -31,10 +28,10 @@ pub type HTMLTagAttribute = (HTMLTagAttributeName, HTMLTagAttributeValue);
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub struct HTMLDoctypeToken {
-    pub name: Option<String>,
-    pub public_identifier: Option<String>,
-    pub system_identifier: Option<String>,
-    pub force_quirks_flag: bool,
+    pub(crate) name: Option<String>,
+    pub(crate) public_identifier: Option<String>,
+    pub(crate) system_identifier: Option<String>,
+    pub(crate) force_quirks_flag: bool,
 }
 
 /// Les jetons `start-tag` (ou `tag`) ont :
@@ -45,12 +42,25 @@ pub struct HTMLDoctypeToken {
 ///   - une liste d'attributs: chacun d'entre eux ayant un nom et une
 ///     valeur.
 #[derive(Debug)]
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub struct HTMLTagToken {
-    pub name: String,
-    pub self_closing_flag: bool,
-    pub self_closing_flag_acknowledge: RwLock<bool>,
-    pub attributes: Vec<HTMLTagAttribute>,
-    pub is_end: bool,
+    pub(crate) name: String,
+    pub(crate) self_closing_flag: bool,
+    pub(crate) self_closing_flag_acknowledge: bool,
+    pub(crate) attributes: Vec<HTMLTagAttribute>,
+    pub(crate) is_end: bool,
+}
+
+#[derive(Debug)]
+#[derive(Clone)]
+#[derive(Default)]
+#[derive(PartialEq)]
+pub struct HTMLTagAttribute {
+    pub(crate) name: HTMLTagAttributeName,
+    pub(crate) value: HTMLTagAttributeValue,
+    pub(crate) prefix: Option<String>,
+    pub(crate) namespace_uri: Option<Namespace>,
 }
 
 // ----------- //
@@ -119,7 +129,7 @@ impl HTMLToken {
 // ------------- //
 
 impl HTMLToken {
-    pub fn into_doctype(&mut self) -> &mut HTMLDoctypeToken {
+    pub(crate) fn as_doctype(&mut self) -> &mut HTMLDoctypeToken {
         assert!(matches!(self, Self::DOCTYPE(_)));
         if let Self::DOCTYPE(doctype) = self {
             return doctype;
@@ -220,17 +230,86 @@ impl HTMLDoctypeToken {
         }
     }
 
-    // &Self
+    /// Défini un nom pour le [DOCTYPE](HTMLToken::DOCTYPE).
+    pub fn with_name(mut self, name: impl ToString) -> Self {
+        self.name.replace(name.to_string());
+        self
+    }
 
+    /// Défini un identificateur public pour le
+    /// [DOCTYPE](HTMLToken::DOCTYPE).
+    pub fn with_public_identifier(
+        mut self,
+        public_identifier: impl ToString,
+    ) -> Self {
+        self.public_identifier
+            .replace(public_identifier.to_string());
+        self
+    }
+
+    /// Défini un identificateur système pour le
+    /// [DOCTYPE](HTMLToken::DOCTYPE).
+    pub fn with_system_identifier(
+        mut self,
+        system_identifier: impl ToString,
+    ) -> Self {
+        self.system_identifier
+            .replace(system_identifier.to_string());
+        self
+    }
+
+    /// Active le drapeau `force-quirks` pour le
+    /// [DOCTYPE](HTMLToken::DOCTYPE).
+    pub fn with_quirks_mode(mut self) -> Self {
+        self.force_quirks_flag = true;
+        self
+    }
+
+    /// Définie le drapeau force-quirks du jeton `DOCTYPE` à true.
+    /// À priori le drapeau est désactivé ; à posteriori le drapeau est
+    /// activé.
+    pub fn define_quirks_mode(mut self) -> Self {
+        assert!(matches!(
+            self,
+            Self {
+                force_quirks_flag: false,
+                ..
+            }
+        ));
+
+        let Self {
+            ref mut force_quirks_flag,
+            ..
+        } = self;
+        *force_quirks_flag = true;
+
+        self
+    }
+
+    /// Définie une chaîne de caractères au nom du jeton `DOCTYPE`.
+    /// À priori son nom est équivalent à `None`, à posteriori son nom
+    /// doit être équivalent à `Some(String)`.
+    pub fn define_doctype_name(mut self, ch: CodePoint) -> Self {
+        assert!(matches!(self, Self { name: None, .. }));
+
+        let Self { ref mut name, .. } = self;
+        *name = Some(ch.into());
+
+        self
+    }
+}
+
+// &HTMLDoctypeToken
+impl HTMLDoctypeToken {
     pub fn is_html_name(&self) -> bool {
         self.name == Some(tag_names::html.to_string())
     }
 
-    pub fn is_public_identifier_missing(&self) -> bool {
+    pub const fn is_public_identifier_missing(&self) -> bool {
         self.public_identifier.is_none()
     }
 
-    pub fn is_system_identifier_missing(&self) -> bool {
+    pub const fn is_system_identifier_missing(&self) -> bool {
         self.system_identifier.is_none()
     }
 
@@ -238,7 +317,7 @@ impl HTMLDoctypeToken {
         self.system_identifier == Some("about:legacy-compat".to_owned())
     }
 
-    pub fn quirks_mode(&self) -> QuirksMode {
+    pub(crate) fn quirks_mode(&self) -> QuirksMode {
         fn is_eq(maybe_id: &Option<String>, xid: &str) -> bool {
             match maybe_id {
                 | Some(p) if p.eq_ignore_ascii_case(xid) => true,
@@ -333,44 +412,10 @@ impl HTMLDoctypeToken {
 
         QuirksMode::No
     }
+}
 
-    // &mut Self
-
-    /// Définie le drapeau force-quirks du jeton `DOCTYPE` à true.
-    /// À priori le drapeau est désactivé ; à posteriori le drapeau est
-    /// activé.
-    pub fn define_force_quirks_flag(mut self) -> Self {
-        assert!(matches!(
-            self,
-            Self {
-                force_quirks_flag: false,
-                ..
-            }
-        ));
-
-        let Self {
-            ref mut force_quirks_flag,
-            ..
-        } = self;
-        *force_quirks_flag = true;
-
-        self
-    }
-
-    /// Définie une chaîne de caractères au nom du jeton `DOCTYPE`.
-    /// À priori son nom est équivalent à `None`, à posteriori son nom
-    /// doit être équivalent à `Some(String)`.
-    pub fn define_doctype_name(mut self, ch: CodePoint) -> Self {
-        assert!(matches!(self, Self { name: None, .. }));
-
-        let Self { ref mut name, .. } = self;
-        *name = Some(ch.into());
-
-        self
-    }
-
-    // &mut Self
-
+// &mut HTMLDoctypeToken
+impl HTMLDoctypeToken {
     /// Ajoute un caractère au jeton `DOCTYPE` à son identifiant public.
     pub fn append_character_to_public_identifier(
         &mut self,
@@ -434,7 +479,7 @@ impl HTMLDoctypeToken {
 // --------- //
 
 impl HTMLToken {
-    pub fn as_tag(&self) -> &HTMLTagToken {
+    pub const fn as_tag(&self) -> &HTMLTagToken {
         assert!(matches!(self, Self::Tag(HTMLTagToken { .. })));
         if let Self::Tag(tag) = self {
             return tag;
@@ -450,7 +495,7 @@ impl HTMLToken {
         unreachable!()
     }
 
-    pub fn is_start_tag(&self) -> bool {
+    pub const fn is_start_tag(&self) -> bool {
         if let Self::Tag(HTMLTagToken {
             is_end: is_end_token,
             ..
@@ -462,7 +507,7 @@ impl HTMLToken {
         }
     }
 
-    pub fn is_end_tag(&self) -> bool {
+    pub const fn is_end_tag(&self) -> bool {
         if let Self::Tag(HTMLTagToken {
             is_end: is_end_token,
             ..
@@ -480,11 +525,11 @@ impl HTMLTagToken {
     /// son drapeau de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
     /// doit être vide.
-    pub fn start() -> Self {
+    pub const fn start() -> Self {
         Self {
             name: String::new(),
             self_closing_flag: false,
-            self_closing_flag_acknowledge: RwLock::new(false),
+            self_closing_flag_acknowledge: false,
             attributes: vec![],
             is_end: false,
         }
@@ -494,19 +539,89 @@ impl HTMLTagToken {
     /// son indicateur de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
     /// doit être vide.
-    pub fn end() -> Self {
+    pub const fn end() -> Self {
         Self {
             name: String::new(),
             self_closing_flag: false,
-            self_closing_flag_acknowledge: RwLock::new(false),
+            self_closing_flag_acknowledge: false,
             attributes: vec![],
             is_end: true,
         }
     }
 
+    /// Définit le nom du jeton d'une balise [start-tag](HTMLToken::Tag).
     pub fn with_name(mut self, name: impl ToString) -> Self {
         self.name = name.to_string();
         self
+    }
+
+    /// Définit des attributs à un jeton d'une balise.
+    pub fn with_attributes(
+        mut self,
+        attributes: impl IntoIterator<Item = impl Into<HTMLTagAttribute>>,
+    ) -> Self {
+        self.attributes =
+            attributes.into_iter().map(|x| x.into()).collect();
+        self
+    }
+
+    /// Définit le drapeau de fermeture automatique d'un jeton d'une balise
+    /// [start-tag](HTMLToken::Tag).
+    pub fn with_self_closing_flag(mut self) -> Self {
+        self.self_closing_flag = true;
+        self
+    }
+}
+
+// &HTMLTagToken
+impl HTMLTagToken {
+    pub fn tag_name(&self) -> tag_names {
+        let Self { name, .. } = self;
+        name.parse().expect("Devrait être un nom de balise valide")
+    }
+}
+
+// &mut HTMLTagToken
+impl HTMLTagToken {
+    pub fn adjust_attribute_name(
+        &mut self,
+        old_name: impl ToString,
+        new_name: impl ToString,
+    ) {
+        let old_name = old_name.to_string();
+        let new_name = new_name.to_string();
+
+        for attr in self.attributes.iter_mut() {
+            if attr.name == old_name {
+                attr.name = new_name.to_string();
+            }
+        }
+    }
+
+    pub fn adjust_foreign_attribute(
+        &mut self,
+        old_name: impl ToString,
+        prefix: impl ToString,
+        local_name: impl ToString,
+        namespace: Namespace,
+    ) {
+        self.attributes.iter_mut().for_each(|attr| {
+            if *attr.name == old_name.to_string() {
+                attr.name = local_name.to_string();
+                attr.prefix.replace(prefix.to_string());
+                attr.namespace_uri.replace(namespace);
+            }
+        });
+    }
+
+    pub fn adjust_tag_name(
+        &mut self,
+        old_name: impl ToString,
+        new_name: impl ToString,
+    ) {
+        if self.name == old_name.to_string() {
+            self.name = new_name.to_string();
+        }
     }
 
     /// Ajoute un caractère à un jeton `tag`, au nom d'un attribut
@@ -516,7 +631,7 @@ impl HTMLTagToken {
     pub fn append_character_to_attribute_name(&mut self, ch: CodePoint) {
         let Self { attributes, .. } = self;
         let attr = attributes.iter_mut().last().unwrap();
-        attr.0.push(ch);
+        attr.name.push(ch);
     }
 
     /// Ajoute un caractère à un jeton `tag`, au nom d'un attribut
@@ -526,12 +641,15 @@ impl HTMLTagToken {
     pub fn append_character_to_attribute_value(&mut self, ch: CodePoint) {
         let Self { attributes, .. } = self;
         let attr = attributes.iter_mut().last().unwrap();
-        attr.1.push(ch);
+        attr.value.push(ch);
     }
 
-    pub fn define_tag_attributes(&mut self, attribute: HTMLTagAttribute) {
+    pub fn append_tag_attributes(
+        &mut self,
+        attribute: impl Into<HTMLTagAttribute>,
+    ) {
         let Self { attributes, .. } = self;
-        attributes.push(attribute);
+        attributes.push(attribute.into());
     }
 
     pub fn has_attributes(
@@ -539,9 +657,9 @@ impl HTMLTagToken {
         attribute_names: impl IntoIterator<Item = tag_attributes> + Copy,
     ) -> bool {
         let Self { attributes, .. } = self;
-        attributes.iter().any(|(attribute_name, _)| {
-            attribute_name.is_one_of(attribute_names)
-        })
+        attributes
+            .iter()
+            .any(|attribute| attribute.name.is_one_of(attribute_names))
     }
 
     pub fn set_self_closing_tag(&mut self, to: bool) {
@@ -551,20 +669,27 @@ impl HTMLTagToken {
         *self_closing_flag = to;
     }
 
-    pub fn set_acknowledge_self_closing_flag(&self) {
+    pub fn set_acknowledge_self_closing_flag(&mut self) {
         let Self {
             self_closing_flag,
             self_closing_flag_acknowledge,
             ..
         } = self;
         if *self_closing_flag {
-            *self_closing_flag_acknowledge.write().unwrap() = true;
+            *self_closing_flag_acknowledge = true;
         }
     }
+}
 
-    pub fn tag_name(&self) -> tag_names {
-        let Self { name, .. } = self;
-        name.parse().expect("Devrait être un nom de balise valide")
+impl HTMLTagAttribute {
+    /// Crée un attribut de balise.
+    pub fn new(name: impl ToString, value: impl ToString) -> Self {
+        Self {
+            name: name.to_string(),
+            value: value.to_string(),
+            prefix: None,
+            namespace_uri: None,
+        }
     }
 }
 
@@ -574,8 +699,8 @@ impl HTMLTagToken {
 
 impl HTMLToken {
     /// Crée un nouveau jeton (comment)(HTMLToken::Comment).
-    pub fn new_comment(comment: String) -> Self {
-        Self::Comment(comment)
+    pub fn new_comment(comment: impl ToString) -> Self {
+        Self::Comment(comment.to_string())
     }
 }
 
@@ -585,15 +710,15 @@ impl HTMLToken {
 
 impl HTMLToken {
     /// Crée un nouveau jeton (character)(HTMLToken::Character).
-    pub fn new_character(ch: CodePoint) -> Self {
+    pub const fn new_character(ch: CodePoint) -> Self {
         Self::Character(ch)
     }
 
-    pub fn is_character(&self) -> bool {
+    pub const fn is_character(&self) -> bool {
         matches!(self, Self::Character(_))
     }
 
-    pub fn is_ascii_whitespace(&self) -> bool {
+    pub const fn is_ascii_whitespace(&self) -> bool {
         if let Self::Character(ch) = self {
             ch.is_ascii_whitespace()
         } else {
@@ -606,26 +731,12 @@ impl HTMLToken {
 // Implémentation // -> Interface
 // -------------- //
 
-impl Clone for HTMLTagToken {
-    fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            self_closing_flag: self.self_closing_flag,
-            self_closing_flag_acknowledge: RwLock::from(
-                *self.self_closing_flag_acknowledge.read().unwrap(),
-            ),
-            attributes: self.attributes.clone(),
-            is_end: self.is_end,
-        }
-    }
-}
-impl PartialEq for HTMLTagToken {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && self.self_closing_flag == other.self_closing_flag
-            && *self.self_closing_flag_acknowledge.read().unwrap()
-                == *other.self_closing_flag_acknowledge.read().unwrap()
-            && self.attributes == other.attributes
-            && self.is_end == other.is_end
+impl<S1, S2> From<(S1, S2)> for HTMLTagAttribute
+where
+    S1: AsRef<str>,
+    S2: AsRef<str>,
+{
+    fn from(nv: (S1, S2)) -> Self {
+        Self::new(nv.0.as_ref(), nv.1.as_ref())
     }
 }

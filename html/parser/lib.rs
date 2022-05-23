@@ -13,8 +13,8 @@ mod tokenizer;
 use std::{borrow::BorrowMut, ops::Deref, sync::Arc};
 
 use dom::node::{
-    CommentNode, Document, DocumentNode, DocumentType, Node, QuirksMode,
-    TextNode,
+    CommentNode, CreateElementOptions, Document, DocumentNode,
+    DocumentType, Node, QuirksMode, TextNode,
 };
 use html_elements::{
     interface::IsOneOfTagsInterface, tag_attributes, tag_names,
@@ -27,10 +27,10 @@ use macros::dd;
 use state::ListOfActiveFormattingElements;
 use tokenizer::State;
 
-pub use self::{
+pub use self::tokenizer::HTMLTokenizer;
+pub(crate) use self::{
     state::{Entry, InsertionMode, StackOfOpenElements},
     token::{HTMLTagToken, HTMLToken},
-    tokenizer::HTMLTokenizer,
 };
 
 // --------- //
@@ -56,8 +56,8 @@ where
     context_element: Option<TreeNode<Node>>,
     character_insertion_node: Option<TreeNode<Node>>,
     character_insertion_builder: String,
-    head_element: Option<TreeNode<Node>>,
-    form_element: Option<TreeNode<Node>>,
+    head_element_pointer: Option<TreeNode<Node>>,
+    form_element_pointer: Option<TreeNode<Node>>,
 }
 
 struct AdjustedInsertionLocation {
@@ -103,8 +103,8 @@ where
             context_element: None,
             character_insertion_node: None,
             character_insertion_builder: String::new(),
-            head_element: None,
-            form_element: None,
+            head_element_pointer: None,
+            form_element_pointer: None,
         }
     }
 }
@@ -199,7 +199,12 @@ where
             }
         }
     }
+}
 
+impl<C> HTMLParser<C>
+where
+    C: Iterator<Item = CodePoint>,
+{
     /// <https://html.spec.whatwg.org/multipage/parsing.html#using-the-rules-for>
     fn process_using_the_rules_for(
         &mut self,
@@ -314,6 +319,7 @@ where
             // Retraiter le jeton selon les règles données dans la section
             // correspondant au mode d'insertion actuel dans le contenu
             // HTML.
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name, is_end, ..
@@ -399,15 +405,36 @@ where
             // Any other start tag
             //
             // Si le nœud courant ajusté est un élément de l'espace de noms
-            // MathML, ajustez les attributs MathML pour le jeton. (Cela
-            // corrige le cas des attributs MathML qui ne sont pas tous en
-            // minuscules).
+            // MathML, nous devons ajuster les attributs MathML pour le
+            // jeton. (Cela corrige le cas des attributs MathML qui ne sont
+            // pas tous en minuscules).
             // Si le nœud courant ajusté est un élément de l'espace de noms
             // SVG, et que le nom de la balise du jeton est l'un de ceux de
-            // la première colonne du tableau suivant, changez le nom de la
-            // balise par le nom donné dans la cellule correspondante de la
-            // deuxième colonne. (Ceci règle le cas des éléments SVG qui ne
-            // sont pas tous en minuscules).
+            // la première colonne du tableau suivant, nous devons changer
+            // le nom de la balise par le nom donné dans la cellule
+            // correspondante de la deuxième colonne. (Ceci règle le cas
+            // des éléments SVG qui ne sont pas tous en  minuscules).
+            // Si le noeud courant ajusté est un élément dans l'espace de
+            // nom SVG, ajuster les attributs SVG pour le jeton. (Cela
+            // corrige le cas des attributs SVG qui ne sont pas tous en
+            // minuscules).
+            // Ajuster les attributs étrangers pour le jeton. (Cela corrige
+            // l'utilisation d'attributs espacés par des noms, en
+            // particulier XLink dans SVG).
+            // Insérer un élément étranger pour le jeton, dans le même
+            // espace de nom que le nœud courant ajusté.
+            // Si le jeton a son drapeau de self-closing activé,
+            // nous devons exécuter les étapes appropriées de la liste
+            // suivante :
+            //   - Si le nom de balise du jeton est "script", et que le
+            //     nouveau nœud courant se trouve dans l'espace de noms
+            //     SVG.
+            //     - Accusez réception du drapeau de fermeture automatique
+            //       du jeton, puis agissez comme décrit dans les étapes
+            //       pour une balise de fin "script" ci-dessous.
+            //   - Sinon
+            //     - Retirer le nœud actuel de la pile des éléments ouverts
+            //       et reconnaître le drapeau de self-closing du jeton.
             | HTMLToken::Tag(
                 mut tag_token @ HTMLTagToken {
                     is_end: false,
@@ -415,10 +442,193 @@ where
                     ..
                 },
             ) => {
+                let adjusted_current_node =
+                    self.adjusted_current_node().element_ref();
+
+                let maybe_acn_namespace =
+                    adjusted_current_node.namespace();
+
+                if let Some(Namespace::MathML) = maybe_acn_namespace {
+                    self.adjust_mathml_attributes(&mut tag_token);
+                } else if let Some(Namespace::SVG) = maybe_acn_namespace {
+                    self.adjust_svg_tag_name(&mut tag_token);
+                    self.adjust_svg_attributes(&mut tag_token);
+                }
+
+                self.adjust_foreign_attributes(&mut tag_token);
+
+                self.insert_foreign_element(
+                    &tag_token,
+                    maybe_acn_namespace
+                        .expect("Devrait être un espace de noms valide"),
+                );
+
+                if !self_closing_flag {
+                    return;
+                }
+
+                let cnode = self.current_node().expect("Le noeud actuel.");
+                if tag_names::script == tag_token.name
+                    && cnode.element_ref().isin_svg_namespace()
+                {
+                    tag_token.set_acknowledge_self_closing_flag();
+                    self.process_using_the_rules_for(
+                        self.insertion_mode,
+                        HTMLToken::Tag(tag_token),
+                    );
+                } else {
+                    self.stack_of_open_elements.pop();
+                }
             }
 
             | _ => todo!(),
         }
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-foreign-attributes>
+    fn adjust_foreign_attributes(&mut self, tag_token: &mut HTMLTagToken) {
+        [
+            ("xlink:actuate", "xlink", "actuate", Namespace::XLink),
+            ("xlink:arcrole", "xlink", "arcrole", Namespace::XLink),
+            ("xlink:href", "xlink", "href", Namespace::XLink),
+            ("xlink:role", "xlink", "role", Namespace::XLink),
+            ("xlink:show", "xlink", "show", Namespace::XLink),
+            ("xlink:title", "xlink", "title", Namespace::XLink),
+            ("xlink:type", "xlink", "type", Namespace::XLink),
+            ("xml:lang", "xml", "lang", Namespace::XML),
+            ("xml:space", "xml", "space", Namespace::XML),
+            ("xmlns", "", "xmlns", Namespace::XMLNS),
+            ("xmlns:xlink", "xmlns", "xlink", Namespace::XMLNS),
+        ]
+        .into_iter()
+        .for_each(|(old_name, prefix, local_name, ns)| {
+            tag_token.adjust_foreign_attribute(
+                old_name, prefix, local_name, ns,
+            );
+        });
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-mathml-attributes>
+    fn adjust_mathml_attributes(&mut self, tag_token: &mut HTMLTagToken) {
+        [("definitionurl", "definitionURL")].into_iter().for_each(
+            |(old_name, new_name)| {
+                tag_token.adjust_attribute_name(old_name, new_name);
+            },
+        );
+    }
+
+    fn adjust_svg_tag_name(&mut self, tag_token: &mut HTMLTagToken) {
+        [
+            ("altglyph", "altGlyph"),
+            ("altglyphdef", "altGlyphDef"),
+            ("altglyphitem", "altGlyphItem"),
+            ("animatecolor", "animateColor"),
+            ("animatemotion", "animateMotion"),
+            ("animatetransform", "animateTransform"),
+            ("clippath", "clipPath"),
+            ("feblend", "feBlend"),
+            ("fecolormatrix", "feColorMatrix"),
+            ("fecomponenttransfer", "feComponentTransfer"),
+            ("fecomposite", "feComposite"),
+            ("feconvolvematrix", "feConvolveMatrix"),
+            ("fediffuselighting", "feDiffuseLighting"),
+            ("fedisplacementmap", "feDisplacementMap"),
+            ("fedistantlight", "feDistantLight"),
+            ("fedropshadow", "feDropShadow"),
+            ("feflood", "feFlood"),
+            ("fefunca", "feFuncA"),
+            ("fefuncb", "feFuncB"),
+            ("fefuncg", "feFuncG"),
+            ("fefuncr", "feFuncR"),
+            ("fegaussianblur", "feGaussianBlur"),
+            ("feimage", "feImage"),
+            ("femerge", "feMerge"),
+            ("femergenode", "feMergeNode"),
+            ("femorphology", "feMorphology"),
+            ("feoffset", "feOffset"),
+            ("fepointlight", "fePointLight"),
+            ("fespecularlighting", "feSpecularLighting"),
+            ("fespotlight", "feSpotLight"),
+            ("fetile", "feTile"),
+            ("feturbulence", "feTurbulence"),
+            ("foreignobject", "foreignObject"),
+            ("glyphref", "glyphRef"),
+            ("lineargradient", "linearGradient"),
+            ("radialgradient", "radialGradient"),
+            ("textpath", "textPath"),
+        ]
+        .into_iter()
+        .for_each(|(old_name, new_name)| {
+            tag_token.adjust_tag_name(old_name, new_name);
+        });
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-svg-attributes>
+    fn adjust_svg_attributes(&mut self, tag_token: &mut HTMLTagToken) {
+        [
+            ("attributename", "attributeName"),
+            ("attributetype", "attributeType"),
+            ("basefrequency", "baseFrequency"),
+            ("baseprofile", "baseProfile"),
+            ("calcmode", "calcMode"),
+            ("clippathunits", "clipPathUnits"),
+            ("diffuseconstant", "diffuseConstant"),
+            ("edgemode", "edgeMode"),
+            ("filterunits", "filterUnits"),
+            ("glyphref", "glyphRef"),
+            ("gradienttransform", "gradientTransform"),
+            ("gradientunits", "gradientUnits"),
+            ("kernelmatrix", "kernelMatrix"),
+            ("kernelunitlength", "kernelUnitLength"),
+            ("keypoints", "keyPoints"),
+            ("keysplines", "keySplines"),
+            ("keytimes", "keyTimes"),
+            ("lengthadjust", "lengthAdjust"),
+            ("limitingconeangle", "limitingConeAngle"),
+            ("markerheight", "markerHeight"),
+            ("markerunits", "markerUnits"),
+            ("markerwidth", "markerWidth"),
+            ("maskcontentunits", "maskContentUnits"),
+            ("maskunits", "maskUnits"),
+            ("numoctaves", "numOctaves"),
+            ("pathlength", "pathLength"),
+            ("patterncontentunits", "patternContentUnits"),
+            ("patterntransform", "patternTransform"),
+            ("patternunits", "patternUnits"),
+            ("pointsatx", "pointsAtX"),
+            ("pointsaty", "pointsAtY"),
+            ("pointsatz", "pointsAtZ"),
+            ("preservealpha", "preserveAlpha"),
+            ("preserveaspectratio", "preserveAspectRatio"),
+            ("primitiveunits", "primitiveUnits"),
+            ("refx", "refX"),
+            ("refy", "refY"),
+            ("repeatcount", "repeatCount"),
+            ("repeatdur", "repeatDur"),
+            ("requiredextensions", "requiredExtensions"),
+            ("requiredfeatures", "requiredFeatures"),
+            ("specularconstant", "specularConstant"),
+            ("specularexponent", "specularExponent"),
+            ("spreadmethod", "spreadMethod"),
+            ("startoffset", "startOffset"),
+            ("stddeviation", "stdDeviation"),
+            ("stitchtiles", "stitchTiles"),
+            ("surfacescale", "surfaceScale"),
+            ("systemlanguage", "systemLanguage"),
+            ("tablevalues", "tableValues"),
+            ("targetx", "targetX"),
+            ("targety", "targetY"),
+            ("textlength", "textLength"),
+            ("viewbox", "viewBox"),
+            ("viewtarget", "viewTarget"),
+            ("xchannelselector", "xChannelSelector"),
+            ("ychannelselector", "yChannelSelector"),
+            ("zoomandpan", "zoomAndPan"),
+        ]
+        .into_iter()
+        .for_each(|(old_name, new_name)| {
+            tag_token.adjust_attribute_name(old_name, new_name);
+        });
     }
 
     /// Le noeud courant ajusté est l'élément de contexte si l'analyseur a
@@ -436,7 +646,6 @@ where
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#create-an-element-for-the-token>
-    /// todo: FIXME
     fn create_element_for(
         &mut self,
         token: &HTMLTagToken,
@@ -451,7 +660,13 @@ where
 
         let document = intended_parent.unwrap_or(&self.document);
 
-        let maybe_element = Document::create_element(local_name, None);
+        let maybe_element = Document::create_element(
+            local_name,
+            Some(CreateElementOptions {
+                is: None,
+                namespace: Some(namespace),
+            }),
+        );
 
         if let Ok(element) = maybe_element.as_ref() {
             element.set_document(document);
@@ -459,7 +674,7 @@ where
             attributes.iter().for_each(|attribute| {
                 element
                     .element_ref()
-                    .set_attribute(&attribute.0, &attribute.1);
+                    .set_attribute(&attribute.name, &attribute.value);
             });
         }
 
@@ -681,6 +896,7 @@ where
         });
     }
 
+    #[allow(deprecated)]
     fn generate_implied_end_tags_with_predicate(
         &mut self,
         predicate: impl Fn(&str) -> bool,
@@ -723,6 +939,7 @@ where
     /// un élément rtc, un élément tbody, un élément td, un élément tfoot,
     /// un élément th, un élément thead ou un élément tr, l'UA doit retirer
     /// le noeud actuel de la pile des éléments ouverts.
+    #[allow(deprecated)]
     fn generate_all_implied_end_tags_thoroughly(&mut self) {
         while let Some(cnode) = self.current_node() {
             if cnode.element_ref().local_name().is_one_of([
@@ -1001,12 +1218,8 @@ where
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#reset-the-insertion-mode-appropriately>
     fn reset_insertion_mode_appropriately(&mut self) {
-        for (index, node) in self
-            .stack_of_open_elements
-            .elements
-            .iter()
-            .enumerate()
-            .rev()
+        for (index, node) in
+            self.stack_of_open_elements.iter().enumerate().rev()
         {
             let last = index == 0;
 
@@ -1017,103 +1230,112 @@ where
             };
 
             let element = node.element_ref();
+            let element_tag_name = element.tag_name();
 
-            if tag_names::select == element.local_name() {
-                for ancestor in self.stack_of_open_elements.elements
-                    [0..index]
-                    .iter()
-                    .rev()
-                {
-                    let ancestor_tag_name =
-                        ancestor.element_ref().tag_name();
-                    if ancestor_tag_name == tag_names::template {
-                        self.insertion_mode
-                            .switch_to(InsertionMode::InSelect);
-                        return;
-                    } else if ancestor_tag_name == tag_names::table {
-                        self.insertion_mode
-                            .switch_to(InsertionMode::InSelectInTable);
-                        return;
+            match element_tag_name {
+                | tag_names::select => {
+                    for ancestor in
+                        self.stack_of_open_elements[0..index].iter().rev()
+                    {
+                        let ancestor_tag_name =
+                            ancestor.element_ref().tag_name();
+                        match ancestor_tag_name {
+                            | tag_names::template => break,
+                            | tag_names::table => {
+                                self.insertion_mode.switch_to(
+                                    InsertionMode::InSelectInTable,
+                                );
+                                return;
+                            }
+                            | _ => {}
+                        }
                     }
-                }
-                self.insertion_mode.switch_to(InsertionMode::InSelect);
-                return;
-            }
 
-            if element
-                .local_name()
-                .is_one_of([tag_names::td, tag_names::th])
-                && !last
-            {
-                self.insertion_mode.switch_to(InsertionMode::InCell);
-                return;
-            }
-
-            if tag_names::tr == element.local_name() {
-                self.insertion_mode.switch_to(InsertionMode::InRow);
-                return;
-            }
-
-            if element.local_name().is_one_of([
-                tag_names::tbody,
-                tag_names::thead,
-                tag_names::tfoot,
-            ]) && !last
-            {
-                self.insertion_mode.switch_to(InsertionMode::InTableBody);
-                return;
-            }
-
-            if tag_names::caption == element.local_name() {
-                self.insertion_mode.switch_to(InsertionMode::InCaption);
-                return;
-            }
-
-            if tag_names::colgroup == element.local_name() {
-                self.insertion_mode
-                    .switch_to(InsertionMode::InColumnGroup);
-                return;
-            }
-
-            if tag_names::table == element.local_name() {
-                self.insertion_mode.switch_to(InsertionMode::InTable);
-                return;
-            }
-
-            if tag_names::template == element.local_name() {
-                self.insertion_mode.switch_to(
-                    *self
-                        .stack_of_template_insertion_modes
-                        .last()
-                        .unwrap(),
-                );
-                return;
-            }
-
-            if tag_names::head == element.local_name() {
-                self.insertion_mode.switch_to(InsertionMode::InHead);
-                return;
-            }
-
-            if tag_names::body == element.local_name() {
-                self.insertion_mode.switch_to(InsertionMode::InBody);
-                return;
-            }
-
-            if tag_names::frameset == element.local_name() {
-                self.insertion_mode.switch_to(InsertionMode::InFrameset);
-                return;
-            }
-
-            if tag_names::html == element.local_name() {
-                if self.head_element.is_none() {
-                    self.insertion_mode
-                        .switch_to(InsertionMode::BeforeHead);
+                    self.insertion_mode.switch_to(InsertionMode::InSelect);
                     return;
                 }
 
-                self.insertion_mode.switch_to(InsertionMode::AfterHead);
-                return;
+                | tag if tag.is_one_of([tag_names::td, tag_names::th])
+                    && !last =>
+                {
+                    self.insertion_mode.switch_to(InsertionMode::InCell);
+                    return;
+                }
+
+                | tag_names::tr => {
+                    self.insertion_mode.switch_to(InsertionMode::InRow);
+                    return;
+                }
+
+                | tag if tag.is_one_of([
+                    tag_names::tbody,
+                    tag_names::thead,
+                    tag_names::tfoot,
+                ]) && !last =>
+                {
+                    self.insertion_mode
+                        .switch_to(InsertionMode::InTableBody);
+                    return;
+                }
+
+                | tag_names::caption => {
+                    self.insertion_mode
+                        .switch_to(InsertionMode::InCaption);
+                    return;
+                }
+
+                | tag_names::colgroup => {
+                    self.insertion_mode
+                        .switch_to(InsertionMode::InColumnGroup);
+                    return;
+                }
+
+                | tag_names::table => {
+                    self.insertion_mode.switch_to(InsertionMode::InTable);
+                    return;
+                }
+
+                | tag_names::template => {
+                    let mode = *self
+                        .stack_of_template_insertion_modes
+                        .last()
+                        .expect("Le dernier mode d'insertion de la pile template.");
+                    self.insertion_mode.switch_to(mode);
+                    return;
+                }
+
+                | tag_names::head if !last => {
+                    self.insertion_mode.switch_to(InsertionMode::InHead);
+                    return;
+                }
+
+                | tag_names::body => {
+                    self.insertion_mode.switch_to(InsertionMode::InBody);
+                    return;
+                }
+
+                #[allow(deprecated)]
+                | tag_names::frameset => {
+                    self.insertion_mode
+                        .switch_to(InsertionMode::InFrameset);
+                    return;
+                }
+
+                | tag_names::html => {
+                    if self.head_element_pointer.is_none() {
+                        self.insertion_mode
+                            .switch_to(InsertionMode::BeforeHead);
+                        return;
+                    }
+
+                    self.insertion_mode
+                        .switch_to(InsertionMode::AfterHead);
+                    return;
+                }
+
+                | _ if last => break,
+
+                | _ => {}
             }
         }
 
@@ -1630,7 +1852,7 @@ where
                 },
             ) if tag_names::head == name => {
                 let head_element = self.insert_html_element(tag_token);
-                self.head_element = head_element;
+                self.head_element_pointer = head_element;
                 self.insertion_mode.switch_to(InsertionMode::InHead);
             }
 
@@ -1665,7 +1887,7 @@ where
             | _ => {
                 let head_element =
                     HTMLTagToken::start().with_name(tag_names::head);
-                self.head_element =
+                self.head_element_pointer =
                     self.insert_html_element(&head_element);
                 self.insertion_mode.switch_to(InsertionMode::InHead);
                 self.process_using_the_rules_for(
@@ -1726,20 +1948,17 @@ where
             // le noeud actuel de la pile des éléments ouverts.
             // Accuser la réception du drapeau d'auto-fermeture du jeton,
             // s'il est activé.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if name.is_one_of([
-                tag_names::base,
-                tag_names::basefont,
-                tag_names::bgsound,
-                tag_names::link,
-            ]) =>
+            #[allow(deprecated)]
+            | HTMLToken::Tag(mut tag_token)
+                if !tag_token.is_end
+                    && tag_token.name.is_one_of([
+                        tag_names::base,
+                        tag_names::basefont,
+                        tag_names::bgsound,
+                        tag_names::link,
+                    ]) =>
             {
-                self.insert_html_element(tag_token);
+                self.insert_html_element(&tag_token);
                 self.stack_of_open_elements.pop();
                 tag_token.set_acknowledge_self_closing_flag();
             }
@@ -1772,14 +1991,11 @@ where
             // Note: L'analyseur HTML spéculatif n'applique pas de manière
             // spéculative les déclarations de codage des caractères afin
             // de réduire la complexité de l'implémentation.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::meta == name => {
-                self.insert_html_element(tag_token);
+            | HTMLToken::Tag(mut tag_token)
+                if !tag_token.is_end
+                    && tag_names::meta == tag_token.name =>
+            {
+                self.insert_html_element(&tag_token);
                 self.stack_of_open_elements.pop();
                 tag_token.set_acknowledge_self_closing_flag();
             }
@@ -1804,6 +2020,7 @@ where
             //
             // Suivre l'algorithme générique d'analyse syntaxique des
             // éléments de texte brut (RAWTEXT).
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -2001,7 +2218,7 @@ where
             // Erreur d'analyse. Ignorer le jeton.
             | HTMLToken::Tag(HTMLTagToken {
                 ref name, is_end, ..
-            }) if (!is_end && tag_names::head == name) || is_end => {
+            }) if is_end || tag_names::head == name => {
                 self.parse_error(&token)
             }
 
@@ -2084,6 +2301,7 @@ where
             //
             // Insérer un élément HTML pour le jeton.
             // Passer le mode d'insertion à "in frameset".
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -2110,6 +2328,7 @@ where
             //
             // Note: le pointeur de l'élément de tête ne peut pas être nul
             // à ce stade.
+            #[allow(deprecated)]
             | HTMLToken::Tag(HTMLTagToken {
                 ref name,
                 is_end: false,
@@ -2128,7 +2347,7 @@ where
             ]) =>
             {
                 self.parse_error(&token);
-                if let Some(head) = self.head_element.as_ref() {
+                if let Some(head) = self.head_element_pointer.as_ref() {
                     self.stack_of_open_elements.put(head.to_owned());
                 }
                 self.process_using_the_rules_for(
@@ -2138,14 +2357,16 @@ where
 
                 self.stack_of_open_elements.remove_first_tag_matching(
                     |node| {
-                        if let Some(head) = self.head_element.as_ref() {
+                        if let Some(head) =
+                            self.head_element_pointer.as_ref()
+                        {
                             return node == head;
                         }
                         false
                     },
                 );
 
-                assert!(matches!(self.head_element, Some(_)));
+                assert!(matches!(self.head_element_pointer, Some(_)));
             }
 
             // An end tag whose tag name is "template"
@@ -2289,6 +2510,7 @@ where
         }
 
         /// <https://html.spec.whatwg.org/multipage/parsing.html#special>
+        #[allow(deprecated)]
         fn is_special_tag(
             tag_name: tag_names,
             namespace: Namespace,
@@ -2471,8 +2693,11 @@ where
                         .current_node()
                         .expect("Le noeud actuel")
                         .element_ref();
-                    if !element.has_attribute(&attribute.0) {
-                        element.set_attribute(&attribute.0, &attribute.1);
+                    if !element.has_attribute(&attribute.name) {
+                        element.set_attribute(
+                            &attribute.name,
+                            &attribute.value,
+                        );
                     }
                 });
             }
@@ -2484,6 +2709,7 @@ where
             //
             // Traiter le jeton en utilisant les règles du mode d'insertion
             // "in head".
+            #[allow(deprecated)]
             | HTMLToken::Tag(HTMLTagToken {
                 ref name, is_end, ..
             }) if !is_end
@@ -2554,9 +2780,11 @@ where
                 .element_ref();
 
                 attributes.iter().for_each(|attribute| {
-                    if !body_element.has_attribute(&attribute.0) {
-                        body_element
-                            .set_attribute(&attribute.0, &attribute.1);
+                    if !body_element.has_attribute(&attribute.name) {
+                        body_element.set_attribute(
+                            &attribute.name,
+                            &attribute.value,
+                        );
                     }
                 });
             }
@@ -2576,6 +2804,7 @@ where
             //   2. Retirer tous les noeuds à partir du bas de la pile
             // d'éléments ouverts, du noeud actuel jusqu'à l'élément html
             // racine, mais sans l'inclure.
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -2644,6 +2873,7 @@ where
             // thead, un élément tr, l'élément body ou l'élément html, il
             // s'agit d'une erreur d'analyse.
             //  2. Arrêter l'analyse.
+            #[allow(deprecated)]
             | HTMLToken::EOF => {
                 if !self.stack_of_open_elements.iter().any(|node| {
                     let local_name = node.element_ref().local_name();
@@ -2702,6 +2932,7 @@ where
             // th, un élément thead, un élément tr, l'élément body ou
             // l'élément html; il s'agit d'une erreur d'analyse.
             // Passer le mode d'insertion sur "after body".
+            #[allow(deprecated)]
             | HTMLToken::Tag(HTMLTagToken {
                 ref name,
                 is_end: true,
@@ -2765,6 +2996,7 @@ where
             // l'élément html, il s'agit d'une erreur d'analyse.
             // Passer le mode d'insertion à "after body".
             // Retraiter le jeton.
+            #[allow(deprecated)]
             | HTMLToken::Tag(HTMLTagToken {
                 ref name,
                 is_end: true,
@@ -2812,6 +3044,7 @@ where
             // Si la pile d'éléments ouverts comporte un élément p dans la
             // portée du bouton, alors nous devons fermer l'élément p.
             // Insérer un élément HTML pour le jeton.
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -2919,6 +3152,7 @@ where
             // suivant. (Les sauts de ligne au début des
             // pré-blocs sont ignorés par convenance pour les auteurs).
             // Définir le drapeau frameset-ok sur "not ok".
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -2958,7 +3192,7 @@ where
                 is_end: false,
                 ..
             }) if tag_names::form == name
-                && self.form_element.is_some()
+                && self.form_element_pointer.is_some()
                 && self
                     .stack_of_open_elements
                     .has_element_with_tag_name(tag_names::template) =>
@@ -2993,7 +3227,7 @@ where
                     .stack_of_open_elements
                     .has_element_with_tag_name(tag_names::template)
                 {
-                    self.form_element = element;
+                    self.form_element_pointer = element;
                 }
             }
 
@@ -3181,6 +3415,7 @@ where
             // "plaintext" a été vue, ce sera le dernier jeton vu autre que
             // les jetons de caractères (et le jeton de fin de fichier),
             // car il n'y a aucun moyen de sortir de l'état PLAINTEXT.
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -3251,6 +3486,7 @@ where
             //   3. Extraire les éléments de la pile des éléments ouverts
             // jusqu'à ce qu'un élément HTML ayant le même nom de balise
             // que le jeton ait été retiré de la pile.
+            #[allow(deprecated)]
             | HTMLToken::Tag(HTMLTagToken {
                 ref name,
                 is_end: true,
@@ -3330,7 +3566,7 @@ where
                     .stack_of_open_elements
                     .has_element_with_tag_name(tag_names::template) =>
             {
-                let maybe_node = self.form_element.take();
+                let maybe_node = self.form_element_pointer.take();
                 match &maybe_node {
                     | Some(node) => {
                         let element_name = node
@@ -3603,6 +3839,7 @@ where
             // a.
             // Insérez un élément HTML pour le jeton. Pousser cet élément
             // dans la liste des éléments de formatage actifs.
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -3643,6 +3880,7 @@ where
             // cas échéant.
             // Insérer un élément HTML pour le jeton. Pousser cet élément
             // dans la liste des éléments de formatage actifs.
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -3675,6 +3913,7 @@ where
             // "strong", "tt", "u"
             //
             // Exécuter l'algorithme de l'agence d'adoption pour le jeton.
+            #[allow(deprecated)]
             | HTMLToken::Tag(HTMLTagToken {
                 ref name,
                 is_end: true,
@@ -3711,6 +3950,7 @@ where
             // Insérer un marqueur à la fin de la liste des éléments de
             // mise en forme actifs.
             // Définir l'indicateur frameset-ok à "not ok".
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -3747,6 +3987,7 @@ where
             // que le jeton ait été retiré de la pile.
             //   4. Effacer la liste des éléments de mise en forme actifs
             // jusqu'au dernier marqueur.
+            #[allow(deprecated)]
             | HTMLToken::Tag(HTMLTagToken {
                 ref name,
                 is_end: true,
@@ -3830,6 +4071,7 @@ where
             // Faire savoir que le drapeau self-closing du jeton, s'il
             // est activé.
             // Définir l'indicateur frameset-ok à "not ok".
+            #[allow(deprecated)]
             | HTMLToken::Tag(ref mut tag_token)
                 if (tag_token.is_end
                     && tag_names::br == tag_token.name)
@@ -3867,20 +4109,17 @@ where
             // correspondance ASCII insensible à la casse pour la chaîne
             // "hidden", alors nous devons mettre le drapeau frameset-ok à
             // "not ok".
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::input == name => {
+            | HTMLToken::Tag(mut tag_token)
+                if !tag_token.is_end
+                    && tag_names::input == tag_token.name =>
+            {
                 self.reconstruct_active_formatting_elements();
-                self.insert_html_element(tag_token);
+                self.insert_html_element(&tag_token);
                 self.stack_of_open_elements.pop();
                 tag_token.set_acknowledge_self_closing_flag();
-                if !tag_token.attributes.iter().any(|(name, value)| {
-                    if name == "type" {
-                        value.eq_ignore_ascii_case("hidden")
+                if !tag_token.attributes.iter().any(|attr| {
+                    if attr.name == "type" {
+                        attr.value.eq_ignore_ascii_case("hidden")
                     } else {
                         false
                     }
@@ -3896,19 +4135,16 @@ where
             // le nœud actuel de la pile des éléments ouverts.
             // Faire savoir que le drapeau self-closing du jeton, s'il est
             // activé.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if name.is_one_of([
-                tag_names::param,
-                tag_names::source,
-                tag_names::track,
-            ]) =>
+            #[allow(deprecated)]
+            | HTMLToken::Tag(mut tag_token)
+                if !tag_token.is_end
+                    && tag_token.name.is_one_of([
+                        tag_names::param,
+                        tag_names::source,
+                        tag_names::track,
+                    ]) =>
             {
-                self.insert_html_element(tag_token);
+                self.insert_html_element(&tag_token);
                 self.stack_of_open_elements.pop();
                 tag_token.set_acknowledge_self_closing_flag();
             }
@@ -3922,13 +4158,10 @@ where
             // Faire savoir que le drapeau self-closing du jeton, s'il est
             // activé.
             // Définir l'indicateur frameset-ok à "not ok".
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::hr == name => {
+            | HTMLToken::Tag(ref tag_token)
+                if !token.is_end_tag()
+                    && tag_names::hr == tag_token.name =>
+            {
                 if self.stack_of_open_elements.has_element_in_scope(
                     tag_names::p,
                     StackOfOpenElements::button_scope_elements(),
@@ -3936,9 +4169,9 @@ where
                     close_p_element(self, &token);
                 }
 
-                self.insert_html_element(tag_token);
+                self.insert_html_element(token.as_tag());
                 self.stack_of_open_elements.pop();
-                tag_token.set_acknowledge_self_closing_flag();
+                token.as_tag_mut().set_acknowledge_self_closing_flag();
                 self.frameset_ok_flag = FramesetOkFlag::NotOk;
             }
 
@@ -3946,6 +4179,7 @@ where
             //
             // Erreur d'analyse. Changer le nom de balise du jeton en "img"
             // et puis retraiter (ne demandez pas).
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -4009,6 +4243,7 @@ where
             // Définir l'indicateur frameset-ok à "not ok".
             // Suivre l'algorithme générique d'analyse syntaxique des
             // éléments de texte brut.
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -4050,6 +4285,7 @@ where
             //
             // Suivre l'algorithme générique d'analyse syntaxique des
             // éléments de texte brut.
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -4126,6 +4362,7 @@ where
             // nœud actuel n'est pas un élément ruby, il s'agit d'une
             // erreur d'analyse.
             // Insérer un élément HTML pour le jeton.
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -4156,6 +4393,7 @@ where
             // élément rtc ou un élément ruby, ceci est une erreur
             // d'analyse.
             // Insérer un élément HTML pour le jeton.
+            #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -4192,6 +4430,7 @@ where
             // "thead", "tr"
             //
             // Erreur d'analyse. Ignorer le token.
+            #[allow(deprecated)]
             | HTMLToken::Tag(HTMLTagToken {
                 ref name,
                 is_end: false,

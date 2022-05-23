@@ -14,6 +14,7 @@ use crate::interface::HTMLElementInterface;
 // --------- //
 
 #[derive(Debug)]
+#[derive(Default)]
 pub struct HTMLScriptElement<Document>
 where
     Document: Clone,

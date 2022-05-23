@@ -49,9 +49,9 @@ pub enum QuirksMode {
     Limited,
 }
 
-#[non_exhaustive]
 pub struct CreateElementOptions {
-    is: String,
+    pub is: Option<String>,
+    pub namespace: Option<Namespace>,
 }
 
 // -------------- //
@@ -80,25 +80,22 @@ impl Document {
 
         // 2) S'il s'agit d'un document HTML, définir localName en
         // minuscules ASCII.
-        let mut production_name = local_name.as_ref().to_owned();
         let maybe_element = local_name.as_ref().parse::<HTMLElement>();
-        if maybe_element.is_ok() {
-            production_name = production_name.to_ascii_lowercase();
-        }
 
         // 3) Laisser `is` être null.
         // 4) Si options est un dictionnaire et que options["is"] existe,
         // alors `is` lui est attribué.
-        let is = if let Some(options) = options {
-            Some(options.is)
-        } else {
-            None
-        };
+        let is =
+            options.as_ref().and_then(|options| options.is.to_owned());
 
         // 5) Que namespace soit l'espace de noms HTML, si c'est un
         // document HTML ou si le type de contenu est
         // "application/xhtml+xml" ; sinon null
-        let namespace = Some(Namespace::HTML);
+        let namespace = if let Some(options) = options.as_ref() {
+            options.namespace
+        } else {
+            Some(Namespace::HTML)
+        };
 
         // 6) Renvoie le résultat de la création d'un élément avec this,
         // localName, namespace, null, is, et avec l'indicateur d'éléments
@@ -108,12 +105,19 @@ impl Document {
             .map(|element| {
                 TreeNode::new(
                     Node::builder()
-                        .set_data(NodeData::Element(Element::new(element)))
+                        .set_data(NodeData::Element(Element::new(
+                            element,
+                            is,
+                            namespace.unwrap(),
+                        )))
                         .set_type(NodeType::ELEMENT_NODE)
                         .build(),
                 )
             })
-            .map_err(|_| DOMException::InvalidNodeTypeError)
+            .map_err(|err| {
+                dbg!(err);
+                DOMException::InvalidNodeTypeError
+            })
     }
 }
 

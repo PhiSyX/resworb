@@ -19,6 +19,7 @@ pub const NAMESPACES: [(&str, &str); 6] = [
 
 /// Les différents espaces de noms.
 #[derive(Debug)]
+#[derive(Copy, Clone)]
 #[derive(PartialEq)]
 pub enum Namespace {
     HTML,

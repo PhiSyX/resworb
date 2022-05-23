@@ -25,7 +25,9 @@ pub struct Element {
     inner: HTMLElement,
     // todo: changer en NamedNodeMap (cf. https://dom.spec.whatwg.org/#namednodemap)
     pub attributes: RwLock<HashMap<DOMString, DOMString>>,
-    pub id: RwLock<Option<String>>,
+    pub id: RwLock<Option<DOMString>>,
+    pub is: RwLock<Option<DOMString>>,
+    pub namespace_uri: RwLock<Namespace>,
 }
 
 // ----------- //
@@ -65,11 +67,17 @@ pub enum HTMLElement {
 // -------------- //
 
 impl Element {
-    pub fn new(data: HTMLElement) -> Self {
+    pub fn new(
+        data: HTMLElement,
+        is: Option<String>,
+        namespace_uri: Namespace,
+    ) -> Self {
         Self {
             inner: data,
             attributes: Default::default(),
             id: Default::default(),
+            is: RwLock::new(is.map(DOMString::from)),
+            namespace_uri: RwLock::new(namespace_uri),
         }
     }
 }
@@ -98,11 +106,15 @@ impl Element {
     }
 
     pub fn namespace(&self) -> Option<Namespace> {
-        self.inner.to_string().parse().ok()
+        self.namespace_uri.read().ok().map(|ns| *ns)
     }
 
     pub fn isin_html_namespace(&self) -> bool {
         self.namespace() == Some(Namespace::HTML)
+    }
+
+    pub fn isin_svg_namespace(&self) -> bool {
+        self.namespace() == Some(Namespace::SVG)
     }
 
     pub fn is_mathml_text_integration_point(&self) -> bool {
@@ -156,7 +168,7 @@ impl Element {
 
     pub fn set_attribute(&self, name: &str, value: &str) {
         if name == "id" {
-            *self.id.write().unwrap() = value.to_owned().into();
+            *self.id.write().unwrap() = Some(DOMString::from(value));
             return;
         }
 
@@ -199,6 +211,9 @@ impl str::FromStr for HTMLElement {
             ),
             | tag_names::template => Self::ScriptingTemplate(
                 html_elements::HTMLTemplateElement::default(),
+            ),
+            | tag_names::script => Self::ScriptingScript(
+                html_elements::HTMLScriptElement::default(),
             ),
             | _ => {
                 return Err("Element non pris en charge pour le moment.")

@@ -21,7 +21,7 @@ use infra::{namespace::Namespace, structure::tree::TreeNode};
 #[derive(Debug)]
 #[derive(Copy, Clone)]
 #[derive(PartialEq)]
-pub enum InsertionMode {
+pub(crate) enum InsertionMode {
     Initial,
     BeforeHTML,
     BeforeHead,
@@ -48,12 +48,14 @@ pub enum InsertionMode {
 }
 
 /// 13.2.4.2 The stack of open elements
-pub struct StackOfOpenElements {
-    pub(crate) elements: Vec<TreeNode<Node>>,
+#[derive(Default)]
+pub(crate) struct StackOfOpenElements {
+    elements: Vec<TreeNode<Node>>,
 }
 
 /// 13.2.4.3 The list of active formatting elements
-pub struct ListOfActiveFormattingElements {
+#[derive(Default)]
+pub(crate) struct ListOfActiveFormattingElements {
     entries: Vec<Entry>,
 }
 
@@ -62,7 +64,7 @@ pub struct ListOfActiveFormattingElements {
 // ----------- //
 
 #[derive(PartialEq)]
-pub enum Entry {
+pub(crate) enum Entry {
     Marker,
     Element(TreeNode<Node>),
 }
@@ -72,7 +74,7 @@ pub enum Entry {
 // -------------- //
 
 impl InsertionMode {
-    pub fn switch_to(&mut self, mode: Self) {
+    pub(crate) fn switch_to(&mut self, mode: Self) {
         *self = mode;
     }
 }
@@ -96,13 +98,15 @@ impl StackOfOpenElements {
     ///   - SVG foreignObject
     ///   - SVG desc
     ///   - SVG title
-    pub const SCOPE_ELEMENTS: [tag_names; 18] = [
+    pub(crate) const SCOPE_ELEMENTS: [tag_names; 18] = [
+        #[allow(deprecated)]
         tag_names::applet,
         tag_names::caption,
         tag_names::html,
         tag_names::table,
         tag_names::td,
         tag_names::th,
+        #[allow(deprecated)]
         tag_names::marquee,
         tag_names::object,
         tag_names::template,
@@ -119,13 +123,13 @@ impl StackOfOpenElements {
 
     /// Le nœud actuel est le nœud le plus bas de cette pile d'éléments
     /// ouverts.
-    pub fn current_node(&self) -> Option<&TreeNode<Node>> {
+    pub(crate) fn current_node(&self) -> Option<&TreeNode<Node>> {
         self.elements.last()
     }
 
     /// Dernier élément (élément HTML) du vecteur de noeuds d'éléments,
     /// qui a le même nom que celui passé en argument.
-    pub fn get_last_element_with_tag_name(
+    pub(crate) fn get_last_element_with_tag_name(
         &self,
         tag_name: tag_names,
     ) -> Option<(usize, &TreeNode<Node>)> {
@@ -138,7 +142,7 @@ impl StackOfOpenElements {
     /// son champ d'application lorsqu'elle a cet élément dans le champ
     /// d'application spécifique composé des types d'éléments suivants :
     /// Voir la constante: [Self::SCOPE_ELEMENTS].
-    pub fn has_element_in_scope<const N: usize>(
+    pub(crate) fn has_element_in_scope<const N: usize>(
         &self,
         tag_name: tag_names,
         list: [tag_names; N],
@@ -151,13 +155,16 @@ impl StackOfOpenElements {
         })
     }
 
-    pub fn has_element_with_tag_name(&self, tag_name: tag_names) -> bool {
+    pub(crate) fn has_element_with_tag_name(
+        &self,
+        tag_name: tag_names,
+    ) -> bool {
         self.elements
             .iter()
             .any(|element| tag_name == element.element_ref().local_name())
     }
 
-    pub fn element_immediately_above(
+    pub(crate) fn element_immediately_above(
         &self,
         node_index: usize,
     ) -> Option<(usize, &TreeNode<Node>)> {
@@ -166,7 +173,7 @@ impl StackOfOpenElements {
             .map(|node| (node_index - 1, node))
     }
 
-    pub fn pop_until_tag(&mut self, tag_name: tag_names) {
+    pub(crate) fn pop_until_tag(&mut self, tag_name: tag_names) {
         while let Some(node) = self.current_node() {
             let element = node.element_ref();
             if tag_name == element.local_name() {
@@ -177,7 +184,7 @@ impl StackOfOpenElements {
         }
     }
 
-    pub fn remove_first_tag_matching<P>(&mut self, predicate: P)
+    pub(crate) fn remove_first_tag_matching<P>(&mut self, predicate: P)
     where
         P: Fn(&TreeNode<Node>) -> bool,
     {
@@ -193,11 +200,34 @@ impl StackOfOpenElements {
     }
 
     /// Ajoute un nouvel arbre de noeud dans le vecteur.
-    pub fn put(&mut self, element: TreeNode<Node>) {
+    pub(crate) fn put(&mut self, element: TreeNode<Node>) {
         self.elements.push(element);
     }
 
-    // <https://github.com/rust-lang/rust/issues/83701>
+    pub(crate) fn button_scope_elements() -> [tag_names; 19] {
+        Self::scoped_elements_with::<19>([tag_names::button])
+    }
+
+    pub(crate) fn topmost_special_node_below(
+        &self,
+        formatting_element: &TreeNode<Node>,
+        is_special_tag: impl Fn(tag_names, Namespace) -> bool,
+    ) -> Option<(usize, &TreeNode<Node>)> {
+        self.elements.iter().enumerate().rfind(|&(_, node)| {
+            if node == formatting_element {
+                return false;
+            }
+
+            is_special_tag(
+                node.element_ref().tag_name(),
+                node.element_ref()
+                    .namespace()
+                    .expect("Devrait être un nom de namespace valide"),
+            )
+        })
+    }
+
+    /// <https://github.com/rust-lang/rust/issues/83701>
     fn scoped_elements_with<const N: usize>(
         list: impl IntoIterator<Item = tag_names>,
     ) -> [tag_names; N] {
@@ -216,33 +246,10 @@ impl StackOfOpenElements {
 
         elements
     }
-
-    pub fn button_scope_elements() -> [tag_names; 19] {
-        Self::scoped_elements_with::<19>([tag_names::button])
-    }
-
-    pub fn topmost_special_node_below(
-        &self,
-        formatting_element: &TreeNode<Node>,
-        is_special_tag: impl Fn(tag_names, Namespace) -> bool,
-    ) -> Option<(usize, &TreeNode<Node>)> {
-        self.elements.iter().enumerate().rfind(|&(_, node)| {
-            if node == formatting_element {
-                return false;
-            }
-
-            is_special_tag(
-                node.element_ref().tag_name(),
-                node.element_ref()
-                    .namespace()
-                    .expect("Devrait être un nom de namespace valide"),
-            )
-        })
-    }
 }
 
 impl ListOfActiveFormattingElements {
-    pub fn clear_up_to_the_last_marker(&mut self) {
+    pub(crate) fn clear_up_to_the_last_marker(&mut self) {
         while let Some(entry) = self.entries.pop() {
             if entry.is_marker() {
                 break;
@@ -250,17 +257,20 @@ impl ListOfActiveFormattingElements {
         }
     }
 
-    pub fn contains_element(&self, element: &TreeNode<Node>) -> bool {
+    pub(crate) fn contains_element(
+        &self,
+        element: &TreeNode<Node>,
+    ) -> bool {
         self.entries
             .iter()
             .any(|entry| Entry::Element(element.to_owned()).eq(entry))
     }
 
-    pub fn insert_marker_at_end(&mut self) {
+    pub(crate) fn insert_marker_at_end(&mut self) {
         self.entries.push(Entry::Marker);
     }
 
-    pub fn last_element_before_marker(
+    pub(crate) fn last_element_before_marker(
         &self,
         tag_name: tag_names,
     ) -> Option<(usize, TreeNode<Node>)> {
@@ -279,7 +289,7 @@ impl ListOfActiveFormattingElements {
             })
     }
 
-    pub fn remove_element(&mut self, element: &TreeNode<Node>) {
+    pub(crate) fn remove_element(&mut self, element: &TreeNode<Node>) {
         if let Some(idx) = self.entries.iter().position(|entry| {
             if let Entry::Element(element_node) = entry {
                 element_node == element
@@ -291,7 +301,10 @@ impl ListOfActiveFormattingElements {
         }
     }
 
-    pub fn position_of(&self, element: &TreeNode<Node>) -> Option<usize> {
+    pub(crate) fn position_of(
+        &self,
+        element: &TreeNode<Node>,
+    ) -> Option<usize> {
         self.entries.iter().enumerate().rposition(|(_, entry)| {
             if let Entry::Element(element_ref) = entry {
                 element_ref == element
@@ -303,22 +316,22 @@ impl ListOfActiveFormattingElements {
 }
 
 impl Entry {
-    pub fn is_element(&self) -> bool {
+    pub(crate) const fn is_element(&self) -> bool {
         matches!(self, Self::Element(_))
     }
 
-    pub fn is_marker(&self) -> bool {
+    pub(crate) const fn is_marker(&self) -> bool {
         matches!(self, Self::Marker)
     }
 
-    pub fn element(&self) -> Option<&TreeNode<Node>> {
+    pub(crate) const fn element(&self) -> Option<&TreeNode<Node>> {
         match self {
             | Entry::Marker => None,
             | Entry::Element(node) => Some(node),
         }
     }
 
-    pub fn element_unchecked(&self) -> &TreeNode<Node> {
+    pub(crate) const fn element_unchecked(&self) -> &TreeNode<Node> {
         match self {
             | Entry::Marker => {
                 panic!("N'est pas une entrée de type Entry::Element.")
@@ -331,24 +344,6 @@ impl Entry {
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
-
-#[allow(clippy::derivable_impls)]
-impl Default for StackOfOpenElements {
-    fn default() -> Self {
-        Self {
-            elements: Default::default(),
-        }
-    }
-}
-
-#[allow(clippy::derivable_impls)]
-impl Default for ListOfActiveFormattingElements {
-    fn default() -> Self {
-        Self {
-            entries: Default::default(),
-        }
-    }
-}
 
 impl Default for InsertionMode {
     /// Initialement, le mode d'insertion est "initial".

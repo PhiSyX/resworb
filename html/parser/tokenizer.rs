@@ -19,7 +19,6 @@ use super::{
     error::HTMLParserError,
     token::{HTMLDoctypeToken, HTMLTagAttribute, HTMLTagToken, HTMLToken},
 };
-use crate::token::HTMLTagAttributeName;
 
 // ----- //
 // Macro //
@@ -577,7 +576,7 @@ impl HTMLTokenizerState {
         self
     }
 
-    fn is_character_of_attribute(&self) -> bool {
+    const fn is_character_of_attribute(&self) -> bool {
         matches!(
             self.returns,
             Some(State::AttributeValueDoubleQuoted)
@@ -2063,9 +2062,8 @@ where
             // chaîne de caractères vide. Passer à l'état `attribute-name`.
             | Some(ch @ '=') => self
                 .change_current_token(|token| {
-                    let mut attribute = HTMLTagAttribute::default();
-                    attribute.0 = HTMLTagAttributeName::from(ch);
-                    token.as_tag_mut().define_tag_attributes(attribute);
+                    let attribute = (ch.to_string(), "");
+                    token.as_tag_mut().append_tag_attributes(attribute);
                 })
                 .switch_state_to("attribute-name")
                 .and_emit_with_error(
@@ -2081,7 +2079,7 @@ where
             | Some(_) => self
                 .change_current_token(|token| {
                     let attribute = HTMLTagAttribute::default();
-                    token.as_tag_mut().define_tag_attributes(attribute);
+                    token.as_tag_mut().append_tag_attributes(attribute);
                 })
                 .reconsume("attribute-name")
                 .and_continue(),
@@ -2219,7 +2217,7 @@ where
             | Some(_) => self
                 .change_current_token(|token| {
                     let attribute = HTMLTagAttribute::default();
-                    token.as_tag_mut().define_tag_attributes(attribute);
+                    token.as_tag_mut().append_tag_attributes(attribute);
                 })
                 .reconsume("attribute-name")
                 .and_continue(),
@@ -2988,7 +2986,7 @@ where
             // jeton `end-of-file`.
             | None => self
                 .emit_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new().define_force_quirks_flag(),
+                    HTMLDoctypeToken::new().define_quirks_mode(),
                 ))
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-doctype"),
@@ -3054,7 +3052,7 @@ where
             // `data`. Émettre le jeton actuel.
             | Some('>') => self
                 .set_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new().define_force_quirks_flag(),
+                    HTMLDoctypeToken::new().define_quirks_mode(),
                 ))
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-name"),
@@ -3067,7 +3065,7 @@ where
             // jeton de `end-of-file`.
             | None => self
                 .emit_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new().define_force_quirks_flag(),
+                    HTMLDoctypeToken::new().define_quirks_mode(),
                 ))
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-doctype"),
@@ -3133,7 +3131,7 @@ where
             // jeton de `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3176,7 +3174,7 @@ where
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3226,7 +3224,7 @@ where
 
                 if !f {
                     self.change_current_token(|token| {
-                        token.into_doctype().set_force_quirks_flag(true);
+                        token.as_doctype().set_force_quirks_flag(true);
                     })
                     .reconsume("bogus-doctype")
                     .and_continue_with_error(
@@ -3264,7 +3262,7 @@ where
             | Some('"') => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .set_public_identifier(String::new());
                 })
                 .switch_state_to("doctype-public-identifier-double-quoted")
@@ -3282,7 +3280,7 @@ where
             | Some('\'') => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .set_public_identifier(String::new());
                 })
                 .switch_state_to("doctype-public-identifier-single-quoted")
@@ -3298,7 +3296,7 @@ where
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-public-identifier"),
@@ -3311,7 +3309,7 @@ where
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3325,7 +3323,7 @@ where
             // Reprendre dans l'état `bogus-doctype`.
             | Some(_) => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -3378,7 +3376,7 @@ where
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-public-identifier"),
@@ -3391,7 +3389,7 @@ where
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3405,7 +3403,7 @@ where
             // Reprendre à l'état `bogus-doctype`.
             | Some(_) => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -3444,7 +3442,7 @@ where
             | Some('\0') => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .append_character_to_public_identifier(
                             char::REPLACEMENT_CHARACTER,
                         );
@@ -3459,7 +3457,7 @@ where
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("abrupt-doctype-public-identifier"),
@@ -3472,7 +3470,7 @@ where
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3485,7 +3483,7 @@ where
             | Some(ch) => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .append_character_to_public_identifier(ch);
                 })
                 .and_continue(),
@@ -3526,7 +3524,7 @@ where
                 let err = "missing-whitespace-between-doctype-public-and-system-identifiers";
                 self.change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .set_system_identifier(String::new());
                 })
                 .switch_state_to(if ch == '"' {
@@ -3545,7 +3543,7 @@ where
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3592,7 +3590,7 @@ where
             | Some(ch @ ('"' | '\'')) => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .set_system_identifier(String::new());
                 })
                 .switch_state_to(if ch == '"' {
@@ -3610,7 +3608,7 @@ where
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3624,7 +3622,7 @@ where
             // dans l'état `bogus-doctype`.
             | Some(_) => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -3658,7 +3656,7 @@ where
             | Some('"') => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-double-quoted")
@@ -3676,7 +3674,7 @@ where
             | Some('\'') => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-single-quoted")
@@ -3692,7 +3690,7 @@ where
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-system-identifier"),
@@ -3705,7 +3703,7 @@ where
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3719,7 +3717,7 @@ where
             // Reprendre dans l'état `bogus-doctype`.
             | Some(_) => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .set_token(HTMLToken::EOF)
                 .reconsume("bogus-doctype")
@@ -3749,7 +3747,7 @@ where
             | Some('"') => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-double-quoted")
@@ -3763,7 +3761,7 @@ where
             | Some('\'') => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-single-quoted")
@@ -3777,7 +3775,7 @@ where
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-system-identifier"),
@@ -3790,7 +3788,7 @@ where
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3804,7 +3802,7 @@ where
             // Reprendre dans l'état `bogus-doctype`.
             | Some(_) => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -3836,7 +3834,7 @@ where
             | Some('\0') => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .append_character_to_system_identifier(
                             char::REPLACEMENT_CHARACTER,
                         );
@@ -3851,7 +3849,7 @@ where
             // données. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("abrupt-doctype-system-identifier"),
@@ -3865,7 +3863,7 @@ where
             // fin de fichier.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -3878,7 +3876,7 @@ where
             | Some(ch) => self
                 .change_current_token(|token| {
                     token
-                        .into_doctype()
+                        .as_doctype()
                         .append_character_to_system_identifier(ch);
                 })
                 .and_continue(),
@@ -3910,7 +3908,7 @@ where
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.into_doctype().set_force_quirks_flag(true);
+                    token.as_doctype().set_force_quirks_flag(true);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -4737,18 +4735,17 @@ mod tests {
             "crashtests/tag/ambiguous_ampersand.html"
         ));
 
+        let attr_name = "href";
+        let attr_value =
+            "?a=b&c=d&a0b=c&copy=1&noti=n&not=in&notin=&notin;&not;&;& &";
+
         assert_eq!(
             token.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                name: "a".into(),
-                self_closing_flag: false,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![(
-                    "href".into(),
-                    "?a=b&c=d&a0b=c&copy=1&noti=n&not=in&notin=&notin;&not;&;& &".into()
-                )],
-                is_end: false
-            }))
+            Some(HTMLToken::Tag(
+                HTMLTagToken::start()
+                    .with_name("a")
+                    .with_attributes([(attr_name, attr_value)])
+            )),
         );
     }
 
@@ -4771,13 +4768,11 @@ mod tests {
 
         assert_eq!(
             token.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                name: "div".into(),
-                self_closing_flag: false,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![("id".into(), "foo".into())],
-                is_end: false
-            }))
+            Some(HTMLToken::Tag(
+                HTMLTagToken::start()
+                    .with_name("div")
+                    .with_attributes([("id", "foo")])
+            )),
         );
 
         // Hello World</div> ...
@@ -4785,31 +4780,12 @@ mod tests {
 
         assert_eq!(
             token.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken {
-                name: "input".into(),
-                self_closing_flag: true,
-                self_closing_flag_acknowledge: Default::default(),
-                attributes: vec![("value".into(), "Hello World".into())],
-                is_end: false
-            }))
+            Some(HTMLToken::Tag(
+                HTMLTagToken::start()
+                    .with_name("input")
+                    .with_attributes([("value", "Hello World")])
+                    .with_self_closing_flag()
+            ))
         );
     }
-
-    // #[test]
-    // fn test_site() {
-    //     let token =
-    //         get_tokenizer_html(include_str!("crashtests/site.html.local"
-    // ));
-    //
-    //     for tok in token {
-    //         if let HTMLToken::EOF = tok {
-    //             break;
-    //         }
-    //         if let HTMLToken::Character(_) = tok {
-    //             continue;
-    //         }
-    //
-    //         println!("-> {tok:?}");
-    //     }
-    // }
 }
