@@ -52,6 +52,8 @@ where
     frameset_ok_flag: FramesetOkFlag,
     parsing_fragment: bool,
     scripting_enabled: bool,
+    script_nesting_level: usize,
+    pause_parsing: bool,
     stop_parsing: bool,
     context_element: Option<TreeNode<Node>>,
     character_insertion_node: Option<TreeNode<Node>>,
@@ -99,6 +101,8 @@ where
             foster_parenting: false,
             parsing_fragment: false,
             scripting_enabled: true,
+            script_nesting_level: 0,
+            pause_parsing: false,
             stop_parsing: false,
             context_element: None,
             character_insertion_node: None,
@@ -231,7 +235,9 @@ where
             | InsertionMode::InBody => {
                 self.handle_in_body_insertion_mode(token)
             }
-            | InsertionMode::Text => todo!(),
+            | InsertionMode::Text => {
+                self.handle_text_insertion_mode(token);
+            }
             | InsertionMode::InTable => todo!(),
             | InsertionMode::InTableText => todo!(),
             | InsertionMode::InCaption => todo!(),
@@ -4471,6 +4477,23 @@ where
             | HTMLToken::Tag(HTMLTagToken { is_end: true, .. }) => {
                 handle_any_other_end_tag(self, &token);
             }
+        }
+    }
+
+    fn handle_text_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // A character token
+            //
+            // Insérer le caractère du jeton.
+            //
+            // Note: il ne peut jamais s'agir d'un caractère U+0000 NULL ;
+            // le tokenizer les convertit en caractères
+            // U+FFFD REPLACEMENT CHARACTER.
+            | HTMLToken::Character(ch) => {
+                self.insert_character(ch);
+            }
+
+            | _ => unreachable!(),
         }
     }
 
