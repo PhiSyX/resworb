@@ -4517,6 +4517,16 @@ where
                     token,
                 );
             }
+            // Toute autre étiquette de fin
+            //
+            // Retirer le nœud actuel de la pile des éléments ouverts.
+            // Passer le mode d'insertion sur le mode d'insertion
+            // d'origine.
+            | HTMLToken::Tag(HTMLTagToken { is_end: true, .. }) => {
+                self.stack_of_open_elements.pop();
+                self.insertion_mode = self.original_insertion_mode;
+            }
+
             | _ => unreachable!(),
         }
     }
