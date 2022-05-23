@@ -462,6 +462,10 @@ where
     }
 
     fn emit_token(&mut self, token: HTMLToken) -> &mut Self {
+        if matches!(token, HTMLToken::Character('<' | '/')) {
+            self.last_start_tag_token = self.token.clone();
+        }
+
         self.output_tokens.push_front(token);
         self
     }
@@ -477,7 +481,7 @@ where
     /// de lui fournir le caractère actuel à la place.
     fn reconsume(&mut self, state: &str) -> &mut Self {
         self.stream.rollback();
-        self.state.switch_to(state);
+        self.switch_state_to(state);
         self
     }
 
@@ -601,15 +605,15 @@ where
             // Définir l'état de retour à l'état `data`. Passer à l'état
             // `character-reference`.
             | Some('&') => self
+                .switch_state_to("character-reference")
                 .state
                 .set_return("data")
-                .switch_to("character-reference")
                 .and_continue(),
 
             // U+003C LESS-THAN SIGN (<)
             //
             // Passer à l'état `tag-open`.
-            | Some('<') => self.state.switch_to("tag-open").and_continue(),
+            | Some('<') => self.switch_state_to("tag-open").and_continue(),
 
             // U+0000 NULL
             //
@@ -640,9 +644,9 @@ where
             // Définir l'état de retour à l'état `rcdata`. Passer à l'état
             // `character-reference`.
             | Some('&') => self
+                .switch_state_to("character-reference")
                 .state
                 .set_return("rcdata")
-                .switch_to("character-reference")
                 .and_continue(),
 
             // U+003C LESS-THAN SIGN (<)
@@ -682,8 +686,7 @@ where
             // U+003C LESS-THAN SIGN (<)
             // Passer à l'état `rawtext-less-than-sign`.
             | Some('<') => self
-                .state
-                .switch_to("rawtext-less-than-sign")
+                .switch_state_to("rawtext-less-than-sign")
                 .and_continue(),
 
             // U+0000 NULL
@@ -717,8 +720,7 @@ where
             //
             // Passer à l'état `script-data-less-than-sign`.
             | Some('<') => self
-                .state
-                .switch_to("script-data-less-than-sign")
+                .switch_state_to("script-data-less-than-sign")
                 .and_continue(),
 
             // U+0000 NULL
@@ -779,15 +781,14 @@ where
             //
             // Passer à l'état `markup-declaration-open`.
             | Some('!') => self
-                .state
-                .switch_to("markup-declaration-open")
+                .switch_state_to("markup-declaration-open")
                 .and_continue(),
 
             // U+002F SOLIDUS (/)
             //
             // Passer à l'état `end-tag-open`.
             | Some('/') => {
-                self.state.switch_to("end-tag-open").and_continue()
+                self.switch_state_to("end-tag-open").and_continue()
             }
 
             // ASCII alpha
@@ -855,8 +856,7 @@ where
             // Il s'agit d'une erreur d'analyse de type
             // `missing-end-tag-name`. Passer à l'état `data`.
             | Some('>') => self
-                .state
-                .switch_to("data")
+                .switch_state_to("data")
                 .and_continue_with_error("missing-end-tag-name"),
 
             // EOF
@@ -897,8 +897,7 @@ where
             // le traiter comme indiqué dans l'entrée "Anything
             // else" ci-dessous.
             | Some(ch) if ch.is_html_whitespace() => self
-                .state
-                .switch_to("before-attribute-name")
+                .switch_state_to("before-attribute-name")
                 .and_continue(),
 
             // U+002F SOLIDUS (/)
@@ -908,14 +907,13 @@ where
             // `self-closing-start-tag`. Sinon, le traiter comme dans
             // l'entrée "Anything else" ci-dessous.
             | Some('/') => self
-                .state
-                .switch_to("self-closing-start-tag")
+                .switch_state_to("self-closing-start-tag")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `tag` actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // ASCII upper alpha
             //
@@ -1027,8 +1025,7 @@ where
                 if ch.is_html_whitespace()
                     && self.is_appropriate_end_tag() =>
             {
-                self.state
-                    .switch_to("before-attribute-name")
+                self.switch_state_to("before-attribute-name")
                     .and_continue()
             }
 
@@ -1039,8 +1036,7 @@ where
             // Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some('/') if self.is_appropriate_end_tag() => self
-                .state
-                .switch_to("self-closing-start-tag")
+                .switch_state_to("self-closing-start-tag")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
@@ -1050,7 +1046,7 @@ where
             // courant. Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some('>') if self.is_appropriate_end_tag() => {
-                self.state.switch_to("data").and_emit()
+                self.switch_state_to("data").and_emit()
             }
 
             // ASCII upper alpha
@@ -1162,8 +1158,7 @@ where
                 if ch.is_html_whitespace()
                     && self.is_appropriate_end_tag() =>
             {
-                self.state
-                    .switch_to("before-attribute-name")
+                self.switch_state_to("before-attribute-name")
                     .and_continue()
             }
 
@@ -1174,8 +1169,7 @@ where
             // Sinon, le traiter comme indiqué dans l'entrée
             // "Anything else" ci-dessous.
             | Some('/') if self.is_appropriate_end_tag() => self
-                .state
-                .switch_to("self-closing-start-tag")
+                .switch_state_to("self-closing-start-tag")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
@@ -1185,7 +1179,7 @@ where
             // le jeton `end-tag` actuel. Sinon, le traiter comme
             // indiqué dans l'entrée "Anything else" ci-dessous.
             | Some('>') if self.is_appropriate_end_tag() => {
-                self.state.switch_to("data").and_emit()
+                self.switch_state_to("data").and_emit()
             }
 
             // ASCII upper alpha
@@ -1304,8 +1298,7 @@ where
                 if ch.is_html_whitespace()
                     && self.is_appropriate_end_tag() =>
             {
-                self.state
-                    .switch_to("before-attribute-name")
+                self.switch_state_to("before-attribute-name")
                     .and_continue()
             }
 
@@ -1316,8 +1309,7 @@ where
             // Sinon, le traiter comme indiqué dans l'entrée `Anything
             // else` ci-dessous.
             | Some('/') if self.is_appropriate_end_tag() => self
-                .state
-                .switch_to("self-closing-start-tag")
+                .switch_state_to("self-closing-start-tag")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
@@ -1327,7 +1319,7 @@ where
             // Sinon, le traiter comme indiqué dans l'entrée `Anything
             // else` ci-dessous.
             | Some('>') if self.is_appropriate_end_tag() => {
-                self.state.switch_to("data").and_continue()
+                self.switch_state_to("data").and_continue()
             }
 
             // ASCII upper alpha
@@ -2110,8 +2102,7 @@ where
             //
             // Passer à l'état `before-attribute-value`.
             | Some('=') => self
-                .state
-                .switch_to("before-attribute-value")
+                .switch_state_to("before-attribute-value")
                 .and_continue(),
 
             // ASCII upper alpha
@@ -2184,22 +2175,20 @@ where
             //
             // Passer à l'état `self-closing-start-tag`.
             | Some('/') => self
-                .state
-                .switch_to("self-closing-start-tag")
+                .switch_state_to("self-closing-start-tag")
                 .and_continue(),
 
             // U+003D EQUALS SIGN (=)
             //
             // Passer à l'état `before-attribute-value`.
             | Some('=') => self
-                .state
-                .switch_to("before-attribute-value")
+                .switch_state_to("before-attribute-value")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // EOF
             //
@@ -2240,16 +2229,14 @@ where
             //
             // Passer à l'état `attribute-value-double-quoted`.
             | Some('"') => self
-                .state
-                .switch_to("attribute-value-double-quoted")
+                .switch_state_to("attribute-value-double-quoted")
                 .and_continue(),
 
             // U+0027 APOSTROPHE (')
             //
             // Passer à l'état `attribute-value-single-quoted`.
             | Some('\'') => self
-                .state
-                .switch_to("attribute-value-single-quoted")
+                .switch_state_to("attribute-value-single-quoted")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
@@ -2279,16 +2266,14 @@ where
             //
             // Passer à l'état `after-attribute-value-quoted`.
             | Some('"') if quote == '"' => self
-                .state
-                .switch_to("after-attribute-value-quoted")
+                .switch_state_to("after-attribute-value-quoted")
                 .and_continue(),
 
             // U+0027 APOSTROPHE (')
             //
             // Passer à l'état `after-attribute-value-quoted`.
             | Some('\'') if quote == '\'' => self
-                .state
-                .switch_to("after-attribute-value-quoted")
+                .switch_state_to("after-attribute-value-quoted")
                 .and_continue(),
 
             // U+0026 AMPERSAND (&)
@@ -2354,8 +2339,7 @@ where
             //
             // Passer à l'état `before-attribute-name`.
             | Some(ch) if ch.is_html_whitespace() => self
-                .state
-                .switch_to("before-attribute-name")
+                .switch_state_to("before-attribute-name")
                 .and_continue(),
 
             // U+0026 AMPERSAND (&)
@@ -2371,7 +2355,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `tag` actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // U+0000 NULL
             //
@@ -2440,22 +2424,20 @@ where
             //
             // Passer à l'état `before-attribute-name`.
             | Some(ch) if ch.is_html_whitespace() => self
-                .state
-                .switch_to("before-attribute-name")
+                .switch_state_to("before-attribute-name")
                 .and_continue(),
 
             // U+002F SOLIDUS (/)
             //
             // Passer à l'état `self-closing-start-tag`.
             | Some('/') => self
-                .state
-                .switch_to("self-closing-start-tag")
+                .switch_state_to("self-closing-start-tag")
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `tag` actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // EOF
             //
@@ -2578,7 +2560,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `comment` actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // EOF
             //
@@ -2618,7 +2600,7 @@ where
             //
             // Passer à l'état `comment-start-dash`.
             | Some('-') => {
-                self.state.switch_to("comment-start-dash").and_continue()
+                self.switch_state_to("comment-start-dash").and_continue()
             }
 
             // U+003E GREATER-THAN SIGN (>)
@@ -2627,8 +2609,7 @@ where
             // `abrupt-closing-of-empty-comment`. Passer à l'état `data`.
             // Émettre le jeton `comment` actuel.
             | Some('>') => self
-                .state
-                .switch_to("data")
+                .switch_state_to("data")
                 .and_emit_with_error("abrupt-closing-of-empty-comment"),
 
             // Anything else
@@ -2677,8 +2658,7 @@ where
             //
             // Passer à l'état `comment-less-than-sign-bang-dash`.
             | Some('-') => self
-                .state
-                .switch_to("comment-less-than-sign-bang-dash")
+                .switch_state_to("comment-less-than-sign-bang-dash")
                 .and_continue(),
 
             // Anything else
@@ -2696,8 +2676,7 @@ where
             //
             // Passer à l'état `comment-less-than-sign-bang-dash-dash`.
             | Some('-') => self
-                .state
-                .switch_to("comment-less-than-sign-bang-dash-dash")
+                .switch_state_to("comment-less-than-sign-bang-dash-dash")
                 .and_continue(),
 
             // Anything else
@@ -2737,7 +2716,7 @@ where
             //
             // Passer à l'état final du commentaire.
             | Some('-') => {
-                self.state.switch_to("comment-end").and_continue()
+                self.switch_state_to("comment-end").and_continue()
             }
 
             // U+003E GREATER-THAN SIGN (>)
@@ -2746,8 +2725,7 @@ where
             // abrupt-closing-of-empty-comment. Passer à l'état de données.
             // Émettre le jeton de commentaire actuel.
             | Some('>') => self
-                .state
-                .switch_to("data")
+                .switch_state_to("data")
                 .and_emit_with_error("abrupt-closing-of-empty-comment"),
 
             // EOF
@@ -2790,7 +2768,7 @@ where
             //
             // Passer à l'état `comment-end-dash`.
             | Some('-') => {
-                self.state.switch_to("comment-end-dash").and_continue()
+                self.switch_state_to("comment-end-dash").and_continue()
             }
 
             // U+0000 NULL
@@ -2834,7 +2812,7 @@ where
             //
             // Passer à l'état `comment-end`.
             | Some('-') => {
-                self.state.switch_to("comment-end").and_continue()
+                self.switch_state_to("comment-end").and_continue()
             }
 
             // EOF
@@ -2865,13 +2843,13 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `comment` actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // U+0021 EXCLAMATION MARK (!)
             //
             // Passer à l'état `comment-end-bang`.
             | Some('!') => {
-                self.state.switch_to("comment-end-bang").and_continue()
+                self.switch_state_to("comment-end-bang").and_continue()
             }
 
             // U+002D HYPHEN-MINUS (-)
@@ -2970,7 +2948,7 @@ where
             //
             // Passer à l'état `before-doctype-name`.
             | Some(ch) if ch.is_html_whitespace() => {
-                self.state.switch_to("before-doctype-name").and_continue()
+                self.switch_state_to("before-doctype-name").and_continue()
             }
 
             // ASCII upper alpha
@@ -3092,13 +3070,13 @@ where
             //
             // Passer à l'état `after-doctype-name`.
             | Some(ch) if ch.is_html_whitespace() => {
-                self.state.switch_to("after-doctype-name").and_continue()
+                self.switch_state_to("after-doctype-name").and_continue()
             }
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // ASCII upper alpha
             //
@@ -3164,7 +3142,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // EOF
             //
@@ -3210,14 +3188,16 @@ where
                     if word == "PUBLIC" {
                         f = true;
 
-                        self.state
-                            .switch_to("after-doctype-public-keyword");
+                        self.switch_state_to(
+                            "after-doctype-public-keyword",
+                        );
                         self.stream.advance(6);
                     } else if word == "SYSTEM" {
                         f = true;
 
-                        self.state
-                            .switch_to("after-doctype-system-keyword");
+                        self.switch_state_to(
+                            "after-doctype-system-keyword",
+                        );
                         self.stream.advance(6);
                     }
                 }
@@ -3248,8 +3228,7 @@ where
             //
             // Passer à l'état `before-doctype-public-identifier`.
             | Some(ch) if ch.is_html_whitespace() => self
-                .state
-                .switch_to("before-doctype-public-identifier")
+                .switch_state_to("before-doctype-public-identifier")
                 .and_continue(),
 
             // U+0022 QUOTATION MARK (")
@@ -3421,16 +3400,14 @@ where
             //
             // Passer à l'état `after-doctype-public-identifier`.
             | Some('"') if quote == '"' => self
-                .state
-                .switch_to("after-doctype-public-identifier")
+                .switch_state_to("after-doctype-public-identifier")
                 .and_continue(),
 
             // U+0027 APOSTROPHE (')
             //
             // Passer à l'état `after-doctype-public-identifier`.
             | Some('\'') if quote == '\'' => self
-                .state
-                .switch_to("after-doctype-public-identifier")
+                .switch_state_to("after-doctype-public-identifier")
                 .and_continue(),
 
             // U+0000 NULL
@@ -3502,14 +3479,15 @@ where
             // Passer à l'état
             // `between-doctype-public-and-system-identifiers`.
             | Some(ch) if ch.is_html_whitespace() => self
-                .state
-                .switch_to("between-doctype-public-and-system-identifiers")
+                .switch_state_to(
+                    "between-doctype-public-and-system-identifiers",
+                )
                 .and_continue(),
 
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `DOCTYPE` actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
@@ -3578,7 +3556,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
@@ -3642,8 +3620,7 @@ where
             //
             // Passer à l'état `before-doctype-system-identifier`.
             | Some(ch) if ch.is_html_whitespace() => self
-                .state
-                .switch_to("before-doctype-system-identifier")
+                .switch_state_to("before-doctype-system-identifier")
                 .and_continue(),
 
             // U+0022 QUOTATION MARK (")
@@ -3821,8 +3798,7 @@ where
             //
             // Passer à l'état `after-doctype-system-identifier`.
             | Some(ch) if ch == quote => self
-                .state
-                .switch_to("after-doctype-system-identifier")
+                .switch_state_to("after-doctype-system-identifier")
                 .and_continue(),
 
             // U+0000 NULL
@@ -3898,7 +3874,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `doctype` actuel.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // EOF
             //
@@ -3935,7 +3911,7 @@ where
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `doctype`.
-            | Some('>') => self.state.switch_to("data").and_emit(),
+            | Some('>') => self.switch_state_to("data").and_emit(),
 
             // U+0000 NULL
             //
