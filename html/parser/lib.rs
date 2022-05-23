@@ -4493,6 +4493,30 @@ where
                 self.insert_character(ch);
             }
 
+            // An end-of-file token
+            //
+            // Erreur d'analyse.
+            // Si le noeud actuel est un élément de type "script", alors
+            // définir sa propriété `already_started` à true.
+            // Retirer le noeud actuel de la pile d'éléments ouverts.
+            // Passer le mode d'insertion au mode d'insertion original puis
+            // retraiter le jeton.
+            | HTMLToken::EOF => {
+                self.parse_error(&token);
+
+                let cnode = self.current_node().expect("Le noeud actuel");
+                let cnode_element = cnode.element_ref();
+                if tag_names::script == cnode_element.tag_name() {
+                    cnode_element.script().set_already_started(true);
+                }
+
+                self.stack_of_open_elements.pop();
+                self.insertion_mode = self.original_insertion_mode;
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
             | _ => unreachable!(),
         }
     }
