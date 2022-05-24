@@ -909,10 +909,10 @@ where
         &mut self,
         predicate: impl Fn(&str) -> bool,
     ) {
-        if let Some(cnode) = self.current_node() {
+        while let Some(cnode) = self.current_node() {
             let element = cnode.element_ref();
             let name = element.local_name();
-            while predicate(&name)
+            if predicate(&name)
                 && name.is_one_of([
                     tag_names::dd,
                     tag_names::dt,
@@ -927,6 +927,8 @@ where
                 ])
             {
                 self.stack_of_open_elements.pop();
+            } else {
+                break;
             }
         }
     }

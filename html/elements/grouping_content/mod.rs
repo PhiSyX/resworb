@@ -5,10 +5,11 @@
 mod div;
 mod dl;
 mod hr;
+mod li;
 mod ol;
 mod pre;
 
 pub use self::{
     div::HTMLDivElement, dl::HTMLDListElement, hr::HTMLHRElement,
-    ol::HTMLOListElement, pre::HTMLPreElement,
+    li::HTMLLIElement, ol::HTMLOListElement, pre::HTMLPreElement,
 };

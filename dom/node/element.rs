@@ -77,6 +77,10 @@ pub enum HTMLElement {
         /// 4.4.5 The ol element
         html_elements::HTMLOListElement,
     ),
+    GroupingContentLi(
+        /// 4.4.8 The li element
+        html_elements::HTMLLIElement,
+    ),
     GroupingContentDl(
         /// 4.4.9 The dl element
         html_elements::HTMLDListElement,
@@ -273,6 +277,9 @@ impl str::FromStr for HTMLElement {
             | tag_names::ol => Self::GroupingContentOl(
                 html_elements::HTMLOListElement::default(),
             ),
+            | tag_names::li => Self::GroupingContentLi(
+                html_elements::HTMLLIElement::default(),
+            ),
             | tag_names::dl => Self::GroupingContentDl(
                 html_elements::HTMLDListElement::default(),
             ),
@@ -311,6 +318,7 @@ impl fmt::Display for HTMLElement {
                 | Self::GroupingContentHr(el) => el.tag_name(),
                 | Self::GroupingContentPre(el) => el.tag_name(),
                 | Self::GroupingContentOl(el) => el.tag_name(),
+                | Self::GroupingContentLi(el) => el.tag_name(),
                 | Self::GroupingContentDl(el) => el.tag_name(),
                 | Self::GroupingContentDiv(el) => el.tag_name(),
                 | Self::TextLevelSpan(el) => el.tag_name(),
