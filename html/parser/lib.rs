@@ -4655,6 +4655,31 @@ where
                 self.insertion_mode
                     .switch_to(InsertionMode::InColumnGroup);
             }
+
+            // A start tag whose tag name is "col"
+            //
+            // Effacer la pile pour revenir à un contexte de table. (Voir
+            // ci-dessus.)
+            // Insérer un élément HTML pour un jeton de balise de début
+            // "colgroup" sans attributs, puis passer le mode d'insertion à
+            // "in column group".
+            // Retraiter le jeton actuel.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::col == name => {
+                clear_stack_back_to_table_context(self);
+                self.insert_html_element(
+                    &HTMLTagToken::start().with_name(tag_names::colgroup),
+                );
+                self.insertion_mode
+                    .switch_to(InsertionMode::InColumnGroup);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
             | _ => todo!(),
         }
     }
