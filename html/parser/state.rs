@@ -208,6 +208,10 @@ impl StackOfOpenElements {
         Self::scoped_elements_with::<19>([tag_names::button])
     }
 
+    pub(crate) fn table_scope_elements() -> [tag_names; 3] {
+        [tag_names::html, tag_names::table, tag_names::template]
+    }
+
     pub(crate) fn topmost_special_node_below(
         &self,
         formatting_element: &TreeNode<Node>,

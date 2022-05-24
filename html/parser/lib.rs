@@ -4733,6 +4733,40 @@ where
                     token,
                 );
             }
+
+            // A start tag whose tag name is "table"
+            //
+            // Erreur d'analyse.
+            // Si la pile d'éléments ouverts ne comporte pas d'élément
+            // table dans la portée de la table, nous devons ignorer le
+            // jeton.
+            // Sinon:
+            // Retirer les éléments de cette pile jusqu'à ce qu'un élément
+            // de table ait été sorti de la pile.
+            // Réinitialiser le mode d'insertion de manière appropriée.
+            // Retraiter le jeton actuel.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::table == name => {
+                self.parse_error(&token);
+
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::table,
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    return;
+                }
+
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_names::table);
+                self.reset_insertion_mode_appropriately();
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
             | _ => todo!(),
         }
     }
