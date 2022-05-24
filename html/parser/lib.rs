@@ -4636,6 +4636,25 @@ where
                 self.insert_html_element(tag_token);
                 self.insertion_mode.switch_to(InsertionMode::InCaption);
             }
+
+            // A start tag whose tag name is "colgroup"
+            //
+            // Effacer la pile pour revenir à un contexte de table. (Voir
+            // ci-dessus.)
+            // Insérer un élément HTML pour le jeton, puis passer le mode
+            // d'insertion à "in column group".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::colgroup == name => {
+                clear_stack_back_to_table_context(self);
+                self.insert_html_element(tag_token);
+                self.insertion_mode
+                    .switch_to(InsertionMode::InColumnGroup);
+            }
             | _ => todo!(),
         }
     }
