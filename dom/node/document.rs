@@ -114,10 +114,7 @@ impl Document {
                         .build(),
                 )
             })
-            .map_err(|err| {
-                dbg!(err);
-                DOMException::InvalidNodeTypeError
-            })
+            .map_err(|_| DOMException::InvalidNodeTypeError)
     }
 }
 

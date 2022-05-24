@@ -32,6 +32,7 @@ macro_rules! enumerate_html_tag_names {
         impl str::FromStr for tag_names {
             type Err = &'static str;
 
+            #[allow(deprecated)]
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 Ok(match s {
                     $(| stringify!($name) => Self::$name),*,
@@ -41,6 +42,7 @@ macro_rules! enumerate_html_tag_names {
         }
 
         impl fmt::Display for tag_names {
+            #[allow(deprecated)]
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write!(f, "{}", match self {
                     $(Self::$name => stringify!($name)),*

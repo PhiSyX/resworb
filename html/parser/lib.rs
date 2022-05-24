@@ -52,6 +52,8 @@ where
     frameset_ok_flag: FramesetOkFlag,
     parsing_fragment: bool,
     scripting_enabled: bool,
+    script_nesting_level: usize,
+    pause_parsing: bool,
     stop_parsing: bool,
     context_element: Option<TreeNode<Node>>,
     character_insertion_node: Option<TreeNode<Node>>,
@@ -99,6 +101,8 @@ where
             foster_parenting: false,
             parsing_fragment: false,
             scripting_enabled: true,
+            script_nesting_level: 0,
+            pause_parsing: false,
             stop_parsing: false,
             context_element: None,
             character_insertion_node: None,
@@ -231,7 +235,9 @@ where
             | InsertionMode::InBody => {
                 self.handle_in_body_insertion_mode(token)
             }
-            | InsertionMode::Text => todo!(),
+            | InsertionMode::Text => {
+                self.handle_text_insertion_mode(token);
+            }
             | InsertionMode::InTable => todo!(),
             | InsertionMode::InTableText => todo!(),
             | InsertionMode::InCaption => todo!(),
@@ -241,7 +247,9 @@ where
             | InsertionMode::InCell => todo!(),
             | InsertionMode::InSelect => todo!(),
             | InsertionMode::InSelectInTable => todo!(),
-            | InsertionMode::InTemplate => todo!(),
+            | InsertionMode::InTemplate => {
+                self.handle_in_template_insertion_mode(token)
+            }
             | InsertionMode::AfterBody => {
                 self.handle_after_body_insertion_mode(token)
             }
@@ -4470,6 +4478,286 @@ where
             // Any other end tag
             | HTMLToken::Tag(HTMLTagToken { is_end: true, .. }) => {
                 handle_any_other_end_tag(self, &token);
+            }
+        }
+    }
+
+    fn handle_text_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // A character token
+            //
+            // Insérer le caractère du jeton.
+            //
+            // Note: il ne peut jamais s'agir d'un caractère U+0000 NULL ;
+            // le tokenizer les convertit en caractères
+            // U+FFFD REPLACEMENT CHARACTER.
+            | HTMLToken::Character(ch) => {
+                self.insert_character(ch);
+            }
+
+            // An end-of-file token
+            //
+            // Erreur d'analyse.
+            // Si le noeud actuel est un élément de type "script", alors
+            // définir sa propriété `already_started` à true.
+            // Retirer le noeud actuel de la pile d'éléments ouverts.
+            // Passer le mode d'insertion au mode d'insertion original puis
+            // retraiter le jeton.
+            | HTMLToken::EOF => {
+                self.parse_error(&token);
+
+                let cnode = self.current_node().expect("Le noeud actuel");
+                let cnode_element = cnode.element_ref();
+                if tag_names::script == cnode_element.tag_name() {
+                    cnode_element.script().set_already_started(true);
+                }
+
+                self.stack_of_open_elements.pop();
+                self.insertion_mode = self.original_insertion_mode;
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            // TODO: active spéculative html parser
+            // An end tag whose tag name is "script"
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::script == name => {
+                todo!()
+            }
+
+            // Any other end tag
+            //
+            // Retirer le nœud actuel de la pile des éléments ouverts.
+            // Passer le mode d'insertion sur le mode d'insertion
+            // d'origine.
+            | HTMLToken::Tag(HTMLTagToken { is_end: true, .. }) => {
+                self.stack_of_open_elements.pop();
+                self.insertion_mode = self.original_insertion_mode;
+            }
+
+            | _ => unreachable!(),
+        }
+    }
+
+    fn handle_in_template_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // A character token
+            // A comment token
+            // A DOCTYPE token
+            //
+            // Traiter le jeton selon les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Character(_)
+            | HTMLToken::Comment(_)
+            | HTMLToken::DOCTYPE(_) => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // A start tag whose tag name is one of: "base", "basefont",
+            // "bgsound", "link", "meta", "noframes", "script", "style",
+            // "template", "title"
+            // An end tag whose tag name is "template"
+            //
+            // Traiter le jeton selon les règles du mode d'insertion
+            // "in head".
+            #[allow(deprecated)]
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name, is_end, ..
+            }) if !is_end
+                && name.is_one_of([
+                    tag_names::base,
+                    tag_names::basefont,
+                    tag_names::bgsound,
+                    tag_names::link,
+                    tag_names::meta,
+                    tag_names::noframes,
+                    tag_names::script,
+                    tag_names::style,
+                    tag_names::template,
+                    tag_names::title,
+                ])
+                || is_end && tag_names::template == name =>
+            {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+
+            // A start tag whose tag name is one of: "caption", "colgroup",
+            // "tbody", "tfoot", "thead"
+            //
+            // Retirer le mode d'insertion template actuel de la pile des
+            // modes d'insertion des templates.
+            // Ajouter "in table" sur la pile des modes d'insertion de
+            // template de sorte qu'il soit le nouveau mode d'insertion
+            // de template actuel.
+            // Passer le mode d'insertion à "in table", puis retraiter le
+            // jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([
+                tag_names::caption,
+                tag_names::colgroup,
+                tag_names::tbody,
+                tag_names::tfoot,
+                tag_names::thead,
+            ]) =>
+            {
+                self.stack_of_template_insertion_modes.pop();
+                self.stack_of_template_insertion_modes
+                    .push(InsertionMode::InTable);
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            // A start tag whose tag name is "col"
+            //
+            // Retirer le mode d'insertion template actuel de la pile des
+            // modes d'insertion des templates.
+            // Ajouter "in column group" sur la pile des modes d'insertion
+            // de template de sorte qu'il soit le nouveau mode
+            // d'insertion de template actuel.
+            // Passer le mode d'insertion à "in column group", puis
+            // retraiter le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::col == name => {
+                self.stack_of_template_insertion_modes.pop();
+                self.stack_of_template_insertion_modes
+                    .push(InsertionMode::InColumnGroup);
+                self.insertion_mode
+                    .switch_to(InsertionMode::InColumnGroup);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            // A start tag whose tag name is "tr"
+            //
+            // Retirer le mode d'insertion template actuel de la pile des
+            // modes d'insertion des templates.
+            // Ajouter "in table body" sur la pile des modes d'insertion
+            // de template de sorte qu'il soit le nouveau mode
+            // d'insertion de template actuel.
+            // Passer le mode d'insertion à "in table body", puis
+            // retraiter le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::tr == name => {
+                self.stack_of_template_insertion_modes.pop();
+                self.stack_of_template_insertion_modes
+                    .push(InsertionMode::InTableBody);
+                self.insertion_mode.switch_to(InsertionMode::InTableBody);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            // A start tag whose tag name is one of: "td", "th"
+            //
+            // Retirer le mode d'insertion template actuel de la pile des
+            // modes d'insertion des templates.
+            // Ajouter "in row" sur la pile des modes d'insertion de
+            // template de sorte qu'il soit le nouveau mode d'insertion
+            // de template actuel.
+            // Passer le mode d'insertion à "in row", puis retraiter le
+            // jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([tag_names::td, tag_names::th]) => {
+                self.stack_of_template_insertion_modes.pop();
+                self.stack_of_template_insertion_modes
+                    .push(InsertionMode::InRow);
+                self.insertion_mode.switch_to(InsertionMode::InRow);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            // Any other start tag
+            //
+            // Retirer le mode d'insertion template actuel de la pile des
+            // modes d'insertion des templates.
+            // Ajouter "in body" sur la pile des modes d'insertion de
+            // template de sorte qu'il soit le nouveau mode d'insertion
+            // de template actuel.
+            // Passer le mode d'insertion à "in body", puis retraiter le
+            // jeton.
+            | HTMLToken::Tag(HTMLTagToken { is_end: false, .. }) => {
+                self.stack_of_template_insertion_modes.pop();
+                self.stack_of_template_insertion_modes
+                    .push(InsertionMode::InBody);
+                self.insertion_mode.switch_to(InsertionMode::InBody);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            // Any other end tag
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken { is_end: true, .. }) => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // An end-of-file token
+            //
+            // S'il n'y a pas d'élément template sur la pile des éléments
+            // ouverts, alors nous devons arrêter l'analyse. (cas du
+            // fragment)
+            // Sinon, il s'agit d'une erreur d'analyse.
+            // Retirer des éléments de la pile d'éléments ouverts jusqu'à
+            // ce qu'un élément template ait été extrait de la pile.
+            // Effacer la liste des éléments de mise en forme actifs
+            // jusqu'au dernier marqueur.
+            // Supprimer le mode d'insertion de template actuel de la pile
+            // des modes d'insertion de template.
+            // Réinitialiser le mode d'insertion de manière appropriée.
+            // Retraiter le jeton.
+            | HTMLToken::EOF => {
+                if !self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_names::template)
+                {
+                    self.stop_parsing = true;
+                    return;
+                }
+
+                self.parse_error(&token);
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_names::template);
+                self.list_of_active_formatting_elements
+                    .clear_up_to_the_last_marker();
+                self.reset_insertion_mode_appropriately();
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
             }
         }
     }
