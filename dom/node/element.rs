@@ -77,6 +77,10 @@ pub enum HTMLElement {
         /// 4.4.5 The ol element
         html_elements::HTMLOListElement,
     ),
+    GroupingContentUl(
+        /// 4.4.6 The ul element
+        html_elements::HTMLUListElement,
+    ),
     GroupingContentLi(
         /// 4.4.8 The li element
         html_elements::HTMLLIElement,
@@ -266,8 +270,6 @@ impl str::FromStr for HTMLElement {
             | tag_names::script => Self::ScriptingScript(
                 html_elements::HTMLScriptElement::default(),
             ),
-            | _ => {
-                return Err("Element non pris en charge pour le moment.")
             | tag_names::hr => Self::GroupingContentHr(
                 html_elements::HTMLHRElement::default(),
             ),
@@ -276,6 +278,9 @@ impl str::FromStr for HTMLElement {
             ),
             | tag_names::ol => Self::GroupingContentOl(
                 html_elements::HTMLOListElement::default(),
+            ),
+            | tag_names::ul => Self::GroupingContentUl(
+                html_elements::HTMLUListElement::default(),
             ),
             | tag_names::li => Self::GroupingContentLi(
                 html_elements::HTMLLIElement::default(),
@@ -301,7 +306,7 @@ impl str::FromStr for HTMLElement {
             | tag_names::h6) => Self::SectionHeading(
                 html_elements::HTMLHeadingElement::new(heading),
             ),
-            }
+            | _ => return Err("Element non pris en charge pour le moment."),
         })
     }
 }
@@ -318,6 +323,7 @@ impl fmt::Display for HTMLElement {
                 | Self::GroupingContentHr(el) => el.tag_name(),
                 | Self::GroupingContentPre(el) => el.tag_name(),
                 | Self::GroupingContentOl(el) => el.tag_name(),
+                | Self::GroupingContentUl(el) => el.tag_name(),
                 | Self::GroupingContentLi(el) => el.tag_name(),
                 | Self::GroupingContentDl(el) => el.tag_name(),
                 | Self::GroupingContentDiv(el) => el.tag_name(),

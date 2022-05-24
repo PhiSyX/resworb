@@ -8,8 +8,10 @@ mod hr;
 mod li;
 mod ol;
 mod pre;
+mod ul;
 
 pub use self::{
     div::HTMLDivElement, dl::HTMLDListElement, hr::HTMLHRElement,
     li::HTMLLIElement, ol::HTMLOListElement, pre::HTMLPreElement,
+    ul::HTMLUListElement,
 };
