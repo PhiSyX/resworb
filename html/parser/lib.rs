@@ -247,7 +247,9 @@ where
             | InsertionMode::InCell => todo!(),
             | InsertionMode::InSelect => todo!(),
             | InsertionMode::InSelectInTable => todo!(),
-            | InsertionMode::InTemplate => todo!(),
+            | InsertionMode::InTemplate => {
+                self.handle_in_template_insertion_mode(token)
+            }
             | InsertionMode::AfterBody => {
                 self.handle_after_body_insertion_mode(token)
             }
@@ -4528,6 +4530,27 @@ where
             }
 
             | _ => unreachable!(),
+        }
+    }
+
+    fn handle_in_template_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // A character token
+            // A comment token
+            // A DOCTYPE token
+            //
+            // Traiter le jeton selon les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Character(_)
+            | HTMLToken::Comment(_)
+            | HTMLToken::DOCTYPE(_) => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            _ => todo!(),
         }
     }
 
