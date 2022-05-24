@@ -5,7 +5,9 @@
 mod div;
 mod dl;
 mod hr;
+mod pre;
 
 pub use self::{
     div::HTMLDivElement, dl::HTMLDListElement, hr::HTMLHRElement,
+    pre::HTMLPreElement,
 };
