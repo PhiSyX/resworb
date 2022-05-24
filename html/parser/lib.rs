@@ -2,7 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-#![feature(explicit_generic_args_with_impl_trait, type_name_of_val)]
+#![feature(
+    explicit_generic_args_with_impl_trait,
+    type_name_of_val,
+    option_result_contains
+)]
 
 mod codepoint;
 mod error;
@@ -4842,6 +4846,43 @@ where
                     InsertionMode::InHead,
                     token,
                 );
+            }
+
+            // A start tag whose tag name is "input"
+            //
+            // Si le jeton ne possède pas d'attribut portant le nom "type",
+            // ou s'il en possède un, mais que la valeur de cet attribut
+            // n'est pas une correspondance ASCII insensible à la casse
+            // pour la chaîne "hidden", alors : nous devons agir comme
+            // décrit dans l'entrée "anything else" ci-dessous.
+            // Sinon:
+            // Erreur d'analyse.
+            // Insérer un élément HTML pour le jeton.
+            // Retirez cet élément d'entrée de la pile des éléments
+            // ouverts.
+            // Faire savoir que le drapeau self-closing du jeton, s'il
+            // est activé.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    ref attributes,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::input == name
+                && attributes.iter().any(|attr| {
+                    attr.name == "type"
+                        && attr.value.eq_ignore_ascii_case("hidden")
+                }) =>
+            {
+                self.parse_error(&token);
+                let element = self.insert_html_element(tag_token);
+
+                self.stack_of_open_elements.remove_first_tag_matching(
+                    |node| element.contains(node),
+                );
+
+                token.as_tag_mut().set_acknowledge_self_closing_flag();
             }
             | _ => todo!(),
         }
