@@ -4884,6 +4884,44 @@ where
 
                 token.as_tag_mut().set_acknowledge_self_closing_flag();
             }
+
+            // A start tag whose tag name is "form"
+            //
+            // Erreur d'analyse.
+            // S'il existe un élément template sur la pile des éléments
+            // ouverts, ou si le pointeur de l'élément de formulaire n'est
+            // pas null, nous devons ignorer le jeton.
+            // Sinon:
+            // Insérer un élément HTML pour le jeton, et définir le
+            // pointeur de l'élément form pour qu'il pointe sur l'élément
+            // créé.
+            // Retirer cet élément de formulaire de la pile des éléments
+            // ouverts.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::form == name => {
+                self.parse_error(&token);
+
+                if self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_names::template)
+                    || self.form_element_pointer.is_some()
+                {
+                    /* Ignore */
+                    return;
+                }
+
+                let element = self.insert_html_element(tag_token);
+                self.form_element_pointer = element.clone();
+
+                self.stack_of_open_elements.remove_first_tag_matching(
+                    |node| element.contains(node),
+                );
+            }
             | _ => todo!(),
         }
     }
