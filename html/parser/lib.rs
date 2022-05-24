@@ -248,7 +248,9 @@ where
                 self.handle_in_table_insertion_mode(token);
             }
             | InsertionMode::InTableText => todo!(),
-            | InsertionMode::InCaption => todo!(),
+            | InsertionMode::InCaption => {
+                self.handle_in_caption_insertion_mode(token);
+            }
             | InsertionMode::InColumnGroup => todo!(),
             | InsertionMode::InTableBody => todo!(),
             | InsertionMode::InRow => todo!(),
@@ -4948,6 +4950,55 @@ where
                 );
                 self.foster_parenting = false;
             }
+        }
+    }
+
+    fn handle_in_caption_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // An end tag whose tag name is "caption"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément
+            // caption dans la portée de la table, il s'agit d'une erreur
+            // d'analyse ; ignorer le jeton. (cas du fragment)
+            // Sinon:
+            // Générer des balises de fin implicites.
+            // Si le nœud actuel n'est pas un élément caption, il s'agit
+            // d'une erreur d'analyse.
+            // Retirer des éléments de cette pile jusqu'à ce qu'un élément
+            // caption ait été extrait de la pile.
+            // Effacer la liste des éléments de mise en forme actifs
+            // jusqu'au dernier marqueur.
+            // Passer le mode d'insertion à "in table".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::caption == name => {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::caption,
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    return;
+                }
+
+                self.generate_implied_end_tags();
+
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name() != tag_names::caption
+                    {
+                        self.parse_error(&token);
+                    }
+                }
+
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_names::caption);
+                self.list_of_active_formatting_elements
+                    .clear_up_to_the_last_marker();
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+            }
+
+            | _ => todo!(),
         }
     }
 
