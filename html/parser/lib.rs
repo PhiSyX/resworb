@@ -4794,6 +4794,33 @@ where
                     .pop_until_tag(tag_names::table);
                 self.reset_insertion_mode_appropriately();
             }
+
+            // An end tag whose tag name is one of: "body", "caption",
+            // "col", "colgroup", "html", "tbody", "td", "tfoot", "th",
+            // "thead", "tr"
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if name.is_one_of([
+                tag_names::body,
+                tag_names::caption,
+                tag_names::col,
+                tag_names::colgroup,
+                tag_names::html,
+                tag_names::tbody,
+                tag_names::td,
+                tag_names::tfoot,
+                tag_names::th,
+                tag_names::thead,
+                tag_names::tr,
+            ]) =>
+            {
+                self.parse_error(&token);
+                /* Ignore */
+            }
             | _ => todo!(),
         }
     }
