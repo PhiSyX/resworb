@@ -65,6 +65,11 @@ pub enum HTMLElement {
     ),
 
     // 4.4 Grouping content
+    GroupingContentHr(
+        /// 4.4.2 The hr element
+        html_elements::HTMLHRElement,
+    ),
+
     GroupingContentDiv(
         /// 4.4.15 The div element
         html_elements::HTMLDivElement,
@@ -248,6 +253,9 @@ impl str::FromStr for HTMLElement {
             ),
             | _ => {
                 return Err("Element non pris en charge pour le moment.")
+            | tag_names::hr => Self::GroupingContentHr(
+                html_elements::HTMLHRElement::default(),
+            ),
             | tag_names::div => Self::GroupingContentDiv(
                 html_elements::HTMLDivElement::default(),
             ),
@@ -280,6 +288,7 @@ impl fmt::Display for HTMLElement {
                 | Self::DocumentHtml(el) => el.tag_name(),
                 | Self::MetadataHead(el) => el.tag_name(),
                 | Self::MetadataTitle(el) => el.tag_name(),
+                | Self::GroupingContentHr(el) => el.tag_name(),
                 | Self::GroupingContentDiv(el) => el.tag_name(),
                 | Self::TextLevelSpan(el) => el.tag_name(),
                 | Self::FormButton(el) => el.tag_name(),

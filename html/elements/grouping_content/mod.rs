@@ -3,5 +3,6 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 mod div;
+mod hr;
 
-pub use self::div::HTMLDivElement;
+pub use self::{div::HTMLDivElement, hr::HTMLHRElement};
