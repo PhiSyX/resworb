@@ -60,6 +60,7 @@ where
     character_insertion_builder: String,
     head_element_pointer: Option<TreeNode<Node>>,
     form_element_pointer: Option<TreeNode<Node>>,
+    pending_table_character_tokens: Vec<HTMLToken>,
 }
 
 struct AdjustedInsertionLocation {
@@ -109,6 +110,7 @@ where
             character_insertion_builder: String::new(),
             head_element_pointer: None,
             form_element_pointer: None,
+            pending_table_character_tokens: Vec::default(),
         }
     }
 }
@@ -238,7 +240,9 @@ where
             | InsertionMode::Text => {
                 self.handle_text_insertion_mode(token);
             }
-            | InsertionMode::InTable => todo!(),
+            | InsertionMode::InTable => {
+                self.handle_in_table_insertion_mode(token);
+            }
             | InsertionMode::InTableText => todo!(),
             | InsertionMode::InCaption => todo!(),
             | InsertionMode::InColumnGroup => todo!(),
@@ -4121,11 +4125,8 @@ where
                 self.stack_of_open_elements.pop();
                 tag_token.set_acknowledge_self_closing_flag();
                 if !tag_token.attributes.iter().any(|attr| {
-                    if attr.name == "type" {
-                        attr.value.eq_ignore_ascii_case("hidden")
-                    } else {
-                        false
-                    }
+                    attr.name == "type"
+                        && attr.value.eq_ignore_ascii_case("hidden")
                 }) {
                     self.frameset_ok_flag = FramesetOkFlag::NotOk;
                 }
@@ -4432,7 +4433,7 @@ where
             // "colgroup", "frame", "head", "tbody", "td", "tfoot", "th",
             // "thead", "tr"
             //
-            // Erreur d'analyse. Ignorer le token.
+            // Erreur d'analyse. Ignorer le jeton.
             #[allow(deprecated)]
             | HTMLToken::Tag(HTMLTagToken {
                 ref name,
@@ -4536,6 +4537,41 @@ where
             }
 
             | _ => unreachable!(),
+        }
+    }
+
+    fn handle_in_table_insertion_mode(&mut self, mut token: HTMLToken) {
+        let cnode = self.current_node().expect("Le noeud actuel");
+
+        match token {
+            // A character token, if the current node is table, tbody,
+            // tfoot, thead, or tr element
+            //
+            // La table en attente de jetons de caractères doit être une
+            // liste de jetons vide.
+            // Le mode d'insertion d'origine est le mode d'insertion
+            // actuel.
+            // Passer le mode d'insertion à "in table text" puis retraiter
+            // le jeton.
+            | HTMLToken::Character(_)
+                if !cnode.element_ref().tag_name().is_one_of([
+                    tag_names::table,
+                    tag_names::tbody,
+                    tag_names::tfoot,
+                    tag_names::thead,
+                    tag_names::tr,
+                ]) =>
+            {
+                self.pending_table_character_tokens.clear();
+                self.original_insertion_mode
+                    .switch_to(self.insertion_mode);
+                self.insertion_mode.switch_to(InsertionMode::InTableText);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+            | _ => todo!(),
         }
     }
 
