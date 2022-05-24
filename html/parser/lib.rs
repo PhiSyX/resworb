@@ -4612,6 +4612,31 @@ where
                     token,
                 );
             }
+
+            // A start tag whose tag name is "col"
+            //
+            // Retirer le mode d'insertion template actuel de la pile des
+            // modes d'insertion des templates.
+            // Ajouter "in column group" sur la pile des modes d'insertion
+            // de template de sorte qu'il soit le nouveau mode
+            // d'insertion de template actuel.
+            // Passer le mode d'insertion à "in column group", puis
+            // retraiter le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::col == name => {
+                self.stack_of_template_insertion_modes.pop();
+                self.stack_of_template_insertion_modes
+                    .push(InsertionMode::InColumnGroup);
+                self.insertion_mode
+                    .switch_to(InsertionMode::InColumnGroup);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
             _ => todo!(),
         }
     }
