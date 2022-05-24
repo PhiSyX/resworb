@@ -4550,6 +4550,37 @@ where
                 );
             }
 
+            // A start tag whose tag name is one of: "base", "basefont",
+            // "bgsound", "link", "meta", "noframes", "script", "style",
+            // "template", "title"
+            // An end tag whose tag name is "template"
+            //
+            // Traiter le jeton selon les règles du mode d'insertion
+            // "in head".
+            #[allow(deprecated)]
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name, is_end, ..
+            }) if !is_end
+                && name.is_one_of([
+                    tag_names::base,
+                    tag_names::basefont,
+                    tag_names::bgsound,
+                    tag_names::link,
+                    tag_names::meta,
+                    tag_names::noframes,
+                    tag_names::script,
+                    tag_names::style,
+                    tag_names::template,
+                    tag_names::title,
+                ])
+                || is_end && tag_names::template == name =>
+            {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+
             _ => todo!(),
         }
     }
