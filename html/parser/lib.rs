@@ -4543,6 +4543,34 @@ where
     fn handle_in_table_insertion_mode(&mut self, mut token: HTMLToken) {
         let cnode = self.current_node().expect("Le noeud actuel");
 
+        /// Lorsque les étapes ci-dessus demandent à l'UA de vider la pile
+        /// pour revenir à un contexte de tableau, cela signifie que l'UA
+        /// doit, tant que le nœud actuel n'est pas un élément de tableau,
+        /// de modèle ou html, extraire des éléments de la pile d'éléments
+        /// ouverts.
+        fn clear_stack_back_to_table_context<C>(parser: &mut HTMLParser<C>)
+        where
+            C: Iterator<Item = CodePoint>,
+        {
+            while let Some(cnode) = parser.current_node() {
+                if !cnode.element_ref().tag_name().is_one_of([
+                    tag_names::table,
+                    tag_names::template,
+                    tag_names::html,
+                ]) {
+                    parser.stack_of_open_elements.pop();
+                } else {
+                    break;
+                }
+            }
+
+            if let Some(cnode) = parser.current_node() {
+                if cnode.element_ref().tag_name() == tag_names::html {
+                    assert!(parser.parsing_fragment);
+                }
+            }
+        }
+
         match token {
             // A character token, if the current node is table, tbody,
             // tfoot, thead, or tr element
@@ -4585,6 +4613,28 @@ where
             | HTMLToken::DOCTYPE(_) => {
                 self.parse_error(&token);
                 /* Ignore */
+            }
+
+            // A start tag whose tag name is "caption"
+            //
+            // Effacer la pile pour revenir à un contexte de table. (Voir
+            // ci-dessus.)
+            // Insérer un marqueur à la fin de la liste des éléments de
+            // mise en forme actifs.
+            // Insérer un élément HTML pour le jeton, puis passer le mode
+            // d'insertion à "in caption".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::caption == name => {
+                clear_stack_back_to_table_context(self);
+                self.list_of_active_formatting_elements
+                    .push(Entry::Marker);
+                self.insert_html_element(tag_token);
+                self.insertion_mode.switch_to(InsertionMode::InCaption);
             }
             | _ => todo!(),
         }
