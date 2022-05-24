@@ -641,6 +641,7 @@ where
     fn handle_rcdata_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0026 AMPERSAND (&)
+            //
             // Définir l'état de retour à l'état `rcdata`. Passer à l'état
             // `character-reference`.
             | Some('&') => self
@@ -684,6 +685,7 @@ where
     fn handle_rawtext_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+003C LESS-THAN SIGN (<)
+            //
             // Passer à l'état `rawtext-less-than-sign`.
             | Some('<') => self
                 .switch_state_to("rawtext-less-than-sign")
@@ -1910,7 +1912,7 @@ where
             // U+0000 NULL
             //
             // Il s'agit d'une erreur d'analyse de type
-            // `unexpected-null-character`. Passez à l'état
+            // `unexpected-null-character`. Passer à l'état
             // `script-data-double-escaped`. Émettre un jeton `character`
             // U+FFFD REPLACEMENT CHARACTER.
             | Some('\0') => self
@@ -3973,7 +3975,7 @@ where
         match self.stream.next_input_char() {
             // U+005D RIGHT SQUARE BRACKET (])
             //
-            // Passez à l'état `cdata-section-end`.
+            // Passer à l'état `cdata-section-end`.
             | Some(']') => {
                 self.switch_state_to("cdata-section-end").and_continue()
             }

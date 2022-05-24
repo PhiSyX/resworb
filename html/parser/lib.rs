@@ -447,9 +447,9 @@ where
             //   - Si le nom de balise du jeton est "script", et que le
             //     nouveau nœud courant se trouve dans l'espace de noms
             //     SVG.
-            //     - Accusez réception du drapeau de fermeture automatique
-            //       du jeton, puis agissez comme décrit dans les étapes
-            //       pour une balise de fin "script" ci-dessous.
+            //     - Accuser réception du drapeau de fermeture automatique
+            //       du jeton, puis agir comme décrit dans les étapes pour
+            //       une balise de fin "script" ci-dessous.
             //   - Sinon
             //     - Retirer le nœud actuel de la pile des éléments ouverts
             //       et reconnaître le drapeau de self-closing du jeton.
@@ -3449,7 +3449,7 @@ where
             // A start tag whose tag name is "button"
             //
             // 1. Si la pile d'éléments ouverts contient un élément bouton,
-            // exécutez ces sous-étapes :
+            // nous devons exécuter ces sous-étapes :
             //    1.1. Erreur d'analyse.
             //    1.2. Générer des balises de fin implicites.
             //    1.3. Extraire des éléments de la pile d'éléments ouverts
@@ -3727,7 +3727,7 @@ where
             // ayant le même nom de balise que celui du jeton, il s'agit
             // d'une erreur d'analyse ; ignorer le jeton.
             //
-            // Sinon, exécutez ces étapes :
+            // Sinon, nous devons exécuter ces étapes :
             //   1. Générer les balises de fin implicites, sauf pour les
             // éléments HTML ayant le même nom de balise que le jeton.
             //   2. Si le noeud actuel n'est pas un élément HTML ayant le
@@ -3774,8 +3774,8 @@ where
             // Si la pile d'éléments ouverts ne contient pas d'élément HTML
             // dont le nom de balise est l'un des suivants : "h1", "h2",
             // "h3", "h4", "h5" ou "h6", il s'agit d'une erreur d'analyse ;
-            // ignorez le jeton.
-            // Sinon, exécutez ces étapes :
+            // ignorer le jeton.
+            // Sinon, nous devons exécuter ces étapes :
             //   1. Génère des balises de fin implicites.
             //   2. Si le nœud actuel n'est pas un élément HTML ayant le
             // même nom de balise que celui du jeton, il s'agit
@@ -3850,7 +3850,7 @@ where
             //
             // Reconstruire les éléments de mise en forme actifs, s'il y en
             // a.
-            // Insérez un élément HTML pour le jeton. Pousser cet élément
+            // Insérer un élément HTML pour le jeton. Pousser cet élément
             // dans la liste des éléments de formatage actifs.
             #[allow(deprecated)]
             | HTMLToken::Tag(
@@ -3889,10 +3889,9 @@ where
             // Si la pile d'éléments ouverts comporte un élément nobr dans
             // sa portée, il s'agit d'une erreur d'analyse ; exécuter
             // l'algorithme de l'agence d'adoption pour le jeton, puis
-            // reconstruisez à nouveau les éléments de formatage actifs, le
-            // cas échéant.
-            // Insérer un élément HTML pour le jeton. Pousser cet élément
-            // dans la liste des éléments de formatage actifs.
+            // reconstruire à nouveau les éléments de formatage actifs,
+            // s'il y en a. Insérer un élément HTML pour le jeton. Pousser
+            // cet élément dans la liste des éléments de formatage actifs.
             #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
@@ -4162,7 +4161,7 @@ where
             // A start tag whose tag name is "hr"
             //
             // Si la pile des éléments ouverts a un élément p dans la
-            // portée du bouton, alors fermez un élément p.
+            // portée du bouton, alors nous devons fermer un élément p.
             // Insérer un élément HTML pour le jeton. Retirer immédiatement
             // le nœud actuel de la pile des éléments ouverts.
             // Faire savoir que le drapeau self-closing du jeton, s'il est
@@ -4221,7 +4220,7 @@ where
             // 4. Laisser le mode d'insertion d'origine être le mode
             // d'insertion actuel.
             // 5. Définir l'indicateur frameset-ok à "not ok".
-            // 6. Passez le mode d'insertion à "text".
+            // 6. Passer le mode d'insertion à "text".
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -4860,7 +4859,7 @@ where
             // Sinon:
             // Erreur d'analyse.
             // Insérer un élément HTML pour le jeton.
-            // Retirez cet élément d'entrée de la pile des éléments
+            // Retirer cet élément d'entrée de la pile des éléments
             // ouverts.
             // Faire savoir que le drapeau self-closing du jeton, s'il
             // est activé.
