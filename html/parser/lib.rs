@@ -4519,7 +4519,18 @@ where
                     token,
                 );
             }
-            // Toute autre étiquette de fin
+
+            // TODO: active spéculative html parser
+            // An end tag whose tag name is "script"
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::script == name => {
+                todo!()
+            }
+
+            // Any other end tag
             //
             // Retirer le nœud actuel de la pile des éléments ouverts.
             // Passer le mode d'insertion sur le mode d'insertion
