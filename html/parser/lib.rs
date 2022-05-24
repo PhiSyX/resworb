@@ -4933,7 +4933,21 @@ where
                     token,
                 );
             }
-            | _ => todo!(),
+
+            // Anything else
+            //
+            // Erreur d'analyse. Activer le foster_parenting, traiter le
+            // jeton en utilisant les règles du mode d'insertion "in body",
+            // puis désactiver foster_parenting.
+            | _ => {
+                self.parse_error(&token);
+                self.foster_parenting = true;
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+                self.foster_parenting = false;
+            }
         }
     }
 
