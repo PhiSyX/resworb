@@ -12,6 +12,7 @@ mod forms;
 mod grouping_content;
 pub mod interface;
 mod sections;
+mod tables;
 mod tags;
 
 pub use self::{
@@ -22,6 +23,7 @@ pub use self::{
     metadata::*,
     scripting::*,
     sections::*,
+    tables::*,
     tags::{tag_attributes, tag_names},
     text_level::*,
 };

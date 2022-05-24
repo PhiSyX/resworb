@@ -106,6 +106,12 @@ pub enum HTMLElement {
         html_elements::HTMLImageElement,
     ),
 
+    // 4.9 Tabular data
+    TabularDataTable(
+        /// 4.9.1 The table element
+        html_elements::HTMLTableElement,
+    ),
+
     // 4.10 Forms
     FormButton(
         /// 4.10.6 The button element
@@ -309,6 +315,10 @@ impl str::FromStr for HTMLElement {
                 html_elements::HTMLImageElement::default(),
             ),
 
+            | tag_names::table => Self::TabularDataTable(
+                html_elements::HTMLTableElement::default(),
+            ),
+
             | tag_names::button => Self::FormButton(
                 html_elements::HTMLButtonElement::default(),
             ),
@@ -344,6 +354,7 @@ impl fmt::Display for HTMLElement {
                 | Self::GroupingContentDiv(el) => el.tag_name(),
                 | Self::TextLevelSpan(el) => el.tag_name(),
                 | Self::EmbeddedContentImg(el) => el.tag_name(),
+                | Self::TabularDataTable(el) => el.tag_name(),
                 | Self::FormButton(el) => el.tag_name(),
                 | Self::SectionBody(el) => el.tag_name(),
                 | Self::SectionHeading(el) => el.tag_name(),
