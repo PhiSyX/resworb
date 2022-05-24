@@ -59,6 +59,11 @@ pub enum HTMLElement {
         /// 4.3.1 The body element
         html_elements::HTMLBodyElement,
     ),
+    SectionHeading(
+        /// 4.3.6 The h1, h2, h3, h4, h5, and h6 elements
+        html_elements::HTMLHeadingElement,
+    ),
+
     // 4.12 Scripting
     ScriptingScript(html_elements::HTMLScriptElement<DocumentNode>),
     ScriptingTemplate(
@@ -225,6 +230,14 @@ impl str::FromStr for HTMLElement {
             ),
             | _ => {
                 return Err("Element non pris en charge pour le moment.")
+            | heading @ (tag_names::h1
+            | tag_names::h2
+            | tag_names::h3
+            | tag_names::h4
+            | tag_names::h5
+            | tag_names::h6) => Self::SectionHeading(
+                html_elements::HTMLHeadingElement::new(heading),
+            ),
             }
         })
     }
@@ -240,6 +253,7 @@ impl fmt::Display for HTMLElement {
                 | Self::MetadataHead(el) => el.tag_name(),
                 | Self::MetadataTitle(el) => el.tag_name(),
                 | Self::SectionBody(el) => el.tag_name(),
+                | Self::SectionHeading(el) => el.tag_name(),
                 | Self::ScriptingScript(el) => el.tag_name(),
                 | Self::ScriptingTemplate(el) => el.tag_name(),
             }
