@@ -4661,6 +4661,30 @@ where
                     token,
                 );
             }
+
+            // A start tag whose tag name is one of: "td", "th"
+            //
+            // Retirer le mode d'insertion template actuel de la pile des
+            // modes d'insertion des templates.
+            // Ajouter "in row" sur la pile des modes d'insertion de
+            // template de sorte qu'il soit le nouveau mode d'insertion
+            // de template actuel.
+            // Passer le mode d'insertion à "in row", puis retraiter le
+            // jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([tag_names::td, tag_names::th]) => {
+                self.stack_of_template_insertion_modes.pop();
+                self.stack_of_template_insertion_modes
+                    .push(InsertionMode::InRow);
+                self.insertion_mode.switch_to(InsertionMode::InRow);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
             _ => todo!(),
         }
     }
