@@ -7,6 +7,7 @@ mod metadata;
 mod scripting;
 mod text_level;
 
+mod embedded_content;
 mod forms;
 mod grouping_content;
 pub mod interface;
@@ -15,6 +16,7 @@ mod tags;
 
 pub use self::{
     document::*,
+    embedded_content::*,
     forms::*,
     grouping_content::*,
     metadata::*,

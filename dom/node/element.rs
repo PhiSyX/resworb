@@ -100,6 +100,12 @@ pub enum HTMLElement {
         html_elements::HTMLSpanElement,
     ),
 
+    // 4.8 Embedded content
+    EmbeddedContentImg(
+        /// 4.8.3 The img element
+        html_elements::HTMLImageElement,
+    ),
+
     // 4.10 Forms
     FormButton(
         /// 4.10.6 The button element
@@ -255,6 +261,7 @@ impl str::FromStr for HTMLElement {
             | tag_names::html => Self::DocumentHtml(
                 html_elements::HTMLHtmlElement::default(),
             ),
+
             | tag_names::head => Self::MetadataHead(
                 html_elements::HTMLHeadElement::default(),
             ),
@@ -264,12 +271,14 @@ impl str::FromStr for HTMLElement {
             | tag_names::title => Self::MetadataTitle(
                 html_elements::HTMLTitleElement::default(),
             ),
+
             | tag_names::template => Self::ScriptingTemplate(
                 html_elements::HTMLTemplateElement::default(),
             ),
             | tag_names::script => Self::ScriptingScript(
                 html_elements::HTMLScriptElement::default(),
             ),
+
             | tag_names::hr => Self::GroupingContentHr(
                 html_elements::HTMLHRElement::default(),
             ),
@@ -291,9 +300,15 @@ impl str::FromStr for HTMLElement {
             | tag_names::div => Self::GroupingContentDiv(
                 html_elements::HTMLDivElement::default(),
             ),
+
             | tag_names::span => Self::TextLevelSpan(
                 html_elements::HTMLSpanElement::default(),
             ),
+
+            | tag_names::img => Self::EmbeddedContentImg(
+                html_elements::HTMLImageElement::default(),
+            ),
+
             | tag_names::button => Self::FormButton(
                 html_elements::HTMLButtonElement::default(),
             ),
@@ -328,6 +343,7 @@ impl fmt::Display for HTMLElement {
                 | Self::GroupingContentDl(el) => el.tag_name(),
                 | Self::GroupingContentDiv(el) => el.tag_name(),
                 | Self::TextLevelSpan(el) => el.tag_name(),
+                | Self::EmbeddedContentImg(el) => el.tag_name(),
                 | Self::FormButton(el) => el.tag_name(),
                 | Self::SectionBody(el) => el.tag_name(),
                 | Self::SectionHeading(el) => el.tag_name(),
