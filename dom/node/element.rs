@@ -77,6 +77,10 @@ pub enum HTMLElement {
         /// 4.4.3 The pre element
         html_elements::HTMLPreElement,
     ),
+    GroupingContentBlockquote(
+        /// 4.4.4 The blockquote element
+        html_elements::HTMLQuoteElement,
+    ),
     GroupingContentOl(
         /// 4.4.5 The ol element
         html_elements::HTMLOListElement,
@@ -298,6 +302,9 @@ impl str::FromStr for HTMLElement {
             | tag_names::pre => Self::GroupingContentPre(
                 html_elements::HTMLPreElement::default(),
             ),
+            | tag_names::blockquote => Self::GroupingContentBlockquote(
+                html_elements::HTMLQuoteElement::default(),
+            ),
             | tag_names::ol => Self::GroupingContentOl(
                 html_elements::HTMLOListElement::default(),
             ),
@@ -355,6 +362,7 @@ impl fmt::Display for HTMLElement {
                 | Self::MetadataMeta(el) => el.tag_name(),
                 | Self::GroupingContentHr(el) => el.tag_name(),
                 | Self::GroupingContentPre(el) => el.tag_name(),
+                | Self::GroupingContentBlockquote(el) => el.tag_name(),
                 | Self::GroupingContentOl(el) => el.tag_name(),
                 | Self::GroupingContentUl(el) => el.tag_name(),
                 | Self::GroupingContentLi(el) => el.tag_name(),

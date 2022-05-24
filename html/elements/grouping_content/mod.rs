@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+mod blockquote;
 mod div;
 mod dl;
 mod hr;
@@ -11,7 +12,7 @@ mod pre;
 mod ul;
 
 pub use self::{
-    div::HTMLDivElement, dl::HTMLDListElement, hr::HTMLHRElement,
-    li::HTMLLIElement, ol::HTMLOListElement, pre::HTMLPreElement,
-    ul::HTMLUListElement,
+    blockquote::HTMLQuoteElement, div::HTMLDivElement,
+    dl::HTMLDListElement, hr::HTMLHRElement, li::HTMLLIElement,
+    ol::HTMLOListElement, pre::HTMLPreElement, ul::HTMLUListElement,
 };
