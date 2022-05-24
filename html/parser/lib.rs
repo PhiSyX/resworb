@@ -4581,6 +4581,37 @@ where
                 );
             }
 
+            // A start tag whose tag name is one of: "caption", "colgroup",
+            // "tbody", "tfoot", "thead"
+            //
+            // Retirer le mode d'insertion template actuel de la pile des
+            // modes d'insertion des templates.
+            // Ajouter "in table" sur la pile des modes d'insertion de
+            // template de sorte qu'il soit le nouveau mode d'insertion
+            // de template actuel.
+            // Passer le mode d'insertion à "in table", puis retraiter le
+            // jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([
+                tag_names::caption,
+                tag_names::colgroup,
+                tag_names::tbody,
+                tag_names::tfoot,
+                tag_names::thead,
+            ]) =>
+            {
+                self.stack_of_template_insertion_modes.pop();
+                self.stack_of_template_insertion_modes
+                    .push(InsertionMode::InTable);
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
             _ => todo!(),
         }
     }
