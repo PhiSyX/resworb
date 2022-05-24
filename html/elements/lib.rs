@@ -8,12 +8,14 @@ mod scripting;
 mod text_level;
 
 pub mod interface;
+mod sections;
 mod tags;
 
 pub use self::{
-    document::HTMLHtmlElement,
-    metadata::{HTMLHeadElement, HTMLTitleElement},
-    scripting::{HTMLScriptElement, HTMLTemplateElement},
+    document::*,
+    metadata::*,
+    scripting::*,
+    sections::*,
     tags::{tag_attributes, tag_names},
-    text_level::HTMLAnchorElement,
+    text_level::*,
 };

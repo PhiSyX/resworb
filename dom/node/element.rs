@@ -54,6 +54,11 @@ pub enum HTMLElement {
         html_elements::HTMLTitleElement,
     ),
 
+    // 4.3 Sections
+    SectionBody(
+        /// 4.3.1 The body element
+        html_elements::HTMLBodyElement,
+    ),
     // 4.12 Scripting
     ScriptingScript(html_elements::HTMLScriptElement<DocumentNode>),
     ScriptingTemplate(
@@ -206,6 +211,9 @@ impl str::FromStr for HTMLElement {
             | tag_names::head => Self::MetadataHead(
                 html_elements::HTMLHeadElement::default(),
             ),
+            | tag_names::body => {
+                Self::SectionBody(html_elements::HTMLBodyElement::default())
+            }
             | tag_names::title => Self::MetadataTitle(
                 html_elements::HTMLTitleElement::default(),
             ),
@@ -231,6 +239,7 @@ impl fmt::Display for HTMLElement {
                 | Self::DocumentHtml(el) => el.tag_name(),
                 | Self::MetadataHead(el) => el.tag_name(),
                 | Self::MetadataTitle(el) => el.tag_name(),
+                | Self::SectionBody(el) => el.tag_name(),
                 | Self::ScriptingScript(el) => el.tag_name(),
                 | Self::ScriptingTemplate(el) => el.tag_name(),
             }

@@ -575,6 +575,10 @@ impl HTMLTagToken {
 
 // &HTMLTagToken
 impl HTMLTagToken {
+    pub fn local_name(&self) -> &str {
+        &self.name
+    }
+
     pub fn tag_name(&self) -> tag_names {
         let Self { name, .. } = self;
         name.parse().expect("Devrait être un nom de balise valide")

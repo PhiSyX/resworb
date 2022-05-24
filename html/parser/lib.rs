@@ -909,24 +909,25 @@ where
         &mut self,
         predicate: impl Fn(&str) -> bool,
     ) {
-        let node = self.current_node().expect("Le noeud actuel");
-        let element = node.element_ref();
-        let name = element.local_name();
-        while predicate(&name)
-            && name.is_one_of([
-                tag_names::dd,
-                tag_names::dt,
-                tag_names::li,
-                tag_names::optgroup,
-                tag_names::option,
-                tag_names::p,
-                tag_names::rb,
-                tag_names::rp,
-                tag_names::rt,
-                tag_names::rtc,
-            ])
-        {
-            self.stack_of_open_elements.pop();
+        if let Some(cnode) = self.current_node() {
+            let element = cnode.element_ref();
+            let name = element.local_name();
+            while predicate(&name)
+                && name.is_one_of([
+                    tag_names::dd,
+                    tag_names::dt,
+                    tag_names::li,
+                    tag_names::optgroup,
+                    tag_names::option,
+                    tag_names::p,
+                    tag_names::rb,
+                    tag_names::rp,
+                    tag_names::rt,
+                    tag_names::rtc,
+                ])
+            {
+                self.stack_of_open_elements.pop();
+            }
         }
     }
 
@@ -1359,15 +1360,15 @@ where
     ) -> bool {
         let subject = token.as_tag().tag_name();
 
-        let cnode =
-            self.current_node().expect("adoption-agency-algorithm");
-        if cnode.element_ref().tag_name() == subject
-            && !self
-                .list_of_active_formatting_elements
-                .contains_element(cnode)
-        {
-            self.stack_of_open_elements.pop();
-            return false;
+        if let Some(cnode) = self.current_node() {
+            if cnode.element_ref().tag_name() == subject
+                && !self
+                    .list_of_active_formatting_elements
+                    .contains_element(cnode)
+            {
+                self.stack_of_open_elements.pop();
+                return false;
+            }
         }
 
         let mut outer_loop_counter = 0;
@@ -2447,7 +2448,7 @@ where
                 parser.stack_of_open_elements.iter().enumerate().rev()
             {
                 let current_tag_name = node.element_ref().tag_name();
-                if tag_token.tag_name() == current_tag_name {
+                if current_tag_name == tag_token.local_name() {
                     if node
                         == parser.current_node().expect("Le noeud actuel")
                     {
@@ -2504,14 +2505,10 @@ where
 
             parser.generate_implied_end_tags_except_for(tag_name);
 
-            if tag_name
-                != parser
-                    .current_node()
-                    .expect("Le noeud actuel")
-                    .element_ref()
-                    .local_name()
-            {
-                parser.parse_error(token);
+            if let Some(cnode) = parser.current_node() {
+                if tag_name != cnode.element_ref().local_name() {
+                    parser.parse_error(token);
+                }
             }
 
             parser.stack_of_open_elements.pop_until_tag(tag_name);
@@ -3128,22 +3125,18 @@ where
                     close_p_element(self, &token);
                 }
 
-                if self
-                    .current_node()
-                    .expect("Le noeud actuel")
-                    .element_ref()
-                    .local_name()
-                    .is_one_of([
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().local_name().is_one_of([
                         tag_names::h1,
                         tag_names::h2,
                         tag_names::h3,
                         tag_names::h4,
                         tag_names::h5,
                         tag_names::h6,
-                    ])
-                {
-                    self.parse_error(&token);
-                    self.stack_of_open_elements.pop();
+                    ]) {
+                        self.parse_error(&token);
+                        self.stack_of_open_elements.pop();
+                    }
                 }
 
                 self.insert_html_element(tag_token);
