@@ -4705,7 +4705,49 @@ where
                     token,
                 );
             }
-            _ => todo!(),
+
+            // Any other end tag
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken { is_end: true, .. }) => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // An end-of-file token
+            //
+            // S'il n'y a pas d'élément template sur la pile des éléments
+            // ouverts, alors nous devons arrêter l'analyse. (cas du
+            // fragment)
+            // Sinon, il s'agit d'une erreur d'analyse.
+            // Retirer des éléments de la pile d'éléments ouverts jusqu'à
+            // ce qu'un élément template ait été extrait de la pile.
+            // Effacer la liste des éléments de mise en forme actifs
+            // jusqu'au dernier marqueur.
+            // Supprimer le mode d'insertion de template actuel de la pile
+            // des modes d'insertion de template.
+            // Réinitialiser le mode d'insertion de manière appropriée.
+            // Retraiter le jeton.
+            | HTMLToken::EOF => {
+                if !self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_names::template)
+                {
+                    self.stop_parsing = true;
+                    return;
+                }
+
+                self.parse_error(&token);
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_names::template);
+                self.list_of_active_formatting_elements
+                    .clear_up_to_the_last_marker();
+                self.reset_insertion_mode_appropriately();
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
         }
     }
 
