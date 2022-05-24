@@ -3,5 +3,6 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 mod anchor;
+mod span;
 
-pub use self::anchor::HTMLAnchorElement;
+pub use self::{anchor::HTMLAnchorElement, span::HTMLSpanElement};

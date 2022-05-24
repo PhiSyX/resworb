@@ -64,6 +64,12 @@ pub enum HTMLElement {
         html_elements::HTMLHeadingElement,
     ),
 
+    // 4.5 Text-level semantics
+    TextLevelSpan(
+        /// 4.5.26 The span element
+        html_elements::HTMLSpanElement,
+    ),
+
     // 4.12 Scripting
     ScriptingScript(html_elements::HTMLScriptElement<DocumentNode>),
     ScriptingTemplate(
@@ -230,6 +236,9 @@ impl str::FromStr for HTMLElement {
             ),
             | _ => {
                 return Err("Element non pris en charge pour le moment.")
+            | tag_names::span => Self::TextLevelSpan(
+                html_elements::HTMLSpanElement::default(),
+            ),
             | heading @ (tag_names::h1
             | tag_names::h2
             | tag_names::h3
@@ -252,6 +261,7 @@ impl fmt::Display for HTMLElement {
                 | Self::DocumentHtml(el) => el.tag_name(),
                 | Self::MetadataHead(el) => el.tag_name(),
                 | Self::MetadataTitle(el) => el.tag_name(),
+                | Self::TextLevelSpan(el) => el.tag_name(),
                 | Self::SectionBody(el) => el.tag_name(),
                 | Self::SectionHeading(el) => el.tag_name(),
                 | Self::ScriptingScript(el) => el.tag_name(),
