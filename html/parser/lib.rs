@@ -4704,6 +4704,35 @@ where
                 self.insert_html_element(tag_token);
                 self.insertion_mode.switch_to(InsertionMode::InTableBody);
             }
+
+            // A start tag whose tag name is one of: "td", "th", "tr"
+            //
+            // Effacer la pile pour revenir à un contexte de table. (Voir
+            // ci-dessus.)
+            // Insérer un élément HTML pour un jeton de balise de début
+            // "tbody" sans attributs, puis passer le mode d'insertion à
+            // "in table body".
+            // Retraiter le jeton actuel.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([
+                tag_names::td,
+                tag_names::th,
+                tag_names::tr,
+            ]) =>
+            {
+                clear_stack_back_to_table_context(self);
+                self.insert_html_element(
+                    &HTMLTagToken::start().with_name(tag_names::tbody),
+                );
+                self.insertion_mode.switch_to(InsertionMode::InTableBody);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
             | _ => todo!(),
         }
     }
