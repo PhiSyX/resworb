@@ -4680,6 +4680,30 @@ where
                     token,
                 );
             }
+
+            // A start tag whose tag name is one of: "tbody", "tfoot",
+            // "thead"
+            //
+            // Effacer la pile pour revenir à un contexte de table. (Voir
+            // ci-dessus.)
+            // Insérer un élément HTML pour le jeton, puis passer le mode
+            // d'insertion à "in table body".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::tbody,
+                tag_names::tfoot,
+                tag_names::thead,
+            ]) =>
+            {
+                clear_stack_back_to_table_context(self);
+                self.insert_html_element(tag_token);
+                self.insertion_mode.switch_to(InsertionMode::InTableBody);
+            }
             | _ => todo!(),
         }
     }
