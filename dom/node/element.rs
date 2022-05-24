@@ -76,6 +76,12 @@ pub enum HTMLElement {
         html_elements::HTMLSpanElement,
     ),
 
+    // 4.10 Forms
+    FormButton(
+        /// 4.10.6 The button element
+        html_elements::HTMLButtonElement,
+    ),
+
     // 4.12 Scripting
     ScriptingScript(html_elements::HTMLScriptElement<DocumentNode>),
     ScriptingTemplate(
@@ -248,6 +254,10 @@ impl str::FromStr for HTMLElement {
             | tag_names::span => Self::TextLevelSpan(
                 html_elements::HTMLSpanElement::default(),
             ),
+            | tag_names::button => Self::FormButton(
+                html_elements::HTMLButtonElement::default(),
+            ),
+
             | heading @ (tag_names::h1
             | tag_names::h2
             | tag_names::h3
@@ -272,6 +282,7 @@ impl fmt::Display for HTMLElement {
                 | Self::MetadataTitle(el) => el.tag_name(),
                 | Self::GroupingContentDiv(el) => el.tag_name(),
                 | Self::TextLevelSpan(el) => el.tag_name(),
+                | Self::FormButton(el) => el.tag_name(),
                 | Self::SectionBody(el) => el.tag_name(),
                 | Self::SectionHeading(el) => el.tag_name(),
                 | Self::ScriptingScript(el) => el.tag_name(),
