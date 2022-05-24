@@ -3,6 +3,9 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 mod head;
+mod meta;
 mod title;
 
-pub use self::{head::HTMLHeadElement, title::HTMLTitleElement};
+pub use self::{
+    head::HTMLHeadElement, meta::HTMLMetaElement, title::HTMLTitleElement,
+};

@@ -53,6 +53,10 @@ pub enum HTMLElement {
         /// 4.2.2 The title element
         html_elements::HTMLTitleElement,
     ),
+    MetadataMeta(
+        /// 4.2.5 The meta element
+        html_elements::HTMLMetaElement,
+    ),
 
     // 4.3 Sections
     SectionBody(
@@ -277,6 +281,9 @@ impl str::FromStr for HTMLElement {
             | tag_names::title => Self::MetadataTitle(
                 html_elements::HTMLTitleElement::default(),
             ),
+            | tag_names::meta => Self::MetadataMeta(
+                html_elements::HTMLMetaElement::default(),
+            ),
 
             | tag_names::template => Self::ScriptingTemplate(
                 html_elements::HTMLTemplateElement::default(),
@@ -345,6 +352,7 @@ impl fmt::Display for HTMLElement {
                 | Self::DocumentHtml(el) => el.tag_name(),
                 | Self::MetadataHead(el) => el.tag_name(),
                 | Self::MetadataTitle(el) => el.tag_name(),
+                | Self::MetadataMeta(el) => el.tag_name(),
                 | Self::GroupingContentHr(el) => el.tag_name(),
                 | Self::GroupingContentPre(el) => el.tag_name(),
                 | Self::GroupingContentOl(el) => el.tag_name(),
