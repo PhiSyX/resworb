@@ -64,6 +64,12 @@ pub enum HTMLElement {
         html_elements::HTMLHeadingElement,
     ),
 
+    // 4.4 Grouping content
+    GroupingContentDiv(
+        /// 4.4.15 The div element
+        html_elements::HTMLDivElement,
+    ),
+
     // 4.5 Text-level semantics
     TextLevelSpan(
         /// 4.5.26 The span element
@@ -236,6 +242,9 @@ impl str::FromStr for HTMLElement {
             ),
             | _ => {
                 return Err("Element non pris en charge pour le moment.")
+            | tag_names::div => Self::GroupingContentDiv(
+                html_elements::HTMLDivElement::default(),
+            ),
             | tag_names::span => Self::TextLevelSpan(
                 html_elements::HTMLSpanElement::default(),
             ),
@@ -261,6 +270,7 @@ impl fmt::Display for HTMLElement {
                 | Self::DocumentHtml(el) => el.tag_name(),
                 | Self::MetadataHead(el) => el.tag_name(),
                 | Self::MetadataTitle(el) => el.tag_name(),
+                | Self::GroupingContentDiv(el) => el.tag_name(),
                 | Self::TextLevelSpan(el) => el.tag_name(),
                 | Self::SectionBody(el) => el.tag_name(),
                 | Self::SectionHeading(el) => el.tag_name(),
