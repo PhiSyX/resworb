@@ -24,6 +24,8 @@ pub type CodePoint = char;
 // --------- //
 
 pub trait CodePointInterface: Copy {
+    fn codepoint(&self) -> u8;
+
     /// Un point de code ASCII est un point de code situé dans la plage
     /// U+0000 NULL à U+007F DELETE, inclusivement.
     fn is_ascii_code_point(self) -> bool;
@@ -63,6 +65,10 @@ pub trait CodePointInterface: Copy {
 // -------------- //
 
 impl CodePointInterface for CodePoint {
+    fn codepoint(&self) -> u8 {
+        *self as u8
+    }
+
     fn is_ascii_code_point(self) -> bool {
         matches!(self, '\0'..='\u{007F}')
     }
