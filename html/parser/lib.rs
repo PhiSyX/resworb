@@ -252,7 +252,9 @@ where
                 self.handle_in_caption_insertion_mode(token);
             }
             | InsertionMode::InColumnGroup => todo!(),
-            | InsertionMode::InTableBody => todo!(),
+            | InsertionMode::InTableBody => {
+                self.handle_in_table_body_insertion_mode(token);
+            }
             | InsertionMode::InRow => todo!(),
             | InsertionMode::InCell => todo!(),
             | InsertionMode::InSelect => todo!(),
@@ -4548,7 +4550,7 @@ where
     fn handle_in_table_insertion_mode(&mut self, mut token: HTMLToken) {
         let cnode = self.current_node().expect("Le noeud actuel");
 
-        /// Lorsque les étapes ci-dessus demandent à l'UA de vider la pile
+        /// Lorsque les étapes ci-dessous demandent à l'UA de vider la pile
         /// pour revenir à un contexte de tableau, cela signifie que l'UA
         /// doit, tant que le nœud actuel n'est pas un élément de tableau,
         /// de modèle ou html, extraire des éléments de la pile d'éléments
@@ -5092,6 +5094,60 @@ where
                     token,
                 );
             }
+        }
+    }
+
+    fn handle_in_table_body_insertion_mode(&mut self, token: HTMLToken) {
+        /// Lorsque les étapes ci-dessous demandent à l'UA de vider la pile
+        /// pour revenir à un contexte de corps de tableau, cela signifie
+        /// que l'UA doit, tant que le nœud actuel n'est pas un élément
+        /// tbody, tfoot, thead, template ou html, extraire des éléments de
+        /// la pile des éléments ouverts.
+        fn clear_stack_back_to_table_body_context<C>(
+            parser: &mut HTMLParser<C>,
+        ) where
+            C: Iterator<Item = CodePoint>,
+        {
+            while let Some(cnode) = parser.current_node() {
+                if !cnode.element_ref().tag_name().is_one_of([
+                    tag_names::tbody,
+                    tag_names::tfoot,
+                    tag_names::thead,
+                    tag_names::template,
+                    tag_names::html,
+                ]) {
+                    parser.stack_of_open_elements.pop();
+                } else {
+                    break;
+                }
+            }
+
+            if let Some(cnode) = parser.current_node() {
+                if cnode.element_ref().tag_name() == tag_names::html {
+                    assert!(parser.parsing_fragment);
+                }
+            }
+        }
+
+        match token {
+            // A start tag whose tag name is "tr"
+            //
+            // Effacer la pile pour revenir à un contexte "table body".
+            // Insérer un élément HTML pour le jeton, puis passer le mode
+            // d'insertion à "in row".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::tr == name => {
+                clear_stack_back_to_table_body_context(self);
+                self.insert_html_element(tag_token);
+                self.insertion_mode.switch_to(InsertionMode::InRow);
+            }
+
+            | _ => todo!(),
         }
     }
 
