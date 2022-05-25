@@ -5332,6 +5332,35 @@ where
                     .push(Entry::Marker);
             }
 
+            // An end tag whose tag name is "tr"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément tr
+            // dans la portée de la table, il s'agit d'une erreur d'analyse
+            // ; ignorer le jeton.
+            // Sinon:
+            // Effacer la pile pour revenir à un contexte "table row".
+            // Retirer le nœud actuel (qui sera un élément tr) de la pile
+            // des éléments ouverts. Passer le mode d'insertion à
+            // "in table body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::tr == name => {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::tr,
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    /* Ignore */
+                    return;
+                }
+
+                clear_stack_back_to_table_row_context(self);
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InTableBody);
+            }
+
             | _ => todo!(),
         }
     }
