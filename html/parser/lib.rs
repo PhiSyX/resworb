@@ -5497,6 +5497,43 @@ where
     }
 
     fn handle_in_cell_insertion_mode(&mut self, token: HTMLToken) {
+        /// Lorsque les étapes ci-dessous indiquent de fermer la cellule,
+        /// elles signifient qu'il faut exécuter l'algorithme suivant :
+        ///
+        /// 1. Générer des balises de fin implicites.
+        /// 2. Si le nœud actuel n'est pas un élément td ou un élément th,
+        /// il s'agit d'une erreur d'analyse.
+        /// 3. Retirer des éléments de la pile d'éléments ouverts jusqu'à
+        /// ce qu'un élément td ou un élément th ait été retiré de la
+        /// pile.
+        /// 4. Effacer la liste des éléments de mise en forme actifs
+        /// jusqu'au dernier marqueur.
+        /// 5. Passer le mode d'insertion à "in row".
+        fn close_cell<C>(parser: &mut HTMLParser<C>, token: &HTMLToken)
+        where
+            C: Iterator<Item = CodePoint>,
+        {
+            parser.generate_implied_end_tags();
+
+            if let Some(cnode) = parser.current_node() {
+                if !cnode
+                    .element_ref()
+                    .tag_name()
+                    .is_one_of([tag_names::td, tag_names::th])
+                {
+                    parser.parse_error(token);
+                }
+            }
+
+            parser
+                .stack_of_open_elements
+                .pop_until_tags([tag_names::td, tag_names::th]);
+            parser
+                .list_of_active_formatting_elements
+                .clear_up_to_the_last_marker();
+            parser.insertion_mode.switch_to(InsertionMode::InRow);
+        }
+
         match token {
             // An end tag whose tag name is one of: "td", "th"
             //
@@ -5546,6 +5583,47 @@ where
                 self.list_of_active_formatting_elements
                     .clear_up_to_the_last_marker();
                 self.insertion_mode.switch_to(InsertionMode::InRow);
+            }
+
+            // A start tag whose tag name is one of: "caption", "col",
+            // "colgroup", "tbody", "td", "tfoot", "th", "thead", "tr"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément td
+            // ou th dans la portée de la table, il s'agit d'une erreur
+            // d'analyse ; ignorez le jeton. (cas d'un fragment)
+            // Sinon, nous devons fermer la cellule puis retraiter le
+            // jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([
+                tag_names::caption,
+                tag_names::col,
+                tag_names::colgroup,
+                tag_names::tbody,
+                tag_names::td,
+                tag_names::tfoot,
+                tag_names::th,
+                tag_names::thead,
+                tag_names::tr,
+            ]) =>
+            {
+                if !self.stack_of_open_elements.has_elements_in_scope(
+                    [tag_names::td, tag_names::th],
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    /* Ignore */
+                    return;
+                }
+
+                close_cell(self, &token);
+
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
             }
 
             | _ => todo!(),

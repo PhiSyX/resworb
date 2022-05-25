@@ -182,9 +182,19 @@ impl StackOfOpenElements {
     }
 
     pub(crate) fn pop_until_tag(&mut self, tag_name: tag_names) {
+        self.pop_until_tags([tag_name]);
+    }
+
+    pub(crate) fn pop_until_tags(
+        &mut self,
+        tag_names_list: impl IntoIterator<Item = tag_names> + Copy,
+    ) {
         while let Some(node) = self.current_node() {
             let element = node.element_ref();
-            if tag_name == element.local_name() {
+            if tag_names_list
+                .into_iter()
+                .any(|tag_name| tag_name == element.local_name())
+            {
                 self.elements.pop();
                 break;
             }
