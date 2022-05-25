@@ -255,7 +255,9 @@ where
             | InsertionMode::InTableBody => {
                 self.handle_in_table_body_insertion_mode(token);
             }
-            | InsertionMode::InRow => todo!(),
+            | InsertionMode::InRow => {
+                self.handle_in_row_insertion_mode(token);
+            }
             | InsertionMode::InCell => todo!(),
             | InsertionMode::InSelect => todo!(),
             | InsertionMode::InSelectInTable => todo!(),
@@ -5283,6 +5285,54 @@ where
                     token,
                 );
             }
+        }
+    }
+
+    fn handle_in_row_insertion_mode(&mut self, token: HTMLToken) {
+        /// Lorsque les étapes ci-dessus exigent que l'UA vide la pile pour
+        /// revenir à un contexte de ligne de table, cela signifie que l'UA
+        /// doit, tant que le nœud actuel n'est pas un élément tr, template
+        /// ou html, extraire des éléments de la pile d'éléments ouverts.
+        fn clear_stack_back_to_table_row_context<C>(
+            parser: &mut HTMLParser<C>,
+        ) where
+            C: Iterator<Item = CodePoint>,
+        {
+            while let Some(cnode) = parser.stack_of_open_elements.pop() {
+                if !cnode.element_ref().tag_name().is_one_of([
+                    tag_names::tr,
+                    tag_names::template,
+                    tag_names::html,
+                ]) {
+                    parser.stack_of_open_elements.pop();
+                } else {
+                    break;
+                }
+            }
+        }
+        match token {
+            // A start tag whose tag name is one of: "th", "td"
+            //
+            // Effacer la pile pour revenir à un contexte "table row".
+            // Insérer un élément HTML pour le jeton, puis passer le mode
+            // d'insertion à "in cell".
+            // Insérer un marqueur à la fin de la liste des éléments de
+            // mise en forme actifs.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([tag_names::th, tag_names::td]) => {
+                clear_stack_back_to_table_row_context(self);
+                self.insert_html_element(tag_token);
+                self.insertion_mode.switch_to(InsertionMode::InCell);
+                self.list_of_active_formatting_elements
+                    .push(Entry::Marker);
+            }
+
+            | _ => todo!(),
         }
     }
 
