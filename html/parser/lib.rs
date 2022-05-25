@@ -258,7 +258,9 @@ where
             | InsertionMode::InRow => {
                 self.handle_in_row_insertion_mode(token);
             }
-            | InsertionMode::InCell => todo!(),
+            | InsertionMode::InCell => {
+                self.handle_in_cell_insertion_mode(token);
+            }
             | InsertionMode::InSelect => todo!(),
             | InsertionMode::InSelectInTable => todo!(),
             | InsertionMode::InTemplate => {
@@ -5491,6 +5493,62 @@ where
                     token,
                 );
             }
+        }
+    }
+
+    fn handle_in_cell_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // An end tag whose tag name is one of: "td", "th"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément dans
+            // la portée de la table qui soit un élément HTML ayant le même
+            // nom de balise que celui du jeton, il s'agit d'une erreur
+            // d'analyse ; ignorer le jeton.
+            // Sinon:
+            // Générer des balises de fin implicites.
+            // Maintenant, si le nœud actuel n'est pas un élément HTML avec
+            // le même nom de balise que le jeton, il s'agit d'une erreur
+            // d'analyse.
+            // Extraire des éléments de la pile d'éléments ouverts jusqu'à
+            // ce qu'un élément HTML ayant le même nom de balise que le
+            // jeton ait été extrait de la pile.
+            // Effacer la liste des éléments de mise en forme actifs
+            // jusqu'au dernier marqueur.
+            // Passer le mode d'insertion sur "in row".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: true,
+                    ..
+                },
+            ) if name.is_one_of([tag_names::td, tag_names::th]) => {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_token.tag_name(),
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    /* Ignore */
+                    return;
+                }
+
+                self.generate_implied_end_tags();
+
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name()
+                        != tag_token.tag_name()
+                    {
+                        self.parse_error(&token);
+                    }
+                }
+
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_token.tag_name());
+                self.list_of_active_formatting_elements
+                    .clear_up_to_the_last_marker();
+                self.insertion_mode.switch_to(InsertionMode::InRow);
+            }
+
+            | _ => todo!(),
         }
     }
 
