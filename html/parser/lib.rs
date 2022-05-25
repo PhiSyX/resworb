@@ -713,6 +713,14 @@ where
         self.stack_of_open_elements.current_node()
     }
 
+    fn before_current_node(&self) -> Option<&TreeNode<Node>> {
+        let size = self.stack_of_open_elements.len();
+        if size == 0 || size == 1 {
+            return None;
+        }
+        self.stack_of_open_elements.get(size - 2)
+    }
+
     /// L'endroit approprié pour insérer un nœud, en utilisant
     /// éventuellement une cible prioritaire particulière, est la position
     /// dans un élément renvoyé par l'exécution des étapes suivantes :
@@ -5807,6 +5815,45 @@ where
                 }
 
                 self.insert_html_element(tag_token);
+            }
+
+            // An end tag whose tag name is "optgroup"
+            //
+            // Tout d'abord, si le nœud actuel est un élément d'option et
+            // que le nœud qui le précède immédiatement dans la pile des
+            // éléments ouverts est un élément de groupe d'options, il faut
+            // sortir le nœud actuel de la pile des éléments ouverts.
+            // Si le noeud actuel est un élément d'optgroup, alors il faut
+            // sortir ce noeud de la pile des éléments ouverts. Sinon, il
+            // s'agit d'une erreur d'analyse ; ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::optgroup == name => {
+                if let (Some(pnode), Some(cnode)) =
+                    (self.before_current_node(), self.current_node())
+                {
+                    let pelement = pnode.element_ref();
+                    let celement = cnode.element_ref();
+
+                    if celement.tag_name() == tag_names::option
+                        && pelement.tag_name() == tag_names::optgroup
+                    {
+                        self.stack_of_open_elements.pop();
+                    }
+                }
+
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name()
+                        == tag_names::optgroup
+                    {
+                        self.stack_of_open_elements.pop();
+                    } else {
+                        self.parse_error(&token);
+                        /* Ignore */
+                    }
+                }
             }
 
             | _ => todo!(),
