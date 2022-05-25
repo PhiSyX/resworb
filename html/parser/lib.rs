@@ -125,7 +125,7 @@ where
 {
     pub fn run(&mut self) {
         loop {
-            match dd!(&self.tokenizer.next_token()) {
+            match self.tokenizer.next_token() {
                 | None => break,
 
                 // Lorsque chaque jeton est émis par le tokenizer, l'agent
