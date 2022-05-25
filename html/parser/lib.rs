@@ -5954,6 +5954,26 @@ where
                 );
             }
 
+            // A start tag whose tag name is one of: "script", "template"
+            // An end tag whose tag name is "template"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in head".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name, is_end, ..
+            }) if !is_end
+                && name.is_one_of([
+                    tag_names::script,
+                    tag_names::template,
+                ])
+                || is_end && tag_names::template == name =>
+            {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+
             | _ => todo!(),
         }
     }
