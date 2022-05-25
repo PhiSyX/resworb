@@ -5171,6 +5171,43 @@ where
                 );
             }
 
+            // A end tag whose tag name is one of: "tbody", "tfoot",
+            // "thead"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément dans
+            // la portée de la table qui soit un élément HTML ayant le même
+            // nom de balise que le jeton, il s'agit d'une erreur d'analyse
+            // ; ignorer le jeton.
+            // Sinon:
+            // Effacer la pile pour revenir à un contexte "table body".
+            // Retirer le nœud actuel de la pile d'éléments ouverts. Passer
+            // le mode d'insertion à "in table".
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: true,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::tbody,
+                tag_names::tfoot,
+                tag_names::thead,
+            ]) =>
+            {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_token.tag_name(),
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    /* Ignore */
+                    return;
+                }
+
+                clear_stack_back_to_table_body_context(self);
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+            }
+
             | _ => todo!(),
         }
     }
