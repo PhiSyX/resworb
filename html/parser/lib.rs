@@ -5607,7 +5607,7 @@ where
             //
             // Si la pile d'éléments ouverts ne comporte pas d'élément td
             // ou th dans la portée de la table, il s'agit d'une erreur
-            // d'analyse ; ignorez le jeton. (cas d'un fragment)
+            // d'analyse ; ignorer le jeton. (cas d'un fragment)
             // Sinon, nous devons fermer la cellule puis retraiter le
             // jeton.
             | HTMLToken::Tag(HTMLTagToken {
@@ -5728,14 +5728,14 @@ where
 
             // Any other character token
             //
-            // Insérez le caractère du jeton.
+            // Insérer le caractère du jeton.
             | HTMLToken::Character(ch) => {
                 self.insert_character(ch);
             }
 
             // A comment token
             //
-            // Insérez un commentaire.
+            // Insérer un commentaire.
             | HTMLToken::Comment(comment) => {
                 self.insert_comment(comment);
             }
@@ -5860,7 +5860,7 @@ where
             //
             // Si le noeud actuel est un élément option, alors il faut
             // sortir ce noeud de la pile des éléments ouverts. Sinon, il
-            // s'agit d'une erreur d'analyse ; ignorez le jeton.
+            // s'agit d'une erreur d'analyse ; ignorer le jeton.
             | HTMLToken::Tag(HTMLTagToken {
                 ref name,
                 is_end: true,
@@ -5881,7 +5881,7 @@ where
             //
             // Si la pile d'éléments ouverts ne comporte pas d'élément
             // select dans la portée select, il s'agit d'une erreur
-            // d'analyse ; ignorez le jeton. (cas d'un fragment)
+            // d'analyse ; ignorer le jeton. (cas d'un fragment)
             // Sinon:
             // Retirer des éléments de la pile d'éléments ouverts jusqu'à
             // ce qu'un élément sélectionné ait été retiré de la pile.
@@ -5908,6 +5908,50 @@ where
                 self.stack_of_open_elements
                     .pop_until_tag(tag_names::select);
                 self.reset_insertion_mode_appropriately();
+            }
+
+            // A start tag whose tag name is one of: "input", "keygen",
+            // "textarea"
+            //
+            // Erreur d'analyse.
+            // Si la pile d'éléments ouverts ne comporte pas d'élément
+            // select dans la portée select, nous devons ignorer le jeton.
+            // (cas du fragment)
+            // Sinon:
+            // Retirer les éléments de la pile des éléments ouverts jusqu'à
+            // ce qu'un élément sélect ait été sorti de la pile.
+            // Réinitialiser le mode d'insertion de manière appropriée.
+            // Retraiter le jeton.
+            #[allow(deprecated)]
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([
+                tag_names::input,
+                tag_names::keygen,
+                tag_names::textarea,
+            ]) =>
+            {
+                if !self
+                    .stack_of_open_elements
+                    .has_element_in_scope_except(
+                        tag_names::select,
+                        StackOfOpenElements::select_scope_elements(),
+                    )
+                {
+                    self.parse_error(&token);
+                    /* Ignore */
+                    return;
+                }
+
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_names::select);
+                self.reset_insertion_mode_appropriately();
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
             }
 
             | _ => todo!(),
