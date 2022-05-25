@@ -4513,10 +4513,11 @@ where
             | HTMLToken::EOF => {
                 self.parse_error(&token);
 
-                let cnode = self.current_node().expect("Le noeud actuel");
-                let cnode_element = cnode.element_ref();
-                if tag_names::script == cnode_element.tag_name() {
-                    cnode_element.script().set_already_started(true);
+                if let Some(cnode) = self.current_node() {
+                    let cnode_element = cnode.element_ref();
+                    if tag_names::script == cnode_element.tag_name() {
+                        cnode_element.script().set_already_started(true);
+                    }
                 }
 
                 self.stack_of_open_elements.pop();
