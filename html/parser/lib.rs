@@ -4552,8 +4552,6 @@ where
     }
 
     fn handle_in_table_insertion_mode(&mut self, mut token: HTMLToken) {
-        let cnode = self.current_node().expect("Le noeud actuel");
-
         /// Lorsque les étapes ci-dessous demandent à l'UA de vider la pile
         /// pour revenir à un contexte de tableau, cela signifie que l'UA
         /// doit, tant que le nœud actuel n'est pas un élément de tableau,
@@ -4593,13 +4591,19 @@ where
             // Passer le mode d'insertion à "in table text" puis retraiter
             // le jeton.
             | HTMLToken::Character(_)
-                if !cnode.element_ref().tag_name().is_one_of([
-                    tag_names::table,
-                    tag_names::tbody,
-                    tag_names::tfoot,
-                    tag_names::thead,
-                    tag_names::tr,
-                ]) =>
+                if self.current_node().is_some()
+                    && !self
+                        .current_node()
+                        .unwrap()
+                        .element_ref()
+                        .tag_name()
+                        .is_one_of([
+                            tag_names::table,
+                            tag_names::tbody,
+                            tag_names::tfoot,
+                            tag_names::thead,
+                            tag_names::tr,
+                        ]) =>
             {
                 self.pending_table_character_tokens.clear();
                 self.original_insertion_mode
