@@ -163,6 +163,29 @@ impl StackOfOpenElements {
         })
     }
 
+    pub(crate) fn has_element_in_scope_except<const N: usize>(
+        &self,
+        tag_name: tag_names,
+        list: [tag_names; N],
+    ) -> bool {
+        self.has_elements_in_scope_except([tag_name], list)
+    }
+
+    pub(crate) fn has_elements_in_scope_except<const N: usize>(
+        &self,
+        tag_names_list: impl IntoIterator<Item = tag_names> + Copy,
+        except_list: [tag_names; N],
+    ) -> bool {
+        self.elements.iter().rev().any(|node| {
+            let element = node.element_ref();
+            let name = element.local_name();
+            tag_names_list.into_iter().any(|tag_name| tag_name == name)
+                || !except_list
+                    .into_iter()
+                    .any(|tag_name| tag_name != name)
+        })
+    }
+
     pub(crate) fn has_element_with_tag_name(
         &self,
         tag_name: tag_names,
@@ -224,6 +247,10 @@ impl StackOfOpenElements {
 
     pub(crate) fn button_scope_elements() -> [tag_names; 19] {
         Self::scoped_elements_with::<19>([tag_names::button])
+    }
+
+    pub(crate) fn select_scope_elements() -> [tag_names; 2] {
+        [tag_names::optgroup, tag_names::option]
     }
 
     pub(crate) fn table_scope_elements() -> [tag_names; 3] {

@@ -5877,6 +5877,39 @@ where
                 }
             }
 
+            // An end tag whose tag name is "select"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément
+            // select dans la portée select, il s'agit d'une erreur
+            // d'analyse ; ignorez le jeton. (cas d'un fragment)
+            // Sinon:
+            // Retirer des éléments de la pile d'éléments ouverts jusqu'à
+            // ce qu'un élément sélectionné ait été retiré de la pile.
+            // Réinitialiser le mode d'insertion de manière appropriée.
+            //
+            // Note: Il est juste traité comme une balise de fin.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::select == name => {
+                if !self
+                    .stack_of_open_elements
+                    .has_element_in_scope_except(
+                        tag_names::select,
+                        StackOfOpenElements::select_scope_elements(),
+                    )
+                {
+                    self.parse_error(&token);
+                    /* Ignore */
+                    return;
+                }
+
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_names::select);
+                self.reset_insertion_mode_appropriately();
+            }
+
             | _ => todo!(),
         }
     }
