@@ -5985,7 +5985,13 @@ where
                 );
             }
 
-            | _ => todo!(),
+            // Anything else
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | _ => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
         }
     }
 
