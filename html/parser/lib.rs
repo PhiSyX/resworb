@@ -5147,6 +5147,30 @@ where
                 self.insertion_mode.switch_to(InsertionMode::InRow);
             }
 
+            // A start tag whose tag name is one of: "th", "td"
+            //
+            // Erreur d'analyse.
+            // Effacer la pile pour revenir à un contexte "table body".
+            // Insérer un élément HTML pour un jeton de balise de début
+            // "tr" sans attributs, puis passer le mode d'insertion à
+            // "in row".
+            // Retraiter le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([tag_names::th, tag_names::td]) => {
+                clear_stack_back_to_table_body_context(self);
+                self.insert_html_element(
+                    &HTMLTagToken::start().with_name(tag_names::tr),
+                );
+                self.insertion_mode.switch_to(InsertionMode::InRow);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
             | _ => todo!(),
         }
     }
