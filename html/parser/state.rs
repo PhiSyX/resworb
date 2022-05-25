@@ -147,10 +147,18 @@ impl StackOfOpenElements {
         tag_name: tag_names,
         list: [tag_names; N],
     ) -> bool {
+        self.has_elements_in_scope([tag_name], list)
+    }
+
+    pub(crate) fn has_elements_in_scope<const N: usize>(
+        &self,
+        tag_names_list: impl IntoIterator<Item = tag_names> + Copy,
+        list: [tag_names; N],
+    ) -> bool {
         self.elements.iter().rev().any(|node| {
             let element = node.element_ref();
             let name = element.local_name();
-            tag_name == name
+            tag_names_list.into_iter().any(|tag_name| tag_name == name)
                 || !list.into_iter().any(|tag_name| tag_name == name)
         })
     }
