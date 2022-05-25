@@ -1,6 +1,6 @@
 [package]
 name = "resworb-html-parser"
-version = "0.1.29"
+version = "0.1.33"
 license-file = "../../LICENSE"
 edition = "2021"
 

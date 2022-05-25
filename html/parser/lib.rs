@@ -125,7 +125,7 @@ where
 {
     pub fn run(&mut self) {
         loop {
-            match dd!(&self.tokenizer.next_token()) {
+            match self.tokenizer.next_token() {
                 | None => break,
 
                 // Lorsque chaque jeton est émis par le tokenizer, l'agent
@@ -248,7 +248,9 @@ where
                 self.handle_in_table_insertion_mode(token);
             }
             | InsertionMode::InTableText => todo!(),
-            | InsertionMode::InCaption => todo!(),
+            | InsertionMode::InCaption => {
+                self.handle_in_caption_insertion_mode(token);
+            }
             | InsertionMode::InColumnGroup => todo!(),
             | InsertionMode::InTableBody => todo!(),
             | InsertionMode::InRow => todo!(),
@@ -445,9 +447,9 @@ where
             //   - Si le nom de balise du jeton est "script", et que le
             //     nouveau nœud courant se trouve dans l'espace de noms
             //     SVG.
-            //     - Accusez réception du drapeau de fermeture automatique
-            //       du jeton, puis agissez comme décrit dans les étapes
-            //       pour une balise de fin "script" ci-dessous.
+            //     - Accuser réception du drapeau de fermeture automatique
+            //       du jeton, puis agir comme décrit dans les étapes pour
+            //       une balise de fin "script" ci-dessous.
             //   - Sinon
             //     - Retirer le nœud actuel de la pile des éléments ouverts
             //       et reconnaître le drapeau de self-closing du jeton.
@@ -3447,7 +3449,7 @@ where
             // A start tag whose tag name is "button"
             //
             // 1. Si la pile d'éléments ouverts contient un élément bouton,
-            // exécutez ces sous-étapes :
+            // nous devons exécuter ces sous-étapes :
             //    1.1. Erreur d'analyse.
             //    1.2. Générer des balises de fin implicites.
             //    1.3. Extraire des éléments de la pile d'éléments ouverts
@@ -3725,7 +3727,7 @@ where
             // ayant le même nom de balise que celui du jeton, il s'agit
             // d'une erreur d'analyse ; ignorer le jeton.
             //
-            // Sinon, exécutez ces étapes :
+            // Sinon, nous devons exécuter ces étapes :
             //   1. Générer les balises de fin implicites, sauf pour les
             // éléments HTML ayant le même nom de balise que le jeton.
             //   2. Si le noeud actuel n'est pas un élément HTML ayant le
@@ -3772,8 +3774,8 @@ where
             // Si la pile d'éléments ouverts ne contient pas d'élément HTML
             // dont le nom de balise est l'un des suivants : "h1", "h2",
             // "h3", "h4", "h5" ou "h6", il s'agit d'une erreur d'analyse ;
-            // ignorez le jeton.
-            // Sinon, exécutez ces étapes :
+            // ignorer le jeton.
+            // Sinon, nous devons exécuter ces étapes :
             //   1. Génère des balises de fin implicites.
             //   2. Si le nœud actuel n'est pas un élément HTML ayant le
             // même nom de balise que celui du jeton, il s'agit
@@ -3848,7 +3850,7 @@ where
             //
             // Reconstruire les éléments de mise en forme actifs, s'il y en
             // a.
-            // Insérez un élément HTML pour le jeton. Pousser cet élément
+            // Insérer un élément HTML pour le jeton. Pousser cet élément
             // dans la liste des éléments de formatage actifs.
             #[allow(deprecated)]
             | HTMLToken::Tag(
@@ -3887,10 +3889,9 @@ where
             // Si la pile d'éléments ouverts comporte un élément nobr dans
             // sa portée, il s'agit d'une erreur d'analyse ; exécuter
             // l'algorithme de l'agence d'adoption pour le jeton, puis
-            // reconstruisez à nouveau les éléments de formatage actifs, le
-            // cas échéant.
-            // Insérer un élément HTML pour le jeton. Pousser cet élément
-            // dans la liste des éléments de formatage actifs.
+            // reconstruire à nouveau les éléments de formatage actifs,
+            // s'il y en a. Insérer un élément HTML pour le jeton. Pousser
+            // cet élément dans la liste des éléments de formatage actifs.
             #[allow(deprecated)]
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
@@ -4160,7 +4161,7 @@ where
             // A start tag whose tag name is "hr"
             //
             // Si la pile des éléments ouverts a un élément p dans la
-            // portée du bouton, alors fermez un élément p.
+            // portée du bouton, alors nous devons fermer un élément p.
             // Insérer un élément HTML pour le jeton. Retirer immédiatement
             // le nœud actuel de la pile des éléments ouverts.
             // Faire savoir que le drapeau self-closing du jeton, s'il est
@@ -4219,7 +4220,7 @@ where
             // 4. Laisser le mode d'insertion d'origine être le mode
             // d'insertion actuel.
             // 5. Définir l'indicateur frameset-ok à "not ok".
-            // 6. Passez le mode d'insertion à "text".
+            // 6. Passer le mode d'insertion à "text".
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
                     ref name,
@@ -4858,7 +4859,7 @@ where
             // Sinon:
             // Erreur d'analyse.
             // Insérer un élément HTML pour le jeton.
-            // Retirez cet élément d'entrée de la pile des éléments
+            // Retirer cet élément d'entrée de la pile des éléments
             // ouverts.
             // Faire savoir que le drapeau self-closing du jeton, s'il
             // est activé.
@@ -4947,6 +4948,149 @@ where
                     token,
                 );
                 self.foster_parenting = false;
+            }
+        }
+    }
+
+    fn handle_in_caption_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // An end tag whose tag name is "caption"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément
+            // caption dans la portée de la table, il s'agit d'une erreur
+            // d'analyse ; ignorer le jeton. (cas du fragment)
+            // Sinon:
+            // Générer des balises de fin implicites.
+            // Si le nœud actuel n'est pas un élément caption, il s'agit
+            // d'une erreur d'analyse.
+            // Retirer des éléments de cette pile jusqu'à ce qu'un élément
+            // caption ait été extrait de la pile.
+            // Effacer la liste des éléments de mise en forme actifs
+            // jusqu'au dernier marqueur.
+            // Passer le mode d'insertion à "in table".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::caption == name => {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::caption,
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    return;
+                }
+
+                self.generate_implied_end_tags();
+
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name() != tag_names::caption
+                    {
+                        self.parse_error(&token);
+                    }
+                }
+
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_names::caption);
+                self.list_of_active_formatting_elements
+                    .clear_up_to_the_last_marker();
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+            }
+
+            // A start tag whose tag name is one of: "caption", "col",
+            // "colgroup", "tbody", "td", "tfoot", "th", "thead", "tr"
+            // An end tag whose tag name is "table"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément
+            // caption dans la portée de la table, il s'agit d'une erreur
+            // d'analyse ; ignorer le jeton. (cas du fragment)
+            // Sinon:
+            // Générer des balises de fin implicites.
+            // Si le nœud actuel n'est pas un élément caption, il s'agit
+            // d'une erreur d'analyse.
+            // Retirer des éléments de cette pile jusqu'à ce qu'un élément
+            // caption ait été extrait de la pile.
+            // Effacer la liste des éléments de mise en forme actifs
+            // jusqu'au dernier marqueur.
+            // Passer le mode d'insertion à "in table".
+            // Retraiter le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name, is_end, ..
+            }) if !is_end
+                && name.is_one_of([
+                    tag_names::caption,
+                    tag_names::col,
+                    tag_names::colgroup,
+                    tag_names::tbody,
+                    tag_names::td,
+                    tag_names::tfoot,
+                    tag_names::th,
+                    tag_names::thead,
+                    tag_names::tr,
+                ])
+                || is_end && tag_names::table == name =>
+            {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::caption,
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    return;
+                }
+
+                self.generate_implied_end_tags();
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name() != tag_names::caption
+                    {
+                        self.parse_error(&token);
+                    }
+                }
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_names::caption);
+                self.list_of_active_formatting_elements
+                    .clear_up_to_the_last_marker();
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            // An end tag whose tag name is one of: "body", "col",
+            // "colgroup", "html", "tbody", "td", "tfoot", "th", "thead",
+            // "tr"
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if name.is_one_of([
+                tag_names::body,
+                tag_names::col,
+                tag_names::colgroup,
+                tag_names::html,
+                tag_names::tbody,
+                tag_names::td,
+                tag_names::tfoot,
+                tag_names::th,
+                tag_names::thead,
+                tag_names::tr,
+            ]) =>
+            {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // Anything else
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | _ => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
             }
         }
     }
