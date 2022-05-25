@@ -5724,6 +5724,13 @@ where
             | HTMLToken::Character(ch) => {
                 self.insert_character(ch);
             }
+
+            // A comment token
+            //
+            // Insérez un commentaire.
+            | HTMLToken::Comment(comment) => {
+                self.insert_comment(comment);
+            }
             | _ => todo!(),
         }
     }
