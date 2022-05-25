@@ -5777,6 +5777,38 @@ where
                 self.insert_html_element(tag_token);
             }
 
+            // A start tag whose tag name is "optgroup"
+            //
+            // Si le noeud actuel est un élément option, il faut retirer
+            // ce noeud de la pile des éléments ouverts.
+            // Si le noeud actuel est un élément optgroup, il faut
+            // retirer ce noeud de la pile des éléments ouverts.
+            // Insérer un élément HTML pour le jeton.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::optgroup == name => {
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name() == tag_names::option
+                    {
+                        self.stack_of_open_elements.pop();
+                    }
+                }
+
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name()
+                        == tag_names::optgroup
+                    {
+                        self.stack_of_open_elements.pop();
+                    }
+                }
+
+                self.insert_html_element(tag_token);
+            }
+
             | _ => todo!(),
         }
     }
