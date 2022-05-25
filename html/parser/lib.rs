@@ -5208,6 +5208,48 @@ where
                 self.insertion_mode.switch_to(InsertionMode::InTable);
             }
 
+            // A start tag whose tag name is one of: "caption", "col",
+            // "colgroup", "tbody", "tfoot", "thead"
+            // An end tag whose tag name is "table"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément
+            // "tbody", "thead" ou "tfoot" dans la portée de la table, il
+            // s'agit d'une erreur d'analyse ; ignorer le jeton.
+            // Sinon:
+            // Effacer la pile pour revenir à un contexte "table body".
+            // Retirer le nœud actuel de la pile d'éléments ouverts. Passer
+            // le mode d'insertion à "in table".
+            // Retraiter le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name, is_end, ..
+            }) if !is_end
+                && name.is_one_of([
+                    tag_names::caption,
+                    tag_names::col,
+                    tag_names::colgroup,
+                    tag_names::tbody,
+                    tag_names::tfoot,
+                    tag_names::thead,
+                ])
+                || is_end && tag_names::table == name =>
+            {
+                if !self.stack_of_open_elements.has_elements_in_scope(
+                    [tag_names::tbody, tag_names::thead, tag_names::tfoot],
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    return;
+                }
+
+                clear_stack_back_to_table_body_context(self);
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
             | _ => todo!(),
         }
     }
