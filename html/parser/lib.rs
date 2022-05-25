@@ -5856,6 +5856,27 @@ where
                 }
             }
 
+            // An end tag whose tag name is "option"
+            //
+            // Si le noeud actuel est un élément option, alors il faut
+            // sortir ce noeud de la pile des éléments ouverts. Sinon, il
+            // s'agit d'une erreur d'analyse ; ignorez le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::option == name => {
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name() == tag_names::option
+                    {
+                        self.stack_of_open_elements.pop();
+                    } else {
+                        self.parse_error(&token);
+                        /* Ignore */
+                    }
+                }
+            }
+
             | _ => todo!(),
         }
     }
