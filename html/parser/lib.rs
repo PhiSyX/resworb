@@ -5273,7 +5273,16 @@ where
                 /* Ignore */
             }
 
-            | _ => todo!(),
+            // Anything else
+            //
+            // Retraiter le jeton en utilisant les règles du mode
+            // d'insertion "in table".
+            | _ => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InTable,
+                    token,
+                );
+            }
         }
     }
 
