@@ -1000,6 +1000,8 @@ where
                 tag_names::tr,
             ]) {
                 self.stack_of_open_elements.pop();
+            } else {
+                break;
             }
         }
     }
@@ -1376,7 +1378,6 @@ where
             }
         }
 
-        assert!(self.parsing_fragment);
         self.insertion_mode.switch_to(InsertionMode::InBody);
     }
 
