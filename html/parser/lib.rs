@@ -4548,7 +4548,9 @@ where
                 self.insertion_mode = self.original_insertion_mode;
             }
 
-            | _ => unreachable!(),
+            // Rien n'est mentionné dans ce cas-ci dans la spécification.
+            // Que faire ici?
+            | _ => {}
         }
     }
 

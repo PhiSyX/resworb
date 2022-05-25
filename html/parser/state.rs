@@ -176,9 +176,9 @@ impl StackOfOpenElements {
         &self,
         node_index: usize,
     ) -> Option<(usize, &TreeNode<Node>)> {
-        self.elements
-            .get(node_index - 1)
-            .map(|node| (node_index - 1, node))
+        node_index
+            .checked_sub(1)
+            .and_then(|idx| self.elements.get(idx).map(|node| (idx, node)))
     }
 
     pub(crate) fn pop_until_tag(&mut self, tag_name: tag_names) {
