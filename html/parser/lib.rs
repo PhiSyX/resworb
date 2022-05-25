@@ -5250,6 +5250,29 @@ where
                 );
             }
 
+            // An end tag whose tag name is one of: "body", "caption",
+            // "col", "colgroup", "html", "td", "th", "tr"
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if name.is_one_of([
+                tag_names::body,
+                tag_names::caption,
+                tag_names::col,
+                tag_names::colgroup,
+                tag_names::html,
+                tag_names::td,
+                tag_names::th,
+                tag_names::tr,
+            ]) =>
+            {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
             | _ => todo!(),
         }
     }
