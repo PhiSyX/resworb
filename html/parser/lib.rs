@@ -5646,6 +5646,45 @@ where
                 /* Ignore */
             }
 
+            // An end tag whose tag name is one of: "table", "tbody",
+            // "tfoot", "thead", "tr"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément dans
+            // la portée de la table qui soit un élément HTML ayant le même
+            // nom de balise que celui du jeton, il s'agit d'une erreur
+            // d'analyse ; ignorer le jeton.
+            // Sinon, nous devons fermer la cellule puis retraiter le
+            // jeton.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: true,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::table,
+                tag_names::tbody,
+                tag_names::tfoot,
+                tag_names::thead,
+                tag_names::tr,
+            ]) =>
+            {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_token.tag_name(),
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    /* Ignore */
+                    return;
+                }
+
+                close_cell(self, &token);
+
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
             | _ => todo!(),
         }
     }
