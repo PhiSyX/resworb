@@ -5685,7 +5685,17 @@ where
                     token,
                 );
             }
-            | _ => todo!(),
+
+            // Anything else
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | _ => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
         }
     }
 
