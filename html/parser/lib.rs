@@ -261,7 +261,9 @@ where
             | InsertionMode::InCell => {
                 self.handle_in_cell_insertion_mode(token);
             }
-            | InsertionMode::InSelect => todo!(),
+            | InsertionMode::InSelect => {
+                self.handle_in_select_insertion_mode(token);
+            }
             | InsertionMode::InSelectInTable => todo!(),
             | InsertionMode::InTemplate => {
                 self.handle_in_template_insertion_mode(token)
@@ -5703,6 +5705,19 @@ where
                     token,
                 );
             }
+        }
+    }
+
+    fn handle_in_select_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // A character token that is U+0000 NULL
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Character('\0') => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+            | _ => todo!(),
         }
     }
 
