@@ -255,7 +255,9 @@ where
             | InsertionMode::InTableBody => {
                 self.handle_in_table_body_insertion_mode(token);
             }
-            | InsertionMode::InRow => todo!(),
+            | InsertionMode::InRow => {
+                self.handle_in_row_insertion_mode(token);
+            }
             | InsertionMode::InCell => todo!(),
             | InsertionMode::InSelect => todo!(),
             | InsertionMode::InSelectInTable => todo!(),
@@ -5277,6 +5279,212 @@ where
             //
             // Retraiter le jeton en utilisant les règles du mode
             // d'insertion "in table".
+            | _ => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InTable,
+                    token,
+                );
+            }
+        }
+    }
+
+    fn handle_in_row_insertion_mode(&mut self, token: HTMLToken) {
+        /// Lorsque les étapes ci-dessus exigent que l'UA vide la pile pour
+        /// revenir à un contexte de ligne de table, cela signifie que l'UA
+        /// doit, tant que le nœud actuel n'est pas un élément tr, template
+        /// ou html, extraire des éléments de la pile d'éléments ouverts.
+        fn clear_stack_back_to_table_row_context<C>(
+            parser: &mut HTMLParser<C>,
+        ) where
+            C: Iterator<Item = CodePoint>,
+        {
+            while let Some(cnode) = parser.stack_of_open_elements.pop() {
+                if !cnode.element_ref().tag_name().is_one_of([
+                    tag_names::tr,
+                    tag_names::template,
+                    tag_names::html,
+                ]) {
+                    parser.stack_of_open_elements.pop();
+                } else {
+                    break;
+                }
+            }
+        }
+        match token {
+            // A start tag whose tag name is one of: "th", "td"
+            //
+            // Effacer la pile pour revenir à un contexte "table row".
+            // Insérer un élément HTML pour le jeton, puis passer le mode
+            // d'insertion à "in cell".
+            // Insérer un marqueur à la fin de la liste des éléments de
+            // mise en forme actifs.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if name.is_one_of([tag_names::th, tag_names::td]) => {
+                clear_stack_back_to_table_row_context(self);
+                self.insert_html_element(tag_token);
+                self.insertion_mode.switch_to(InsertionMode::InCell);
+                self.list_of_active_formatting_elements
+                    .push(Entry::Marker);
+            }
+
+            // An end tag whose tag name is "tr"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément tr
+            // dans la portée de la table, il s'agit d'une erreur d'analyse
+            // ; ignorer le jeton.
+            // Sinon:
+            // Effacer la pile pour revenir à un contexte "table row".
+            // Retirer le nœud actuel (qui sera un élément tr) de la pile
+            // des éléments ouverts. Passer le mode d'insertion à
+            // "in table body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::tr == name => {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::tr,
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    /* Ignore */
+                    return;
+                }
+
+                clear_stack_back_to_table_row_context(self);
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InTableBody);
+            }
+
+            // A start tag whose tag name is one of: "caption", "col",
+            // "colgroup", "tbody", "tfoot", "thead", "tr"
+            // An end tag whose tag name is "table"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément tr
+            // dans la portée de la table, il s'agit d'une erreur d'analyse
+            // ; ignorer le jeton.
+            // Sinon:
+            // Effacer la pile pour revenir à un contexte "table row".
+            // Retirer le nœud actuel (qui sera un élément tr) de la pile
+            // des éléments ouverts. Passer le mode d'insertion à
+            // "in table body".
+            // Retraiter le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name, is_end, ..
+            }) if !is_end
+                && name.is_one_of([
+                    tag_names::caption,
+                    tag_names::col,
+                    tag_names::colgroup,
+                    tag_names::tbody,
+                    tag_names::tfoot,
+                    tag_names::thead,
+                    tag_names::tr,
+                ])
+                || is_end && tag_names::table == name =>
+            {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::tr,
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    /* Ignore */
+                    return;
+                }
+
+                clear_stack_back_to_table_row_context(self);
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InTableBody);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            // An end tag whose tag name is one of: "tbody", "tfoot",
+            // "thead"
+            //
+            // Si la pile d'éléments ouverts ne comporte pas d'élément dans
+            // la portée de la table qui soit un élément HTML ayant le même
+            // nom de balise que le jeton, il s'agit d'une erreur d'analyse
+            // ; ignorer le jeton.
+            // Si la pile d'éléments ouverts ne comporte pas d'élément tr
+            // dans la portée de la table, ignorer le jeton.
+            // Sinon:
+            // Effacer la pile pour revenir à un contexte "table row".
+            // Retirer le nœud actuel (qui sera un élément tr) de la pile
+            // des éléments ouverts. Passer le mode d'insertion à
+            // "in table body".
+            // Retraiter le jeton.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: true,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::tbody,
+                tag_names::tfoot,
+                tag_names::thead,
+            ]) =>
+            {
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_token.tag_name(),
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    self.parse_error(&token);
+                    /* Ignore */
+                    return;
+                }
+
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_names::tr,
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    /* Ignore */
+                    return;
+                }
+
+                clear_stack_back_to_table_row_context(self);
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InTableBody);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            // An end tag whose tag name is one of: "body", "caption",
+            // "col", "colgroup", "html", "td", "th"
+            //
+            // Erreur d'analyse: ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if name.is_one_of([
+                tag_names::body,
+                tag_names::caption,
+                tag_names::col,
+                tag_names::colgroup,
+                tag_names::html,
+                tag_names::td,
+                tag_names::th,
+            ]) =>
+            {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // Anything else
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in table".
             | _ => {
                 self.process_using_the_rules_for(
                     InsertionMode::InTable,
