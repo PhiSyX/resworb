@@ -5717,6 +5717,13 @@ where
                 self.parse_error(&token);
                 /* Ignore */
             }
+
+            // Any other character token
+            //
+            // Insérez le caractère du jeton.
+            | HTMLToken::Character(ch) => {
+                self.insert_character(ch);
+            }
             | _ => todo!(),
         }
     }
