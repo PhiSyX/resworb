@@ -2325,6 +2325,50 @@ where
                 self.insertion_mode.switch_to(InsertionMode::InHead);
             }
 
+            // U+0009 CHARACTER
+            // TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF),
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            // A comment token
+            // A start tag whose tag name is one of: "basefont", "bgsound",
+            // "link", "meta", "noframes", "style"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in head".
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+            | HTMLToken::Comment(_) => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+            #[allow(deprecated)]
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([
+                tag_names::basefont,
+                tag_names::bgsound,
+                tag_names::link,
+                tag_names::meta,
+                tag_names::noframes,
+                tag_names::style,
+            ]) =>
+            {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+
             // Anything else
             //
             // Erreur d'analyse.
