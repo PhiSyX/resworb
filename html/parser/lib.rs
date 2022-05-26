@@ -264,7 +264,9 @@ where
             | InsertionMode::InSelect => {
                 self.handle_in_select_insertion_mode(token);
             }
-            | InsertionMode::InSelectInTable => todo!(),
+            | InsertionMode::InSelectInTable => {
+                self.handle_in_select_in_table_insertion_mode(token);
+            }
             | InsertionMode::InTemplate => {
                 self.handle_in_template_insertion_mode(token)
             }
@@ -883,10 +885,6 @@ where
     fn find_character_insertion_node(&self) -> Option<TreeNode<Node>> {
         let adjusted_insertion_location =
             self.find_appropriate_place_for_inserting_node(None);
-
-        if adjusted_insertion_location.insert_before_sibling.is_some() {
-            todo!()
-        }
 
         let parent = adjusted_insertion_location.parent?;
 
@@ -1937,6 +1935,7 @@ where
     }
 
     fn handle_in_head_insertion_mode(&mut self, token: HTMLToken) {
+        dd!(&token);
         match token {
             // U+0009 CHARACTER TABULATION
             // U+000A LINE FEED (LF)
@@ -5885,7 +5884,7 @@ where
             // d'analyse ; ignorer le jeton. (cas d'un fragment)
             // Sinon:
             // Retirer des éléments de la pile d'éléments ouverts jusqu'à
-            // ce qu'un élément sélectionné ait été retiré de la pile.
+            // ce qu'un élément select ait été retiré de la pile.
             // Réinitialiser le mode d'insertion de manière appropriée.
             //
             // Note: Il est juste traité comme une balise de fin.
@@ -5993,6 +5992,48 @@ where
                 self.parse_error(&token);
                 /* Ignore */
             }
+        }
+    }
+
+    fn handle_in_select_in_table_insertion_mode(
+        &mut self,
+        token: HTMLToken,
+    ) {
+        match token {
+            // A start tag whose tag name is one of: "caption", "table",
+            // "tbody", "tfoot", "thead", "tr", "td", "th"
+            //
+            // Erreur d'analyse.
+            // Retirer les éléments de la pile des éléments ouverts jusqu'à
+            // ce qu'un élément select ait été retiré de la pile.
+            // Réinitialiser le mode d'insertion de manière appropriée.
+            // Retraiter le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([
+                tag_names::caption,
+                tag_names::table,
+                tag_names::tbody,
+                tag_names::tfoot,
+                tag_names::thead,
+                tag_names::tr,
+                tag_names::td,
+                tag_names::th,
+            ]) =>
+            {
+                self.parse_error(&token);
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_names::select);
+                self.reset_insertion_mode_appropriately();
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
+            | _ => todo!(),
         }
     }
 
