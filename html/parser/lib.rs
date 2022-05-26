@@ -4102,7 +4102,7 @@ where
             // a.
             // Insérer un élément HTML pour le jeton. Retirer immédiatement
             // le nœud actuel de la pile des éléments ouverts.
-            // Faire savoir que le drapeau self-closing du jeton, s'il
+            // Accusé réception du le drapeau self-closing du jeton, s'il
             // est activé.
             // Définir l'indicateur frameset-ok à "not ok".
             #[allow(deprecated)]
@@ -4136,8 +4136,8 @@ where
             // en a.
             // Insérer un élément HTML pour le jeton. Retirer immédiatement
             // le nœud actuel de la pile des éléments ouverts.
-            // Faire savoir que le drapeau self-closing du jeton, s'il est
-            // activé.
+            // Accusé réception du le drapeau self-closing du jeton, s'il
+            // est activé.
             // Si le jeton n'a pas d'attribut avec le nom "type", ou s'il
             // en a un, mais que la valeur de cet attribut n'est pas une
             // correspondance ASCII insensible à la casse pour la chaîne
@@ -4164,8 +4164,8 @@ where
             //
             // Insérer un élément HTML pour le jeton. Retirer immédiatement
             // le nœud actuel de la pile des éléments ouverts.
-            // Faire savoir que le drapeau self-closing du jeton, s'il est
-            // activé.
+            // Accusé réception du le drapeau self-closing du jeton, s'il
+            // est activé.
             #[allow(deprecated)]
             | HTMLToken::Tag(mut tag_token)
                 if !tag_token.is_end
@@ -4186,8 +4186,8 @@ where
             // portée du bouton, alors nous devons fermer un élément p.
             // Insérer un élément HTML pour le jeton. Retirer immédiatement
             // le nœud actuel de la pile des éléments ouverts.
-            // Faire savoir que le drapeau self-closing du jeton, s'il est
-            // activé.
+            // Accusé réception du le drapeau self-closing du jeton, s'il
+            // est activé.
             // Définir l'indicateur frameset-ok à "not ok".
             | HTMLToken::Tag(ref tag_token)
                 if !token.is_end_tag()
@@ -4891,7 +4891,7 @@ where
             // Insérer un élément HTML pour le jeton.
             // Retirer cet élément d'entrée de la pile des éléments
             // ouverts.
-            // Faire savoir que le drapeau self-closing du jeton, s'il
+            // Accusé réception du le drapeau self-closing du jeton, s'il
             // est activé.
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
@@ -5197,7 +5197,10 @@ where
         }
     }
 
-    fn handle_in_column_group_insertion_mode(&mut self, token: HTMLToken) {
+    fn handle_in_column_group_insertion_mode(
+        &mut self,
+        mut token: HTMLToken,
+    ) {
         match token {
             // U+0009 CHARACTER TABULATION,
             // U+000A LINE FEED (LF)
@@ -5238,6 +5241,25 @@ where
                     InsertionMode::InBody,
                     token,
                 );
+            }
+
+            // A start tag whose tag name is "col"
+            //
+            // Insérer un élément HTML pour le jeton. Extraire
+            // immédiatement le nœud actuel de la pile
+            // d'éléments ouverts.
+            // Accusé réception du le drapeau self-closing du jeton, s'il
+            // est activé.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::col == name => {
+                self.insert_html_element(tag_token);
+                self.stack_of_open_elements.pop();
+                token.as_tag_mut().set_acknowledge_self_closing_flag();
             }
 
             // Anything else
