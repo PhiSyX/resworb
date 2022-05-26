@@ -5262,6 +5262,30 @@ where
                 token.as_tag_mut().set_acknowledge_self_closing_flag();
             }
 
+            // An end tag whose tag name is "colgroup"
+            //
+            // Si le nœud actuel n'est pas un élément colgroup, il s'agit
+            // d'une erreur d'analyse ; ignorer le jeton.
+            // Sinon, extraire le nœud actuel de la pile d'éléments
+            // ouverts. Passer le mode d'insertion à "in table".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::colgroup == name => {
+                if let Some(node) = self.current_node() {
+                    if node.element_ref().tag_name() != tag_names::colgroup
+                    {
+                        self.parse_error(&token);
+                        /* Ignore */
+                        return;
+                    }
+                }
+
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+            }
+
             // Anything else
             //
             // Si le nœud actuel n'est pas un élément colgroup, il s'agit
