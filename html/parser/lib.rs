@@ -223,23 +223,25 @@ where
     ) {
         match dd!(&m) {
             | InsertionMode::Initial => {
-                self.handle_initial_insertion_mode(token)
+                self.handle_initial_insertion_mode(token);
             }
             | InsertionMode::BeforeHTML => {
-                self.handle_before_html_insertion_mode(token)
+                self.handle_before_html_insertion_mode(token);
             }
             | InsertionMode::BeforeHead => {
-                self.handle_before_head_insertion_mode(token)
+                self.handle_before_head_insertion_mode(token);
             }
             | InsertionMode::InHead => {
-                self.handle_in_head_insertion_mode(token)
+                self.handle_in_head_insertion_mode(token);
             }
-            | InsertionMode::InHeadNoscript => todo!(),
+            | InsertionMode::InHeadNoscript => {
+                self.handle_in_head_noscript_insertion_mode(token);
+            }
             | InsertionMode::AfterHead => {
-                self.handle_after_head_insertion_mode(token)
+                self.handle_after_head_insertion_mode(token);
             }
             | InsertionMode::InBody => {
-                self.handle_in_body_insertion_mode(token)
+                self.handle_in_body_insertion_mode(token);
             }
             | InsertionMode::Text => {
                 self.handle_text_insertion_mode(token);
@@ -272,10 +274,10 @@ where
                 self.handle_in_select_in_table_insertion_mode(token);
             }
             | InsertionMode::InTemplate => {
-                self.handle_in_template_insertion_mode(token)
+                self.handle_in_template_insertion_mode(token);
             }
             | InsertionMode::AfterBody => {
-                self.handle_after_body_insertion_mode(token)
+                self.handle_after_body_insertion_mode(token);
             }
             | InsertionMode::InFrameset => todo!(),
             | InsertionMode::AfterFrameset => todo!(),
@@ -2272,6 +2274,31 @@ where
             | _ => {
                 self.stack_of_open_elements.pop();
                 self.insertion_mode.switch_to(InsertionMode::AfterHead);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+        }
+    }
+
+    fn handle_in_head_noscript_insertion_mode(
+        &mut self,
+        token: HTMLToken,
+    ) {
+        match token {
+            // Anything else
+            //
+            // Erreur d'analyse.
+            // Extraire le noeud actuel (qui sera un élément noscript) de
+            // la pile des éléments ouverts ; le nouveau noeud actuel sera
+            // un élément head.
+            // Passer le mode d'insertion sur "in head".
+            // Retraiter le jeton.
+            | _ => {
+                self.parse_error(&token);
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InHead);
                 self.process_using_the_rules_for(
                     self.insertion_mode,
                     token,
