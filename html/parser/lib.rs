@@ -253,7 +253,9 @@ where
             | InsertionMode::InCaption => {
                 self.handle_in_caption_insertion_mode(token);
             }
-            | InsertionMode::InColumnGroup => todo!(),
+            | InsertionMode::InColumnGroup => {
+                self.handle_in_column_group_insertion_mode(token);
+            }
             | InsertionMode::InTableBody => {
                 self.handle_in_table_body_insertion_mode(token);
             }
@@ -4100,7 +4102,7 @@ where
             // a.
             // Insérer un élément HTML pour le jeton. Retirer immédiatement
             // le nœud actuel de la pile des éléments ouverts.
-            // Faire savoir que le drapeau self-closing du jeton, s'il
+            // Accusé réception du le drapeau self-closing du jeton, s'il
             // est activé.
             // Définir l'indicateur frameset-ok à "not ok".
             #[allow(deprecated)]
@@ -4134,8 +4136,8 @@ where
             // en a.
             // Insérer un élément HTML pour le jeton. Retirer immédiatement
             // le nœud actuel de la pile des éléments ouverts.
-            // Faire savoir que le drapeau self-closing du jeton, s'il est
-            // activé.
+            // Accusé réception du le drapeau self-closing du jeton, s'il
+            // est activé.
             // Si le jeton n'a pas d'attribut avec le nom "type", ou s'il
             // en a un, mais que la valeur de cet attribut n'est pas une
             // correspondance ASCII insensible à la casse pour la chaîne
@@ -4162,8 +4164,8 @@ where
             //
             // Insérer un élément HTML pour le jeton. Retirer immédiatement
             // le nœud actuel de la pile des éléments ouverts.
-            // Faire savoir que le drapeau self-closing du jeton, s'il est
-            // activé.
+            // Accusé réception du le drapeau self-closing du jeton, s'il
+            // est activé.
             #[allow(deprecated)]
             | HTMLToken::Tag(mut tag_token)
                 if !tag_token.is_end
@@ -4184,8 +4186,8 @@ where
             // portée du bouton, alors nous devons fermer un élément p.
             // Insérer un élément HTML pour le jeton. Retirer immédiatement
             // le nœud actuel de la pile des éléments ouverts.
-            // Faire savoir que le drapeau self-closing du jeton, s'il est
-            // activé.
+            // Accusé réception du le drapeau self-closing du jeton, s'il
+            // est activé.
             // Définir l'indicateur frameset-ok à "not ok".
             | HTMLToken::Tag(ref tag_token)
                 if !token.is_end_tag()
@@ -4889,7 +4891,7 @@ where
             // Insérer un élément HTML pour le jeton.
             // Retirer cet élément d'entrée de la pile des éléments
             // ouverts.
-            // Faire savoir que le drapeau self-closing du jeton, s'il
+            // Accusé réception du le drapeau self-closing du jeton, s'il
             // est activé.
             | HTMLToken::Tag(
                 ref tag_token @ HTMLTagToken {
@@ -5189,6 +5191,159 @@ where
             | _ => {
                 self.process_using_the_rules_for(
                     InsertionMode::InBody,
+                    token,
+                );
+            }
+        }
+    }
+
+    fn handle_in_column_group_insertion_mode(
+        &mut self,
+        mut token: HTMLToken,
+    ) {
+        match token {
+            // U+0009 CHARACTER TABULATION,
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF),
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            //
+            // Insérer le caractère.
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                self.insert_character(ch);
+            }
+
+            // A comment token
+            //
+            // Insérer un commentaire
+            | HTMLToken::Comment(comment) => {
+                self.insert_comment(comment);
+            }
+
+            // A DOCTYPE token
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::DOCTYPE(_) => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // A start tag whose tag name is "html"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::html == name => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // A start tag whose tag name is "col"
+            //
+            // Insérer un élément HTML pour le jeton. Extraire
+            // immédiatement le nœud actuel de la pile
+            // d'éléments ouverts.
+            // Accusé réception du le drapeau self-closing du jeton, s'il
+            // est activé.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::col == name => {
+                self.insert_html_element(tag_token);
+                self.stack_of_open_elements.pop();
+                token.as_tag_mut().set_acknowledge_self_closing_flag();
+            }
+
+            // An end tag whose tag name is "colgroup"
+            //
+            // Si le nœud actuel n'est pas un élément colgroup, il s'agit
+            // d'une erreur d'analyse ; ignorer le jeton.
+            // Sinon, extraire le nœud actuel de la pile d'éléments
+            // ouverts. Passer le mode d'insertion à "in table".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::colgroup == name => {
+                if let Some(node) = self.current_node() {
+                    if node.element_ref().tag_name() != tag_names::colgroup
+                    {
+                        self.parse_error(&token);
+                        /* Ignore */
+                        return;
+                    }
+                }
+
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+            }
+
+            // A end tag whose tag name is "col"
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::col == name => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // A start tag whose tag name is "template"
+            // An end tag whose tag name is "template"
+            //
+            // Retraiter le jeton en utilisant les règles du mode
+            // d'insertion "in head".
+            | HTMLToken::Tag(HTMLTagToken { ref name, .. })
+                if tag_names::template == name =>
+            {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+
+            // An end-of-file token
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::EOF => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // Anything else
+            //
+            // Si le nœud actuel n'est pas un élément colgroup, il s'agit
+            // d'une erreur d'analyse ; ignorer le jeton.
+            // Sinon, extraire le nœud actuel de la pile d'éléments
+            // ouverts. Passer le mode d'insertion à "in
+            // table". Retraiter le jeton.
+            | _ => {
+                if let Some(node) = self.current_node() {
+                    if node.element_ref().tag_name() != tag_names::colgroup
+                    {
+                        self.parse_error(&token);
+                        /* Ignore */
+                        return;
+                    }
+                }
+
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
                     token,
                 );
             }
