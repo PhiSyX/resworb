@@ -223,23 +223,25 @@ where
     ) {
         match dd!(&m) {
             | InsertionMode::Initial => {
-                self.handle_initial_insertion_mode(token)
+                self.handle_initial_insertion_mode(token);
             }
             | InsertionMode::BeforeHTML => {
-                self.handle_before_html_insertion_mode(token)
+                self.handle_before_html_insertion_mode(token);
             }
             | InsertionMode::BeforeHead => {
-                self.handle_before_head_insertion_mode(token)
+                self.handle_before_head_insertion_mode(token);
             }
             | InsertionMode::InHead => {
-                self.handle_in_head_insertion_mode(token)
+                self.handle_in_head_insertion_mode(token);
             }
-            | InsertionMode::InHeadNoscript => todo!(),
+            | InsertionMode::InHeadNoscript => {
+                self.handle_in_head_noscript_insertion_mode(token);
+            }
             | InsertionMode::AfterHead => {
-                self.handle_after_head_insertion_mode(token)
+                self.handle_after_head_insertion_mode(token);
             }
             | InsertionMode::InBody => {
-                self.handle_in_body_insertion_mode(token)
+                self.handle_in_body_insertion_mode(token);
             }
             | InsertionMode::Text => {
                 self.handle_text_insertion_mode(token);
@@ -272,10 +274,10 @@ where
                 self.handle_in_select_in_table_insertion_mode(token);
             }
             | InsertionMode::InTemplate => {
-                self.handle_in_template_insertion_mode(token)
+                self.handle_in_template_insertion_mode(token);
             }
             | InsertionMode::AfterBody => {
-                self.handle_after_body_insertion_mode(token)
+                self.handle_after_body_insertion_mode(token);
             }
             | InsertionMode::InFrameset => todo!(),
             | InsertionMode::AfterFrameset => todo!(),
@@ -2272,6 +2274,132 @@ where
             | _ => {
                 self.stack_of_open_elements.pop();
                 self.insertion_mode.switch_to(InsertionMode::AfterHead);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+        }
+    }
+
+    fn handle_in_head_noscript_insertion_mode(
+        &mut self,
+        token: HTMLToken,
+    ) {
+        match token {
+            // A DOCTYPE token
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::DOCTYPE(_) => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // A start tag whose tag name is "html"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::html == name => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // An end tag whose tag name is "noscript"
+            //
+            // Extraire le noeud actuel (qui sera un élément noscript) de
+            // la pile des éléments ouverts ; le nouveau noeud actuel sera
+            // un élément head.
+            // Passer le mode d'insertion à "in head".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::noscript == name => {
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InHead);
+            }
+
+            // U+0009 CHARACTER
+            // TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF),
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            // A comment token
+            // A start tag whose tag name is one of: "basefont", "bgsound",
+            // "link", "meta", "noframes", "style"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in head".
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+            | HTMLToken::Comment(_) => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+            #[allow(deprecated)]
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if name.is_one_of([
+                tag_names::basefont,
+                tag_names::bgsound,
+                tag_names::link,
+                tag_names::meta,
+                tag_names::noframes,
+                tag_names::style,
+            ]) =>
+            {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+
+            // An end tag whose tag name is "br"
+            //
+            // Agir comme décrit dans l'entrée "Anything else" ci-dessous.
+            //
+            // A start tag whose tag name is one of: "head", "noscript"
+            // Any other end tag
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name, is_end, ..
+            }) if !is_end
+                && name
+                    .is_one_of([tag_names::head, tag_names::noscript])
+                || is_end && tag_names::br != name =>
+            {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // Anything else
+            //
+            // Erreur d'analyse.
+            // Extraire le noeud actuel (qui sera un élément noscript) de
+            // la pile des éléments ouverts ; le nouveau noeud actuel sera
+            // un élément head.
+            // Passer le mode d'insertion sur "in head".
+            // Retraiter le jeton.
+            | _ => {
+                self.parse_error(&token);
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InHead);
                 self.process_using_the_rules_for(
                     self.insertion_mode,
                     token,
