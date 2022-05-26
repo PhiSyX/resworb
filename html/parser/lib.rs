@@ -5286,6 +5286,18 @@ where
                 self.insertion_mode.switch_to(InsertionMode::InTable);
             }
 
+            // A end tag whose tag name is "col"
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::col == name => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
             // Anything else
             //
             // Si le nœud actuel n'est pas un élément colgroup, il s'agit
