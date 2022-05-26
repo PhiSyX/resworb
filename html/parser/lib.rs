@@ -5298,6 +5298,20 @@ where
                 /* Ignore */
             }
 
+            // A start tag whose tag name is "template"
+            // An end tag whose tag name is "template"
+            //
+            // Retraiter le jeton en utilisant les règles du mode
+            // d'insertion "in head".
+            | HTMLToken::Tag(HTMLTagToken { ref name, .. })
+                if tag_names::template == name =>
+            {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+
             // Anything else
             //
             // Si le nœud actuel n'est pas un élément colgroup, il s'agit
