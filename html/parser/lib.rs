@@ -5225,6 +5225,21 @@ where
                 /* Ignore */
             }
 
+            // A start tag whose tag name is "html"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::html == name => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
             // Anything else
             //
             // Si le nœud actuel n'est pas un élément colgroup, il s'agit
