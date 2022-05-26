@@ -253,7 +253,9 @@ where
             | InsertionMode::InCaption => {
                 self.handle_in_caption_insertion_mode(token);
             }
-            | InsertionMode::InColumnGroup => todo!(),
+            | InsertionMode::InColumnGroup => {
+                self.handle_in_column_group_insertion_mode(token);
+            }
             | InsertionMode::InTableBody => {
                 self.handle_in_table_body_insertion_mode(token);
             }
@@ -5189,6 +5191,35 @@ where
             | _ => {
                 self.process_using_the_rules_for(
                     InsertionMode::InBody,
+                    token,
+                );
+            }
+        }
+    }
+
+    fn handle_in_column_group_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // Anything else
+            //
+            // Si le nœud actuel n'est pas un élément colgroup, il s'agit
+            // d'une erreur d'analyse ; ignorer le jeton.
+            // Sinon, extraire le nœud actuel de la pile d'éléments
+            // ouverts. Passer le mode d'insertion à "in
+            // table". Retraiter le jeton.
+            | _ => {
+                if let Some(node) = self.current_node() {
+                    if node.element_ref().tag_name() != tag_names::colgroup
+                    {
+                        self.parse_error(&token);
+                        /* Ignore */
+                        return;
+                    }
+                }
+
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InTable);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
                     token,
                 );
             }
