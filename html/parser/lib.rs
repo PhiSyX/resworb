@@ -4997,7 +4997,58 @@ where
             | HTMLToken::Character(_) => {
                 self.pending_table_character_tokens.push(token);
             }
-            | _ => todo!(),
+
+            // Anything else
+            //
+            // Si l'un des jetons de la liste des jetons de caractères de
+            // la table en attente est un jeton de caractère qui n'est pas
+            // un espace blanc ASCII, il s'agit d'une erreur d'analyse :
+            // retraiter les jetons de caractères de la liste des jetons de
+            // caractères de la table en attente en appliquant les règles
+            // données dans l'entrée "anything else" du mode d'insertion
+            // "in table".
+            // Sinon, insérer les caractères donnés par la liste des jetons
+            // de caractères de la table en attente.
+            // Passer le mode d'insertion au mode d'insertion original et
+            // retraiter le jeton.
+            | _ => {
+                let pending_token_does_have_whitespace = self
+                    .pending_table_character_tokens
+                    .iter()
+                    .any(|token| !token.is_ascii_whitespace());
+
+                if pending_token_does_have_whitespace {
+                    self.parse_error(&token);
+
+                    for pending_token in
+                        self.pending_table_character_tokens.clone()
+                    {
+                        // Jeton "Anything else" du mode d'insertion "in
+                        // table"
+                        self.foster_parenting = true;
+                        self.process_using_the_rules_for(
+                            InsertionMode::InBody,
+                            pending_token,
+                        );
+                        self.foster_parenting = false;
+                    }
+                } else {
+                    for pending_token in
+                        self.pending_table_character_tokens.clone()
+                    {
+                        if let HTMLToken::Character(ch) = pending_token {
+                            self.insert_character(ch);
+                        }
+                    }
+                }
+
+                self.insertion_mode
+                    .switch_to(self.original_insertion_mode);
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
         }
     }
 
