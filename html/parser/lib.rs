@@ -6033,6 +6033,55 @@ where
                 );
             }
 
+            // An end tag whose tag name is one of: "caption", "table",
+            // "tbody", "tfoot", "thead", "tr", "td", "th"
+            //
+            // Erreur d'analyse.
+            // Si la pile d'éléments ouverts ne contient pas d'élément dans
+            // la portée de la table qui soit un élément HTML avec le même
+            // nom de balise que celui du jeton, alors nous devons ignorer
+            // le jeton.
+            // Sinon:
+            // Retirer les éléments de la pile des éléments ouverts jusqu'à
+            // ce qu'un élément sélect ait été retiré de la pile.
+            // Réinitialiser le mode d'insertion de manière appropriée.
+            // Retraiter le jeton.
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: true,
+                    ..
+                },
+            ) if name.is_one_of([
+                tag_names::caption,
+                tag_names::table,
+                tag_names::tbody,
+                tag_names::tfoot,
+                tag_names::thead,
+                tag_names::tr,
+                tag_names::td,
+                tag_names::th,
+            ]) =>
+            {
+                self.parse_error(&token);
+
+                if !self.stack_of_open_elements.has_element_in_scope(
+                    tag_token.tag_name(),
+                    StackOfOpenElements::table_scope_elements(),
+                ) {
+                    /* Ignore */
+                    return;
+                }
+
+                self.stack_of_open_elements
+                    .pop_until_tag(tag_names::select);
+                self.reset_insertion_mode_appropriately();
+                self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+
             | _ => todo!(),
         }
     }
