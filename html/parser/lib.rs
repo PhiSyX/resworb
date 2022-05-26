@@ -5312,6 +5312,17 @@ where
                 );
             }
 
+            // An end-of-file token
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::EOF => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
             // Anything else
             //
             // Si le nœud actuel n'est pas un élément colgroup, il s'agit
