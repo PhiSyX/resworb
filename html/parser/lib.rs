@@ -1935,7 +1935,6 @@ where
     }
 
     fn handle_in_head_insertion_mode(&mut self, token: HTMLToken) {
-        dd!(&token);
         match token {
             // U+0009 CHARACTER TABULATION
             // U+000A LINE FEED (LF)
@@ -2200,9 +2199,9 @@ where
 
             // An end tag whose tag name is "template"
             //
-            // S'il n'y a pas d'élément de template sur la pile des
-            // éléments ouverts, il s'agit d'une erreur d'analyse ; ignorer
-            // le jeton.
+            // S'il n'y a pas d'élément template sur la pile des éléments
+            // ouverts, il s'agit d'une erreur d'analyse ; ignorer le
+            // jeton.
             //
             // Sinon:
             //   1. générer minutieusement toutes les balises de fin
@@ -2223,7 +2222,10 @@ where
                 is_end: true,
                 ..
             }) if tag_names::template == name => {
-                if self.stack_of_template_insertion_modes.is_empty() {
+                if !self
+                    .stack_of_open_elements
+                    .has_element_with_tag_name(tag_names::template)
+                {
                     self.parse_error(&token);
                     return;
                 }
@@ -4526,12 +4528,13 @@ where
                 if let Some(cnode) = self.current_node() {
                     let cnode_element = cnode.element_ref();
                     if tag_names::script == cnode_element.tag_name() {
-                        cnode_element.script().set_already_started(true);
+                        cnode.script_ref().set_already_started(true);
                     }
                 }
 
                 self.stack_of_open_elements.pop();
-                self.insertion_mode = self.original_insertion_mode;
+                self.insertion_mode
+                    .switch_to(self.original_insertion_mode);
                 self.process_using_the_rules_for(
                     self.insertion_mode,
                     token,
