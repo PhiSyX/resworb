@@ -2310,6 +2310,21 @@ where
                 );
             }
 
+            // An end tag whose tag name is "noscript"
+            //
+            // Extraire le noeud actuel (qui sera un élément noscript) de
+            // la pile des éléments ouverts ; le nouveau noeud actuel sera
+            // un élément head.
+            // Passer le mode d'insertion à "in head".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::noscript == name => {
+                self.stack_of_open_elements.pop();
+                self.insertion_mode.switch_to(InsertionMode::InHead);
+            }
+
             // Anything else
             //
             // Erreur d'analyse.
