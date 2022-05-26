@@ -4989,6 +4989,14 @@ where
                 self.parse_error(&token);
                 /* Ignore */
             }
+
+            // Any other character token
+            //
+            // Ajouter le jeton de caractère à la liste des jetons de
+            // caractère de la table en attente.
+            | HTMLToken::Character(_) => {
+                self.pending_table_character_tokens.push(token);
+            }
             | _ => todo!(),
         }
     }
