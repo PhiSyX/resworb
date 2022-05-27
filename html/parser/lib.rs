@@ -6880,6 +6880,22 @@ where
                 token.as_tag_mut().set_acknowledge_self_closing_flag();
             }
 
+            // A start tag whose tag name is "noframes"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in head".
+            #[allow(deprecated)] // noframes
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::noframes == name => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+
             // Anything else
             //
             // Erreur d'analyse. Ignorer le jeton.
