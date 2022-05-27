@@ -33,7 +33,9 @@ use state::{
 };
 
 pub(crate) use self::state::{Entry, InsertionMode, StackOfOpenElements};
-use self::tokenization::{HTMLTagToken, HTMLToken, HTMLTokenizer, State};
+use self::tokenization::{
+    HTMLTagToken, HTMLToken, HTMLTokenizer, HTMLTokenizerState,
+};
 
 // --------- //
 // Structure //
@@ -54,8 +56,6 @@ where
     scripting_flag: ScriptingFlag,
     frameset_ok_flag: FramesetOkFlag,
     parsing_fragment: bool,
-    script_nesting_level: usize,
-    pause_parsing: bool,
     stop_parsing: bool,
     context_element: Option<TreeNode<Node>>,
     character_insertion_node: Option<TreeNode<Node>>,
@@ -94,8 +94,6 @@ where
             foster_parenting: false,
             parsing_fragment: false,
             scripting_flag: ScriptingFlag::Enabled,
-            script_nesting_level: 0,
-            pause_parsing: false,
             stop_parsing: false,
             context_element: None,
             character_insertion_node: None,
@@ -1122,7 +1120,7 @@ where
     fn parse_generic_element(
         &mut self,
         tag_token: &HTMLTagToken,
-        state: State,
+        state: HTMLTokenizerState,
     ) {
         self.insert_html_element(tag_token);
         self.tokenizer.switch_state_to(state.to_string());
@@ -2047,7 +2045,10 @@ where
                     ..
                 },
             ) if tag_names::title == name => {
-                self.parse_generic_element(tag_token, State::RCDATA);
+                self.parse_generic_element(
+                    tag_token,
+                    HTMLTokenizerState::RCDATA,
+                );
             }
 
             // A start tag whose tag name is "noscript", if the scripting
@@ -2070,7 +2071,10 @@ where
                     tag_names::style,
                 ]) =>
             {
-                self.parse_generic_element(tag_token, State::RAWTEXT);
+                self.parse_generic_element(
+                    tag_token,
+                    HTMLTokenizerState::RAWTEXT,
+                );
             }
 
             // A start tag whose tag name is "noscript", if the scripting
@@ -2151,7 +2155,7 @@ where
                 }
 
                 self.stack_of_open_elements.put(element);
-                let token_state = State::ScriptData;
+                let token_state = HTMLTokenizerState::ScriptData;
                 self.tokenizer.switch_state_to(token_state.to_string());
                 self.original_insertion_mode
                     .switch_to(self.insertion_mode);
@@ -4413,7 +4417,10 @@ where
 
                 self.reconstruct_active_formatting_elements();
                 self.frameset_ok_flag = FramesetOkFlag::NotOk;
-                self.parse_generic_element(tag_token, State::RAWTEXT);
+                self.parse_generic_element(
+                    tag_token,
+                    HTMLTokenizerState::RAWTEXT,
+                );
             }
 
             // A start tag whose tag name is "iframe"
@@ -4429,7 +4436,10 @@ where
                 },
             ) if tag_names::iframe == name => {
                 self.frameset_ok_flag = FramesetOkFlag::NotOk;
-                self.parse_generic_element(tag_token, State::RAWTEXT);
+                self.parse_generic_element(
+                    tag_token,
+                    HTMLTokenizerState::RAWTEXT,
+                );
             }
 
             // A start tag whose tag name is "noembed"
@@ -4449,7 +4459,10 @@ where
                 || (tag_names::noscript == name
                     && self.scripting_flag == ScriptingFlag::Enabled) =>
             {
-                self.parse_generic_element(tag_token, State::RAWTEXT);
+                self.parse_generic_element(
+                    tag_token,
+                    HTMLTokenizerState::RAWTEXT,
+                );
             }
 
             // A start tag whose tag name is "select"
