@@ -14,11 +14,8 @@ use named_character_references::{
 };
 use parser::preprocessor::InputStream;
 
-use super::{
-    codepoint::HTMLCodePoint,
-    error::HTMLParserError,
-    token::{HTMLDoctypeToken, HTMLTagAttribute, HTMLTagToken, HTMLToken},
-};
+use super::{HTMLDoctypeToken, HTMLTagAttribute, HTMLTagToken, HTMLToken};
+use crate::{codepoint::HTMLCodePoint, error::HTMLParserError};
 
 // ----- //
 // Macro //
@@ -61,7 +58,7 @@ impl core::fmt::Display for State {
 // Interface //
 // --------- //
 
-trait HTMLTokenizerProcessInterface {
+pub(crate) trait HTMLTokenizerProcessInterface {
     fn ignore(&self) -> HTMLTokenizerProcessResult {
         Ok(HTMLTokenizerProcessControlFlow::Continue)
     }
@@ -91,14 +88,14 @@ trait HTMLTokenizerProcessInterface {
     }
 }
 
-enum HTMLTokenizerProcessControlFlow {
+pub enum HTMLTokenizerProcessControlFlow {
     Continue,
     Emit,
 }
 
 pub(crate) type HTMLInputStream<Iter> = InputStream<Iter, CodePoint>;
 
-type HTMLTokenizerProcessResult = Result<
+pub(crate) type HTMLTokenizerProcessResult = Result<
     HTMLTokenizerProcessControlFlow,
     (HTMLParserError, HTMLTokenizerProcessControlFlow),
 >;
@@ -112,7 +109,7 @@ pub struct HTMLTokenizer<Chars>
 where
     Chars: Iterator<Item = CodePoint>,
 {
-    stream: HTMLInputStream<Chars>,
+    pub(crate) stream: HTMLInputStream<Chars>,
 
     /// Le jeton courant.
     token: Option<HTMLToken>,
@@ -470,8 +467,8 @@ where
         self
     }
 
-    fn set_token(&mut self, token: HTMLToken) -> &mut Self {
-        self.token = Some(token);
+    pub fn set_token(&mut self, token: HTMLToken) -> &mut Self {
+        self.token.replace(token);
         self
     }
 
@@ -482,6 +479,14 @@ where
     fn reconsume(&mut self, state: &str) -> &mut Self {
         self.stream.rollback();
         self.switch_state_to(state);
+        self
+    }
+
+    pub(crate) fn set_return_state_to(
+        &mut self,
+        state: impl AsRef<str>,
+    ) -> &mut Self {
+        self.state.set_return(state.as_ref());
         self
     }
 
@@ -598,46 +603,6 @@ impl<C> Tokenizer<C>
 where
     C: Iterator<Item = CodePoint>,
 {
-    fn handle_data_state(&mut self) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
-            // U+0026 AMPERSAND (&)
-            //
-            // Définir l'état de retour à l'état `data`. Passer à l'état
-            // `character-reference`.
-            | Some('&') => self
-                .switch_state_to("character-reference")
-                .state
-                .set_return("data")
-                .and_continue(),
-
-            // U+003C LESS-THAN SIGN (<)
-            //
-            // Passer à l'état `tag-open`.
-            | Some('<') => self.switch_state_to("tag-open").and_continue(),
-
-            // U+0000 NULL
-            //
-            // Il s'agit d'une erreur d'analyse de type
-            // `unexpected-null-character. Émettre le caractère
-            // actuel comme un jeton de caractère.
-            | Some('\0') => {
-                self.and_emit_with_error("unexpected-null-character")
-            }
-
-            // EOF
-            //
-            // Émettre un jeton `end-of-file`.
-            | None => self.set_token(HTMLToken::EOF).and_emit(),
-
-            // Anything else
-            //
-            // Émettre le caractère actuel comme un jeton `character`.
-            | Some(ch) => {
-                self.set_token(HTMLToken::Character(ch)).and_emit()
-            }
-        }
-    }
-
     fn handle_rcdata_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0026 AMPERSAND (&)
@@ -4710,7 +4675,7 @@ mod tests {
     #[test]
     fn test_ambiguous_ampersand() {
         let mut token = get_tokenizer_html(include_str!(
-            "crashtests/tag/ambiguous_ampersand.html"
+            "../crashtests/tag/ambiguous_ampersand.html"
         ));
 
         let attr_name = "href";
@@ -4730,7 +4695,7 @@ mod tests {
     #[test]
     fn test_comment() {
         let mut token = get_tokenizer_html(include_str!(
-            "crashtests/comment/comment.html"
+            "../crashtests/comment/comment.html"
         ));
 
         assert_eq!(
@@ -4742,7 +4707,7 @@ mod tests {
     #[test]
     fn test_tag() {
         let mut token =
-            get_tokenizer_html(include_str!("crashtests/tag/tag.html"));
+            get_tokenizer_html(include_str!("../crashtests/tag/tag.html"));
 
         assert_eq!(
             token.next_token(),

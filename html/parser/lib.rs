@@ -11,8 +11,7 @@
 mod codepoint;
 mod error;
 mod state;
-mod token;
-mod tokenizer;
+mod tokenization;
 
 use std::{borrow::BorrowMut, ops::Deref, sync::Arc};
 
@@ -32,13 +31,9 @@ use state::{
     FormElementPointer, FramesetOkFlag, HeadElementPointer,
     ListOfActiveFormattingElements, ScriptingFlag,
 };
-use tokenizer::State;
 
-pub use self::tokenizer::HTMLTokenizer;
-pub(crate) use self::{
-    state::{Entry, InsertionMode, StackOfOpenElements},
-    token::{HTMLTagToken, HTMLToken},
-};
+pub(crate) use self::state::{Entry, InsertionMode, StackOfOpenElements};
+use self::tokenization::{HTMLTagToken, HTMLToken, HTMLTokenizer, State};
 
 // --------- //
 // Structure //

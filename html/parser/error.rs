@@ -442,9 +442,8 @@ mod tests {
     use infra::primitive::codepoint::CodePoint;
     use parser::preprocessor::InputStream;
 
-    use crate::{
-        token::{HTMLDoctypeToken, HTMLTagToken, HTMLToken},
-        tokenizer::HTMLTokenizer,
+    use crate::tokenization::{
+        HTMLDoctypeToken, HTMLTagToken, HTMLToken, HTMLTokenizer,
     };
 
     fn get_tokenizer_html(
