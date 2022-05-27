@@ -8,6 +8,7 @@ pub mod tokenizer;
 mod state {
     mod comment;
     mod data;
+    mod doctype;
     mod plaintext;
     mod rawtext;
     mod rcdata;
