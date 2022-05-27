@@ -6896,6 +6896,24 @@ where
                 );
             }
 
+            // An end-of-file token
+            //
+            // Si le nœud actuel n'est pas l'élément html racine, il s'agit
+            // d'une erreur d'analyse.
+            // Note: Le nœud actuel ne peut être que l'élément html racine
+            // dans le cas d'un fragment.
+            // Arrêter l'analyse.
+            | HTMLToken::EOF => {
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name() != tag_names::html {
+                        self.parse_error(&token);
+                        return;
+                    }
+                }
+
+                self.stop_parsing = true;
+            }
+
             // Anything else
             //
             // Erreur d'analyse. Ignorer le jeton.
