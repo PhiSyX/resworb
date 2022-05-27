@@ -6816,6 +6816,20 @@ where
                 );
             }
 
+            // A start tag whose tag name is "frameset"
+            //
+            // Insérer un élément HTML pour le jeton.
+            #[allow(deprecated)]
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::frameset == name => {
+                self.insert_html_element(tag_token);
+            }
+
             // Anything else
             //
             // Erreur d'analyse. Ignorer le jeton.
