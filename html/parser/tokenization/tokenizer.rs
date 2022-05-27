@@ -417,6 +417,7 @@ impl<C> Tokenizer<C>
 where
     C: Iterator<Item = CodePoint>,
 {
+    /// Le jeton actuel.
     pub fn current_token(&mut self) -> Option<HTMLToken> {
         if let Some(token) = self.token.to_owned() {
             self.output_tokens.push_back(token);
@@ -424,14 +425,17 @@ where
         self.pop_token()
     }
 
+    /// Le jeton suivant.
     pub fn next_token(&mut self) -> Option<HTMLToken> {
         self.next()
     }
 
+    /// Extrait le premier jeton.
     fn pop_token(&mut self) -> Option<HTMLToken> {
         self.output_tokens.pop_front()
     }
 
+    /// Change l'état d'un jeton via une fonction de retour.
     pub(crate) fn change_current_token<F: FnOnce(&mut HTMLToken)>(
         &mut self,
         callback: F,
@@ -442,6 +446,7 @@ where
         self
     }
 
+    /// Émet le jeton actuel.
     pub(crate) fn and_emit_current_token(&mut self) -> &mut Self {
         if let Some(token) = self.current_token() {
             self.emit_token(token);
@@ -449,6 +454,7 @@ where
         self
     }
 
+    /// Émet chaque caractère du tampon temporaire.
     pub(crate) fn emit_each_characters_of_temporary_buffer(
         &mut self,
     ) -> &mut Self {
@@ -458,6 +464,7 @@ where
         self
     }
 
+    /// Émet le jeton actuel.
     pub(crate) fn emit_token(&mut self, token: HTMLToken) -> &mut Self {
         if matches!(token, HTMLToken::Character('<' | '/')) {
             self.last_start_tag_token = self.token.clone();
@@ -467,8 +474,9 @@ where
         self
     }
 
-    pub(crate) fn set_token(&mut self, token: HTMLToken) -> &mut Self {
-        self.token.replace(token);
+    /// Remplace le jeton actuel par un nouveau jeton.
+    pub(crate) fn set_token(&mut self, new_token: HTMLToken) -> &mut Self {
+        self.token.replace(new_token);
         self
     }
 
