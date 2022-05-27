@@ -9,6 +9,7 @@ mod state {
     mod data;
     mod rawtext;
     mod rcdata;
+    mod script_data;
 }
 
 pub(crate) use self::{

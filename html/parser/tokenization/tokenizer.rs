@@ -603,40 +603,6 @@ impl<C> Tokenizer<C>
 where
     C: Iterator<Item = CodePoint>,
 {
-    fn handle_script_data_state(&mut self) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
-            // U+003C LESS-THAN SIGN (<)
-            //
-            // Passer à l'état `script-data-less-than-sign`.
-            | Some('<') => self
-                .switch_state_to("script-data-less-than-sign")
-                .and_continue(),
-
-            // U+0000 NULL
-            //
-            // Il s'agit d'une erreur d'analyse de type
-            // `unexpected-null-character`. Émettre un jeton `character`
-            // U+FFFD REPLACEMENT CHARACTER.
-            | Some('\0') => self
-                .set_token(HTMLToken::Character(
-                    char::REPLACEMENT_CHARACTER,
-                ))
-                .and_emit_with_error("unexpected-null-character"),
-
-            // EOF
-            //
-            // Émettre un jeton `end-of-file`
-            | None => self.set_token(HTMLToken::EOF).and_emit(),
-
-            // Anything else
-            //
-            // Émettre le caractère actuel comme un jeton `character`.
-            | Some(ch) => {
-                self.set_token(HTMLToken::Character(ch)).and_emit()
-            }
-        }
-    }
-
     fn handle_plaintext_state(&mut self) -> HTMLTokenizerProcessResult {
         match self.stream.next_input_char() {
             // U+0000 NULL
