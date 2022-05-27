@@ -7,6 +7,7 @@ pub mod tokenizer;
 
 mod state {
     mod data;
+    mod rawtext;
     mod rcdata;
 }
 
