@@ -6947,6 +6947,14 @@ where
                 self.insert_comment(comment);
             }
 
+            // A DOCTYPE token
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::DOCTYPE(_) => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
             // Anything else
             //
             // Erreur d'analyse. Ignorer le jeton.
