@@ -282,7 +282,9 @@ where
             | InsertionMode::InFrameset => {
                 self.handle_in_frameset_insertion_mode(token);
             }
-            | InsertionMode::AfterFrameset => todo!(),
+            | InsertionMode::AfterFrameset => {
+                self.handle_after_frameset_insertion_mode(token);
+            }
             | InsertionMode::AfterAfterBody => {
                 self.handle_after_after_body_insertion_mode(token);
             }
@@ -6911,6 +6913,79 @@ where
                     }
                 }
 
+                self.stop_parsing = true;
+            }
+
+            // Anything else
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | _ => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+        }
+    }
+
+    fn handle_after_frameset_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // U+0009 CHARACTER TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C
+            // FORM FEED (FF)
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            //
+            // Insérer le caractère.
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                self.insert_character(ch);
+            }
+
+            // A comment token
+            //
+            // Insérer un commentaire.
+            | HTMLToken::Comment(comment) => {
+                self.insert_comment(comment);
+            }
+
+            // A DOCTYPE token
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::DOCTYPE(_) => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // A start tag whose tag name is "html"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::html == name => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // An end tag whose tag name is "html"
+            //
+            // Passer le mode d'insertion à "after after frameset".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::html == name => {
+                self.insertion_mode
+                    .switch_to(InsertionMode::AfterAfterFrameset);
+            }
+
+            // An end-of-file token
+            //
+            // Arrêter l'analyse.
+            | HTMLToken::EOF => {
                 self.stop_parsing = true;
             }
 
