@@ -279,7 +279,9 @@ where
             | InsertionMode::AfterBody => {
                 self.handle_after_body_insertion_mode(token);
             }
-            | InsertionMode::InFrameset => todo!(),
+            | InsertionMode::InFrameset => {
+                self.handle_in_frameset_insertion_mode(token);
+            }
             | InsertionMode::AfterFrameset => todo!(),
             | InsertionMode::AfterAfterBody => {
                 self.handle_after_after_body_insertion_mode(token);
@@ -6767,6 +6769,18 @@ where
                     self.insertion_mode,
                     token,
                 );
+            }
+        }
+    }
+
+    fn handle_in_frameset_insertion_mode(&mut self, token: HTMLToken) {
+        match token {
+            // Anything else
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | _ => {
+                self.parse_error(&token);
+                /* Ignore */
             }
         }
     }
