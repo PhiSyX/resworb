@@ -6982,6 +6982,13 @@ where
                     .switch_to(InsertionMode::AfterAfterFrameset);
             }
 
+            // An end-of-file token
+            //
+            // Arrêter l'analyse.
+            | HTMLToken::EOF => {
+                self.stop_parsing = true;
+            }
+
             // Anything else
             //
             // Erreur d'analyse. Ignorer le jeton.
