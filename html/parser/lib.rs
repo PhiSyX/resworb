@@ -28,7 +28,10 @@ use infra::{
     structure::tree::TreeNode,
 };
 use macros::dd;
-use state::ListOfActiveFormattingElements;
+use state::{
+    FormElementPointer, FramesetOkFlag, HeadElementPointer,
+    ListOfActiveFormattingElements, ScriptingFlag,
+};
 use tokenizer::State;
 
 pub use self::tokenizer::HTMLTokenizer;
@@ -53,33 +56,23 @@ where
     stack_of_open_elements: StackOfOpenElements,
     list_of_active_formatting_elements: ListOfActiveFormattingElements,
     foster_parenting: bool,
+    scripting_flag: ScriptingFlag,
     frameset_ok_flag: FramesetOkFlag,
     parsing_fragment: bool,
-    scripting_enabled: bool,
     script_nesting_level: usize,
     pause_parsing: bool,
     stop_parsing: bool,
     context_element: Option<TreeNode<Node>>,
     character_insertion_node: Option<TreeNode<Node>>,
     character_insertion_builder: String,
-    head_element_pointer: Option<TreeNode<Node>>,
-    form_element_pointer: Option<TreeNode<Node>>,
+    head_element_pointer: Option<HeadElementPointer>,
+    form_element_pointer: Option<FormElementPointer>,
     pending_table_character_tokens: Vec<HTMLToken>,
 }
 
 struct AdjustedInsertionLocation {
     parent: Option<TreeNode<Node>>,
     insert_before_sibling: Option<TreeNode<Node>>,
-}
-
-// ----------- //
-// Énumération //
-// ----------- //
-
-#[derive(PartialEq)]
-enum FramesetOkFlag {
-    Ok,
-    NotOk,
 }
 
 // -------------- //
@@ -105,7 +98,7 @@ where
             frameset_ok_flag: FramesetOkFlag::Ok,
             foster_parenting: false,
             parsing_fragment: false,
-            scripting_enabled: true,
+            scripting_flag: ScriptingFlag::Enabled,
             script_nesting_level: 0,
             pause_parsing: false,
             stop_parsing: false,
@@ -2076,7 +2069,7 @@ where
                     ..
                 },
             ) if (tag_names::noscript == name
-                && self.scripting_enabled)
+                && self.scripting_flag == ScriptingFlag::Enabled)
                 || name.is_one_of([
                     tag_names::noframes,
                     tag_names::style,
@@ -2097,7 +2090,7 @@ where
                     ..
                 },
             ) if tag_names::noscript == name
-                && !self.scripting_enabled =>
+                && self.scripting_flag == ScriptingFlag::Disabled =>
             {
                 self.insert_html_element(tag_token);
                 self.insertion_mode
@@ -4459,7 +4452,7 @@ where
                 },
             ) if tag_names::noembed == name
                 || (tag_names::noscript == name
-                    && self.scripting_enabled) =>
+                    && self.scripting_flag == ScriptingFlag::Enabled) =>
             {
                 self.parse_generic_element(tag_token, State::RAWTEXT);
             }
