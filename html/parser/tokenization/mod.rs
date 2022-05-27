@@ -11,6 +11,7 @@ mod state {
     mod rawtext;
     mod rcdata;
     mod script_data;
+    mod tag;
 }
 
 pub(crate) use self::{
