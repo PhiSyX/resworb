@@ -6,6 +6,7 @@ mod token;
 pub mod tokenizer;
 
 mod state {
+    mod cdata;
     mod comment;
     mod data;
     mod doctype;
