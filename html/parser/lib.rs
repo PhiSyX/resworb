@@ -6830,6 +6830,37 @@ where
                 self.insert_html_element(tag_token);
             }
 
+            // An end tag whose tag name is "frameset"
+            //
+            // Si le nœud actuel est l'élément html racine, il s'agit d'une
+            // erreur d'analyse ; ignorer le jeton (cas d'un fragment).
+            // Sinon, extraire le nœud de la pile d'éléments ouverts.
+            // Si l'analyseur syntaxique n'a pas été créé dans le cadre de
+            // l'algorithme d'analyse syntaxique des fragments HTML (cas
+            // des fragments) et que le nœud actuel n'est plus un élément
+            // frameset, le mode d'insertion doit alors passer à "after
+            // frameset".
+            #[allow(deprecated)] // frameset
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::frameset == name => {
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name() == tag_names::html {
+                        self.parse_error(&token);
+                        return;
+                    }
+                }
+
+                self.stack_of_open_elements.pop();
+
+                if !self.parsing_fragment {
+                    self.insertion_mode
+                        .switch_to(InsertionMode::AfterFrameset);
+                }
+            }
+
             // Anything else
             //
             // Erreur d'analyse. Ignorer le jeton.
