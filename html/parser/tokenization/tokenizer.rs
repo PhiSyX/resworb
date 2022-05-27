@@ -635,209 +635,139 @@ where
                 | State::TagOpen => self.handle_tag_open_state(),
                 | State::EndTagOpen => self.handle_end_tag_open_state(),
                 | State::TagName => self.handle_tag_name_state(),
-                | State::RCDATALessThanSign => {
-                    self.handle_rcdata_less_than_sign_state()
-                }
-                | State::RCDATAEndTagOpen => {
-                    self.handle_rcdata_end_tag_open_state()
-                }
-                | State::RCDATAEndTagName => {
-                    self.handle_rcdata_end_tag_name_state()
-                }
-                | State::RAWTEXTLessThanSign => {
-                    self.handle_rawtext_less_than_sign_state()
-                }
-                | State::RAWTEXTEndTagOpen => {
-                    self.handle_rawtext_end_tag_open_state()
-                }
-                | State::RAWTEXTEndTagName => {
-                    self.handle_rawtext_end_tag_name_state()
-                }
-                | State::ScriptDataLessThanSign => {
-                    self.handle_script_data_less_than_sign_state()
-                }
-                | State::ScriptDataEndTagOpen => {
-                    self.handle_script_data_end_tag_open_state()
-                }
-                | State::ScriptDataEndTagName => {
-                    self.handle_script_data_end_tag_name_state()
-                }
-                | State::ScriptDataEscapeStart => {
-                    self.handle_script_data_escape_start_state()
-                }
-                | State::ScriptDataEscapeStartDash => {
-                    self.handle_script_data_escape_start_dash_state()
-                }
-                | State::ScriptDataEscaped => {
-                    self.handle_script_data_escaped_state()
-                }
-                | State::ScriptDataEscapedDash => {
-                    self.handle_script_data_escaped_dash_state()
-                }
-                | State::ScriptDataEscapedDashDash => {
-                    self.handle_script_data_escaped_dash_dash_state()
-                }
-                | State::ScriptDataEscapedLessThanSign => {
-                    self.handle_script_data_escaped_less_than_sign_state()
-                }
-                | State::ScriptDataEscapedEndTagOpen => {
-                    self.handle_script_data_escaped_end_tag_open_state()
-                }
-                | State::ScriptDataEscapedEndTagName => {
-                    self.handle_script_data_escaped_end_tag_name_state()
-                }
-                | State::ScriptDataDoubleEscapeStart => {
-                    self.handle_script_data_double_escape_start_state()
-                }
-                | State::ScriptDataDoubleEscapedState => {
-                    self.handle_script_data_double_escaped_state()
-                }
-                | State::ScriptDataDoubleEscapedDash => {
-                    self.handle_script_data_double_escaped_dash_state()
-                }
-                | State::ScriptDataDoubleEscapedDashDash => {
-                    self.handle_script_data_double_escaped_dash_dash_state()
-                }
-                | State::ScriptDataDoubleEscapedLessThanSign => {
-                    self.handle_script_data_double_escaped_less_than_sign_state()
-                }
-                | State::ScriptDataDoubleEscapeEnd => {
-                    self.handle_script_data_double_escape_end_state()
-                }
-                | State::BeforeAttributeName => {
-                    self.handle_before_attribute_name_state()
-                }
-                | State::AttributeName => {
-                    self.handle_attribute_name_state()
-                }
-                | State::AfterAttributeName => {
-                    self.handle_after_attribute_name_state()
-                }
-                | State::BeforeAttributeValue => {
-                    self.handle_before_attribute_value_state()
-                }
-                | State::AttributeValueDoubleQuoted => {
-                    self.handle_attribute_value_quoted_state('"')
-                }
-                | State::AttributeValueSingleQuoted => {
-                    self.handle_attribute_value_quoted_state('\'')
-                }
-                | State::AttributeValueUnquoted => {
-                    self.handle_attribute_value_unquoted_state()
-                }
-                | State::AfterAttributeValueQuoted => {
-                    self.handle_after_attribute_value_quoted_state()
-                }
-                | State::SelfClosingStartTag => {
-                    self.handle_self_closing_start_tag_state()
-                }
-                | State::MarkupDeclarationOpen => {
-                    self.handle_markup_declaration_open_state()
-                }
+                | State::RCDATALessThanSign =>
+                    self.handle_rcdata_less_than_sign_state(),
+                | State::RCDATAEndTagOpen =>
+                    self.handle_rcdata_end_tag_open_state(),
+                | State::RCDATAEndTagName =>
+                    self.handle_rcdata_end_tag_name_state(),
+                | State::RAWTEXTLessThanSign =>
+                    self.handle_rawtext_less_than_sign_state(),
+                | State::RAWTEXTEndTagOpen =>
+                    self.handle_rawtext_end_tag_open_state(),
+                | State::RAWTEXTEndTagName =>
+                    self.handle_rawtext_end_tag_name_state(),
+                | State::ScriptDataLessThanSign =>
+                    self.handle_script_data_less_than_sign_state(),
+                | State::ScriptDataEndTagOpen =>
+                    self.handle_script_data_end_tag_open_state(),
+                | State::ScriptDataEndTagName =>
+                    self.handle_script_data_end_tag_name_state(),
+                | State::ScriptDataEscapeStart =>
+                    self.handle_script_data_escape_start_state(),
+                | State::ScriptDataEscapeStartDash =>
+                    self.handle_script_data_escape_start_dash_state(),
+                | State::ScriptDataEscaped =>
+                    self.handle_script_data_escaped_state(),
+                | State::ScriptDataEscapedDash =>
+                    self.handle_script_data_escaped_dash_state(),
+                | State::ScriptDataEscapedDashDash =>
+                    self.handle_script_data_escaped_dash_dash_state(),
+                | State::ScriptDataEscapedLessThanSign =>
+                    self.handle_script_data_escaped_less_than_sign_state(),
+                | State::ScriptDataEscapedEndTagOpen =>
+                    self.handle_script_data_escaped_end_tag_open_state(),
+                | State::ScriptDataEscapedEndTagName =>
+                    self.handle_script_data_escaped_end_tag_name_state(),
+                | State::ScriptDataDoubleEscapeStart =>
+                    self.handle_script_data_double_escape_start_state(),
+                | State::ScriptDataDoubleEscapedState =>
+                    self.handle_script_data_double_escaped_state(),
+                | State::ScriptDataDoubleEscapedDash =>
+                    self.handle_script_data_double_escaped_dash_state(),
+                | State::ScriptDataDoubleEscapedDashDash =>
+                    self.handle_script_data_double_escaped_dash_dash_state(),
+                | State::ScriptDataDoubleEscapedLessThanSign =>
+                    self.handle_script_data_double_escaped_less_than_sign_state(),
+                | State::ScriptDataDoubleEscapeEnd =>
+                    self.handle_script_data_double_escape_end_state(),
+                | State::BeforeAttributeName =>
+                    self.handle_before_attribute_name_state(),
+                | State::AttributeName => self.handle_attribute_name_state(),
+                | State::AfterAttributeName =>
+                    self.handle_after_attribute_name_state(),
+                | State::BeforeAttributeValue =>
+                    self.handle_before_attribute_value_state(),
+                | State::AttributeValueDoubleQuoted =>
+                    self.handle_attribute_value_quoted_state('"'),
+                | State::AttributeValueSingleQuoted =>
+                    self.handle_attribute_value_quoted_state('\''),
+                | State::AttributeValueUnquoted =>
+                    self.handle_attribute_value_unquoted_state(),
+                | State::AfterAttributeValueQuoted =>
+                    self.handle_after_attribute_value_quoted_state(),
+                | State::SelfClosingStartTag =>
+                    self.handle_self_closing_start_tag_state(),
+                | State::MarkupDeclarationOpen =>
+                    self.handle_markup_declaration_open_state(),
                 | State::BogusComment => self.handle_bogus_comment_state(),
                 | State::CommentStart => self.handle_comment_start_state(),
-                | State::CommentLessThanSign => {
-                    self.handle_comment_less_than_sign_state()
-                }
-                | State::CommentLessThanSignBang => {
-                    self.handle_comment_less_than_sign_bang_state()
-                }
-                | State::CommentLessThanSignBangDash => {
-                    self.handle_comment_less_than_sign_bang_dash_state()
-                }
-                | State::CommentLessThanSignBangDashDash => {
-                    self.handle_comment_less_than_sign_bang_dash_dash_state()
-                }
-                | State::CommentStartDash => {
-                    self.handle_comment_start_dash_state()
-                }
+                | State::CommentLessThanSign =>
+                    self.handle_comment_less_than_sign_state(),
+                | State::CommentLessThanSignBang =>
+                    self.handle_comment_less_than_sign_bang_state(),
+                | State::CommentLessThanSignBangDash =>
+                    self.handle_comment_less_than_sign_bang_dash_state(),
+                | State::CommentLessThanSignBangDashDash =>
+                    self.handle_comment_less_than_sign_bang_dash_dash_state(),
+                | State::CommentStartDash =>
+                    self.handle_comment_start_dash_state(),
                 | State::Comment => self.handle_comment_state(),
-                | State::CommentEndDash => {
-                    self.handle_comment_end_dash_state()
-                }
-                | State::CommentEnd => {
-                    self.handle_comment_end_state()
-                }
-                | State::CommentEndBang => {
-                    self.handle_comment_end_bang_state()
-                }
+                | State::CommentEndDash => self.handle_comment_end_dash_state(),
+                | State::CommentEnd => self.handle_comment_end_state(),
+                | State::CommentEndBang => self.handle_comment_end_bang_state(),
                 | State::DOCTYPE => self.handle_doctype_state(),
-                | State::BeforeDOCTYPEName => {
-                    self.handle_before_doctype_name_state()
-                }
+                | State::BeforeDOCTYPEName =>
+                    self.handle_before_doctype_name_state(),
                 | State::DOCTYPEName => self.handle_doctype_name_state(),
-                | State::AfterDOCTYPEName => {
-                    self.handle_after_doctype_name_state()
-                }
-                | State::AfterDOCTYPEPublicKeyword => {
-                    self.handle_after_doctype_public_keyword_state()
-                }
-                | State::BeforeDOCTYPEPublicIdentifier => {
-                    self.handle_before_doctype_public_identifier_state()
-                }
-                | State::DOCTYPEPublicIdentifierDoubleQuoted => {
-                    self.handle_doctype_public_identifier_quoted('"')
-                }
-                | State::DOCTYPEPublicIdentifierSingleQuoted => {
-                    self.handle_doctype_public_identifier_quoted('\'')
-                }
-                | State::AfterDOCTYPEPublicIdentifier => {
-                    self.handle_after_doctype_public_identifier_state()
-                }
-                | State::BetweenDOCTYPEPublicAndSystemIdentifiers => {
-                    self.handle_between_doctype_public_and_system_identifiers_state()
-                }
-                | State::AfterDOCTYPESystemKeyword => {
-                    self.handle_after_doctype_system_keyword_state()
-                }
-                | State::BeforeDOCTYPESystemIdentifier => {
-                    self.handle_before_doctype_system_identifier_state()
-                }
-                | State::DOCTYPESystemIdentifierDoubleQuoted => {
-                    self.handle_doctype_system_identifier_quoted_state('"')
-                }
-                | State::DOCTYPESystemIdentifierSingleQuoted => {
-                    self.handle_doctype_system_identifier_quoted_state('\'')
-                }
-                | State::AfterDOCTYPESystemIdentifier => {
-                    self.handle_after_doctype_system_identifier_state()
-                }
+                | State::AfterDOCTYPEName =>
+                    self.handle_after_doctype_name_state(),
+                | State::AfterDOCTYPEPublicKeyword =>
+                    self.handle_after_doctype_public_keyword_state(),
+                | State::BeforeDOCTYPEPublicIdentifier =>
+                    self.handle_before_doctype_public_identifier_state(),
+                | State::DOCTYPEPublicIdentifierDoubleQuoted =>
+                    self.handle_doctype_public_identifier_quoted('"'),
+                | State::DOCTYPEPublicIdentifierSingleQuoted =>
+                    self.handle_doctype_public_identifier_quoted('\''),
+                | State::AfterDOCTYPEPublicIdentifier =>
+                    self.handle_after_doctype_public_identifier_state(),
+                | State::BetweenDOCTYPEPublicAndSystemIdentifiers =>
+                    self.handle_between_doctype_public_and_system_identifiers_state(),
+                | State::AfterDOCTYPESystemKeyword =>
+                    self.handle_after_doctype_system_keyword_state(),
+                | State::BeforeDOCTYPESystemIdentifier =>
+                    self.handle_before_doctype_system_identifier_state(),
+                | State::DOCTYPESystemIdentifierDoubleQuoted =>
+                    self.handle_doctype_system_identifier_quoted_state('"'),
+                | State::DOCTYPESystemIdentifierSingleQuoted =>
+                    self.handle_doctype_system_identifier_quoted_state('\''),
+                | State::AfterDOCTYPESystemIdentifier =>
+                    self.handle_after_doctype_system_identifier_state(),
                 | State::BogusDOCTYPE => self.handle_bogus_doctype_state(),
                 | State::CDATASection => self.handle_cdata_section_state(),
-                | State::CDATASectionBracket => {
-                    self.handle_cdata_section_bracket_state()
-                }
-                | State::CDATASectionEnd => {
-                    self.handle_cdata_section_end_state()
-                }
-                | State::CharacterReference => {
-                    self.handle_character_reference_state()
-                }
-                | State::NamedCharacterReference => {
-                    self.handle_named_character_reference_state()
-                }
-                | State::AmbiguousAmpersand => {
-                    self.handle_ambiguous_ampersand_state()
-                }
-                | State::NumericCharacterReference => {
-                    self.handle_numeric_character_reference_state()
-                }
-                | State::HexadecimalCharacterReferenceStart => {
-                    self.handle_hexadecimal_character_reference_start_state()
-                }
-                | State::DecimalCharacterReferenceStart => {
-                    self.handle_decimal_character_reference_start_state()
-                }
-                | State::HexadecimalCharacterReference => {
-                    self.handle_hexadecimal_character_reference_state()
-                }
-                | State::DecimalCharacterReference => {
-                    self.handle_decimal_character_reference_state()
-                }
-                | State::NumericCharacterReferenceEnd => {
-                    self.handle_numeric_character_reference_end_state()
-                }
-                // | _ => return None,
+                | State::CDATASectionBracket =>
+                    self.handle_cdata_section_bracket_state(),
+                | State::CDATASectionEnd =>
+                    self.handle_cdata_section_end_state(),
+                | State::CharacterReference =>
+                    self.handle_character_reference_state(),
+                | State::NamedCharacterReference =>
+                    self.handle_named_character_reference_state(),
+                | State::AmbiguousAmpersand =>
+                    self.handle_ambiguous_ampersand_state(),
+                | State::NumericCharacterReference =>
+                    self.handle_numeric_character_reference_state(),
+                | State::HexadecimalCharacterReferenceStart =>
+                    self.handle_hexadecimal_character_reference_start_state(),
+                | State::DecimalCharacterReferenceStart =>
+                    self.handle_decimal_character_reference_start_state(),
+                | State::HexadecimalCharacterReference =>
+                    self.handle_hexadecimal_character_reference_state(),
+                | State::DecimalCharacterReference =>
+                    self.handle_decimal_character_reference_state(),
+                | State::NumericCharacterReferenceEnd =>
+                    self.handle_numeric_character_reference_end_state(),
             };
 
             match state {
