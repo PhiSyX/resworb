@@ -6970,6 +6970,18 @@ where
                 );
             }
 
+            // An end tag whose tag name is "html"
+            //
+            // Passer le mode d'insertion à "after after frameset".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::html == name => {
+                self.insertion_mode
+                    .switch_to(InsertionMode::AfterAfterFrameset);
+            }
+
             // Anything else
             //
             // Erreur d'analyse. Ignorer le jeton.
