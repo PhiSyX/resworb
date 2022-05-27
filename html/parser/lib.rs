@@ -6928,6 +6928,18 @@ where
 
     fn handle_after_frameset_insertion_mode(&mut self, token: HTMLToken) {
         match token {
+            // U+0009 CHARACTER TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C
+            // FORM FEED (FF)
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            //
+            // Insérer le caractère.
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                self.insert_character(ch);
+            }
+
             // Anything else
             //
             // Erreur d'analyse. Ignorer le jeton.
