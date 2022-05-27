@@ -7075,6 +7075,15 @@ where
         token: HTMLToken,
     ) {
         match token {
+            // A comment token
+            //
+            // Insérer un commentaire comme dernier enfant de l'objet
+            // [Document].
+            | HTMLToken::Comment(comment) => {
+                let comment = CommentNode::new(&self.document, comment);
+                self.document.append_child(comment.to_owned());
+            }
+
             // Anything else
             //
             // Erreur d'analyse. Ignorer le jeton.
