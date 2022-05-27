@@ -6940,6 +6940,13 @@ where
                 self.insert_character(ch);
             }
 
+            // A comment token
+            //
+            // Insérer un commentaire.
+            | HTMLToken::Comment(comment) => {
+                self.insert_comment(comment);
+            }
+
             // Anything else
             //
             // Erreur d'analyse. Ignorer le jeton.
