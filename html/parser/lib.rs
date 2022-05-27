@@ -279,7 +279,9 @@ where
             | InsertionMode::AfterBody => {
                 self.handle_after_body_insertion_mode(token);
             }
-            | InsertionMode::InFrameset => todo!(),
+            | InsertionMode::InFrameset => {
+                self.handle_in_frameset_insertion_mode(token);
+            }
             | InsertionMode::AfterFrameset => todo!(),
             | InsertionMode::AfterAfterBody => {
                 self.handle_after_after_body_insertion_mode(token);
@@ -6767,6 +6769,157 @@ where
                     self.insertion_mode,
                     token,
                 );
+            }
+        }
+    }
+
+    fn handle_in_frameset_insertion_mode(&mut self, mut token: HTMLToken) {
+        match token {
+            // U+0009 CHARACTER TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            //
+            // Insérer le caractère.
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                self.insert_character(ch);
+            }
+
+            // A comment token
+            //
+            // Insérer un commentaire.
+            | HTMLToken::Comment(comment) => {
+                self.insert_comment(comment);
+            }
+
+            // A DOCTYPE token
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::DOCTYPE(_) => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // A start tag whose tag name is "html"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::html == name => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // A start tag whose tag name is "frameset"
+            //
+            // Insérer un élément HTML pour le jeton.
+            #[allow(deprecated)]
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::frameset == name => {
+                self.insert_html_element(tag_token);
+            }
+
+            // An end tag whose tag name is "frameset"
+            //
+            // Si le nœud actuel est l'élément html racine, il s'agit d'une
+            // erreur d'analyse ; ignorer le jeton (cas d'un fragment).
+            // Sinon, extraire le nœud de la pile d'éléments ouverts.
+            // Si l'analyseur syntaxique n'a pas été créé dans le cadre de
+            // l'algorithme d'analyse syntaxique des fragments HTML (cas
+            // des fragments) et que le nœud actuel n'est plus un élément
+            // frameset, le mode d'insertion doit alors passer à "after
+            // frameset".
+            #[allow(deprecated)] // frameset
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::frameset == name => {
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name() == tag_names::html {
+                        self.parse_error(&token);
+                        return;
+                    }
+                }
+
+                self.stack_of_open_elements.pop();
+
+                if !self.parsing_fragment {
+                    self.insertion_mode
+                        .switch_to(InsertionMode::AfterFrameset);
+                }
+            }
+
+            // A start tag whose tag name is "frame"
+            //
+            // Insérer un élément HTML pour le jeton. Extraire
+            // immédiatement le nœud de la pile d'éléments ouverts.
+            // Accuser réception du drapeau de fermeture automatique du
+            // jeton, si défini.
+            #[allow(deprecated)] // frame
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::frame == name => {
+                self.insert_html_element(tag_token);
+                self.stack_of_open_elements.pop();
+                token.as_tag_mut().set_acknowledge_self_closing_flag();
+            }
+
+            // A start tag whose tag name is "noframes"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in head".
+            #[allow(deprecated)] // noframes
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::noframes == name => {
+                self.process_using_the_rules_for(
+                    InsertionMode::InHead,
+                    token,
+                );
+            }
+
+            // An end-of-file token
+            //
+            // Si le nœud actuel n'est pas l'élément html racine, il s'agit
+            // d'une erreur d'analyse.
+            // Note: Le nœud actuel ne peut être que l'élément html racine
+            // dans le cas d'un fragment.
+            // Arrêter l'analyse.
+            | HTMLToken::EOF => {
+                if let Some(cnode) = self.current_node() {
+                    if cnode.element_ref().tag_name() != tag_names::html {
+                        self.parse_error(&token);
+                        return;
+                    }
+                }
+
+                self.stop_parsing = true;
+            }
+
+            // Anything else
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | _ => {
+                self.parse_error(&token);
+                /* Ignore */
             }
         }
     }
