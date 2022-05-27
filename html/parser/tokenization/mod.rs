@@ -7,6 +7,7 @@ pub mod tokenizer;
 
 mod state {
     mod cdata;
+    mod character_reference;
     mod comment;
     mod data;
     mod doctype;
