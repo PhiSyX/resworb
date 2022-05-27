@@ -6773,7 +6773,7 @@ where
         }
     }
 
-    fn handle_in_frameset_insertion_mode(&mut self, token: HTMLToken) {
+    fn handle_in_frameset_insertion_mode(&mut self, mut token: HTMLToken) {
         match token {
             // U+0009 CHARACTER TABULATION
             // U+000A LINE FEED (LF)
@@ -6859,6 +6859,25 @@ where
                     self.insertion_mode
                         .switch_to(InsertionMode::AfterFrameset);
                 }
+            }
+
+            // A start tag whose tag name is "frame"
+            //
+            // Insérer un élément HTML pour le jeton. Extraire
+            // immédiatement le nœud de la pile d'éléments ouverts.
+            // Accuser réception du drapeau de fermeture automatique du
+            // jeton, si défini.
+            #[allow(deprecated)] // frame
+            | HTMLToken::Tag(
+                ref tag_token @ HTMLTagToken {
+                    ref name,
+                    is_end: false,
+                    ..
+                },
+            ) if tag_names::frame == name => {
+                self.insert_html_element(tag_token);
+                self.stack_of_open_elements.pop();
+                token.as_tag_mut().set_acknowledge_self_closing_flag();
             }
 
             // Anything else
