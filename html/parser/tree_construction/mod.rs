@@ -3,8 +3,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 mod rules {
-    mod before_head;
-    mod before_html;
+    mod head;
+    mod html;
     mod initial;
 }
 
