@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use dom::node::CommentNode;
 use html_elements::{interface::IsOneOfTagsInterface, tag_names};
 use infra::namespace::Namespace;
 
@@ -2086,6 +2087,190 @@ impl HTMLTreeConstruction {
                 handle_any_other_end_tag(self, &token);
             }
         }
+
+        HTMLTreeConstructionControlFlow::Continue(
+            HTMLParserState::Continue,
+        )
+    }
+
+    pub(crate) fn handle_after_body_insertion_mode(
+        &mut self,
+        token: HTMLToken,
+    ) -> HTMLTreeConstructionControlFlow {
+        match token {
+            // U+0009 CHARACTER TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                return self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // A comment token
+            //
+            // Insérer un commentaire comme dernier enfant du premier
+            // élément de la pile d'éléments ouverts (l'élément html).
+            | HTMLToken::Comment(comment) => {
+                let maybe_insertion_location =
+                    self.stack_of_open_elements.first();
+                if let Some(insertion_location) = maybe_insertion_location
+                {
+                    let comment =
+                        CommentNode::new(&self.document, comment);
+                    insertion_location.append_child(comment.to_owned());
+                }
+            }
+
+            // A DOCTYPE token
+            //
+            // Erreur d'analyse. Ignorer le jeton.
+            | HTMLToken::DOCTYPE(_) => {
+                self.parse_error(&token);
+                /* Ignore */
+            }
+
+            // A start tag whose tag name is "html"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::html == name => {
+                return self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // An end tag whose tag name is "html"
+            //
+            // Si l'analyseur a été créé dans le cadre de l'algorithme
+            // d'analyse des fragments HTML, il s'agit d'une erreur
+            // d'analyse ; ignorer le jeton (cas du fragment).
+            // Sinon, nous devons passer le mode d'insertion sur
+            // "after after body".
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: true,
+                ..
+            }) if tag_names::html == name => {
+                if self.parsing_fragment {
+                    self.parse_error(&token);
+                    return HTMLTreeConstructionControlFlow::Continue(
+                        HTMLParserState::Ignore,
+                    );
+                }
+
+                self.insertion_mode
+                    .switch_to(InsertionMode::AfterAfterBody);
+            }
+
+            // An end-of-file token
+            //
+            // Arrêter l'analyse.
+            | HTMLToken::EOF => {
+                return HTMLTreeConstructionControlFlow::Break(
+                    HTMLParserFlag::Stop,
+                );
+            }
+
+            // Anything else
+            //
+            // Erreur d'analyse. Passer le mode d'insertion à "in body" et
+            // retraiter le jeton.
+            | _ => {
+                self.parse_error(&token);
+                self.insertion_mode.switch_to(InsertionMode::InBody);
+                return self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+        };
+
+        HTMLTreeConstructionControlFlow::Continue(
+            HTMLParserState::Continue,
+        )
+    }
+
+    pub(crate) fn handle_after_after_body_insertion_mode(
+        &mut self,
+        token: HTMLToken,
+    ) -> HTMLTreeConstructionControlFlow {
+        match token {
+            // A comment token
+            //
+            // Insérer un commentaire comme dernier enfant de l'objet
+            // Document.
+            | HTMLToken::Comment(comment) => {
+                let comment = CommentNode::new(&self.document, comment);
+                self.document.append_child(comment.to_owned());
+            }
+
+            // A DOCTYPE token,
+            // U+0009 CHARACTER TABULATION
+            // U+000A LINE FEED (LF)
+            // U+000C FORM FEED (FF)
+            // U+000D CARRIAGE RETURN (CR)
+            // U+0020 SPACE,
+            // A start tag whose tag name is "html"
+            //
+            // Traiter le jeton en utilisant les règles du mode d'insertion
+            // "in body".
+            | HTMLToken::DOCTYPE(_) => {
+                return self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+            | HTMLToken::Character(ch) if ch.is_ascii_whitespace() => {
+                return self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+            | HTMLToken::Tag(HTMLTagToken {
+                ref name,
+                is_end: false,
+                ..
+            }) if tag_names::html == name => {
+                return self.process_using_the_rules_for(
+                    InsertionMode::InBody,
+                    token,
+                );
+            }
+
+            // An end-of-file token
+            //
+            // Arrêter l'analyse.
+            | HTMLToken::EOF => {
+                return HTMLTreeConstructionControlFlow::Break(
+                    HTMLParserFlag::Stop,
+                );
+            }
+
+            // Anything else
+            //
+            // Erreur d'analyse. Passer le mode d'insertion à "in body" et
+            // retraiter le jeton.
+            | _ => {
+                self.parse_error(&token);
+                self.insertion_mode.switch_to(InsertionMode::InBody);
+                return self.process_using_the_rules_for(
+                    self.insertion_mode,
+                    token,
+                );
+            }
+        };
 
         HTMLTreeConstructionControlFlow::Continue(
             HTMLParserState::Continue,
