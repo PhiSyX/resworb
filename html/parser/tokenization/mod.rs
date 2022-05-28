@@ -299,9 +299,6 @@ mod state {
 
 pub(crate) use self::{
     state::State as HTMLTokenizerState,
-    token::{
-        HTMLDoctypeToken, HTMLTagAttribute,
-        HTMLTagToken, HTMLToken,
-    },
+    token::{HTMLTagAttribute, HTMLTagToken, HTMLToken},
     tokenizer::HTMLTokenizer,
 };

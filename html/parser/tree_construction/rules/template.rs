@@ -27,7 +27,7 @@ impl HTMLTreeConstruction {
             // "in body".
             | HTMLToken::Character(_)
             | HTMLToken::Comment(_)
-            | HTMLToken::DOCTYPE(_) => {
+            | HTMLToken::DOCTYPE {  .. } => {
                 return self.process_using_the_rules_for(
                     InsertionMode::InBody,
                     token,

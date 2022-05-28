@@ -41,7 +41,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE(_) => {
+            | HTMLToken::DOCTYPE { .. } => {
                 self.parse_error(&token);
                 /* Ignore */
             }
@@ -206,7 +206,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE(_) => {
+            | HTMLToken::DOCTYPE { .. } => {
                 self.parse_error(&token);
                 /* Ignore */
             }
@@ -285,7 +285,7 @@ impl HTMLTreeConstruction {
             //
             // Traiter le jeton en utilisant les règles du mode d'insertion
             // "in body".
-            | HTMLToken::DOCTYPE(_) => {
+            | HTMLToken::DOCTYPE { .. } => {
                 return self.process_using_the_rules_for(
                     InsertionMode::InBody,
                     token,

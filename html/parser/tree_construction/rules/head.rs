@@ -39,7 +39,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE(_) => self.parse_error(&token),
+            | HTMLToken::DOCTYPE {  .. } => self.parse_error(&token),
 
             // A start tag whose tag name is "html"
             //
@@ -146,7 +146,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE(_) => {
+            | HTMLToken::DOCTYPE {  .. } => {
                 self.parse_error(&token);
                 /* ignore */
             }
@@ -488,7 +488,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE(_) => {
+            | HTMLToken::DOCTYPE {  .. } => {
                 self.parse_error(&token);
                 /* Ignore */
             }
@@ -636,7 +636,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE(_) => {
+            | HTMLToken::DOCTYPE {  .. } => {
                 self.parse_error(&token);
                 /* Ignore */
             }

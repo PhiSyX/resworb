@@ -443,9 +443,7 @@ mod tests {
     use infra::primitive::codepoint::CodePoint;
     use parser::preprocessor::InputStream;
 
-    use crate::tokenization::{
-        HTMLDoctypeToken, HTMLTagToken, HTMLToken, HTMLTokenizer,
-    };
+    use crate::tokenization::{HTMLTagToken, HTMLToken, HTMLTokenizer};
 
     fn get_tokenizer_html(
         input: &'static str,
@@ -481,25 +479,25 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_public_identifier("foo")
                     .with_quirks_mode()
-            )),
+            ),
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_public_identifier("-//W3C//DTD HTML 4.01//EN")
                     .with_system_identifier("foo")
                     .with_quirks_mode()
-            ))
+            )
         );
     }
 
@@ -532,9 +530,7 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new().with_quirks_mode()
-            ))
+            Some(HTMLToken::new_doctype().with_quirks_mode())
         );
     }
 
@@ -593,11 +589,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_quirks_mode()
-            ))
+            )
         );
     }
 
@@ -644,9 +640,7 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new().with_quirks_mode()
-            ))
+            Some(HTMLToken::new_doctype().with_quirks_mode())
         );
     }
 
@@ -658,22 +652,22 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_quirks_mode()
-            ))
+            )
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_quirks_mode()
-            ))
+            )
         );
     }
 
@@ -702,22 +696,22 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_quirks_mode()
-            ))
+            )
         );
 
         html_tok.next_token();
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_quirks_mode()
-            ))
+            )
         );
     }
 
@@ -729,11 +723,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_public_identifier("-//W3C//DTD HTML 4.01//EN")
-            ))
+            )
         );
 
         html_tok.next_token();
@@ -741,11 +735,11 @@ mod tests {
         let s = "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd";
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_system_identifier(s)
-            ))
+            )
         );
     }
 
@@ -757,11 +751,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_public_identifier("-//W3C//DTD HTML 4.01//EN")
-            ))
+            )
         );
     }
 
@@ -790,11 +784,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::DOCTYPE(
-                HTMLDoctypeToken::new()
+            Some(
+                HTMLToken::new_doctype()
                     .with_name("html")
                     .with_public_identifier("-//W3C//DTD HTML 4.01//EN")
-            ))
+            )
         );
     }
 

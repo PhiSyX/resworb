@@ -24,7 +24,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE(_) => {
+            | HTMLToken::DOCTYPE {  .. } => {
                 self.parse_error(&token);
                 /* ignore */
             }

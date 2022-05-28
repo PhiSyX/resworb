@@ -10,10 +10,11 @@ use infra::{
 use crate::{
     codepoint::HTMLCodePoint,
     tokenization::{
+        token::ForceQuirksFlag,
         tokenizer::{
             HTMLTokenizerProcessInterface, HTMLTokenizerProcessResult,
         },
-        HTMLDoctypeToken, HTMLToken, HTMLTokenizer,
+        HTMLToken, HTMLTokenizer,
     },
 };
 
@@ -47,9 +48,7 @@ where
             // force-quirks à vrai. Émettre le jeton actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
-                .emit_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new().define_quirks_mode(),
-                ))
+                .emit_token(HTMLToken::new_doctype().with_quirks_mode())
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-doctype"),
 
@@ -85,10 +84,10 @@ where
             // (ajouter 0x0020 au point de code du caractère). Passer à
             // l'état `doctype-name`.
             | Some(ch) if ch.is_ascii_uppercase() => self
-                .set_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new()
-                        .define_doctype_name(ch.to_ascii_lowercase()),
-                ))
+                .set_token(
+                    HTMLToken::new_doctype()
+                        .with_name(ch.to_ascii_lowercase()),
+                )
                 .switch_state_to("doctype-name")
                 .and_continue(),
 
@@ -99,10 +98,10 @@ where
             // `doctype`. Définir le nom du jeton sur un caractère U+FFFD
             // `REPLACEMENT_CHARACTER`. Passer à l'état `doctype-name`.
             | Some('\0') => self
-                .set_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new()
-                        .define_doctype_name(char::REPLACEMENT_CHARACTER),
-                ))
+                .set_token(
+                    HTMLToken::new_doctype()
+                        .with_name(char::REPLACEMENT_CHARACTER),
+                )
                 .switch_state_to("doctype-name")
                 .and_continue_with_error("unexpected-null-character"),
 
@@ -113,9 +112,7 @@ where
             // Mettre son drapeau force-quirks à vrai. Passer à l'état
             // `data`. Émettre le jeton actuel.
             | Some('>') => self
-                .set_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new().define_quirks_mode(),
-                ))
+                .set_token(HTMLToken::new_doctype().with_quirks_mode())
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-name"),
 
@@ -126,9 +123,7 @@ where
             // force-quirks à vrai. Émettre le jeton actuel. Émettre un
             // jeton de `end-of-file`.
             | None => self
-                .emit_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new().define_quirks_mode(),
-                ))
+                .emit_token(HTMLToken::new_doctype().with_quirks_mode())
                 .set_token(HTMLToken::EOF)
                 .and_emit_with_error("eof-in-doctype"),
 
@@ -137,9 +132,7 @@ where
             // Créer un nouveau jeton `doctype`. Définir le nom du jeton
             // sur le caractère actuel. Passer à l'état `doctype-name`.
             | Some(ch) => self
-                .set_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new().define_doctype_name(ch),
-                ))
+                .set_token(HTMLToken::new_doctype().with_name(ch))
                 .switch_state_to("doctype-name")
                 .and_continue(),
         }
@@ -191,11 +184,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
-            // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
+            // sur "on". Émettre le jeton `doctype` actuel. Émettre d'un
             // jeton de `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -234,11 +227,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
-            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // sur "on". Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -290,7 +283,7 @@ where
 
                 if !f {
                     self.change_current_token(|token| {
-                        token.as_doctype().set_force_quirks_flag(true);
+                        token.set_force_quirks_flag(ForceQuirksFlag::On);
                     })
                     .reconsume("bogus-doctype")
                     .and_continue_with_error(
@@ -326,9 +319,7 @@ where
             // `doctype-public-identifier-double-quoted`.
             | Some('"') => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .set_public_identifier(String::new());
+                    token.set_public_identifier(String::new());
                 })
                 .switch_state_to("doctype-public-identifier-double-quoted")
                 .and_continue_with_error(
@@ -344,9 +335,7 @@ where
             // `doctype-public-identifier-single-quoted`.
             | Some('\'') => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .set_public_identifier(String::new());
+                    token.set_public_identifier(String::new());
                 })
                 .switch_state_to("doctype-public-identifier-single-quoted")
                 .and_continue_with_error(
@@ -357,11 +346,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `missing-doctype-public-identifier`. Définir le drapeau
-            // force-quirks du jeton `doctype` actuel sur vrai. Passer à
+            // force-quirks du jeton `doctype` actuel sur "on". Passer à
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-public-identifier"),
@@ -370,11 +359,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
-            // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
+            // sur "on". Émettre le jeton `doctype` actuel. Émettre d'un
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -384,11 +373,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `missing-quote-before-doctype-public-identifier`. Définir le
-            // drapeau force-quirks du jeton `doctype` actuel sur vrai.
+            // drapeau force-quirks du jeton `doctype` actuel sur "on".
             // Reprendre dans l'état `bogus-doctype`.
             | Some(_) => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -415,9 +404,7 @@ where
             // chaîne de caractères vide, passer à l'état
             // `doctype-public-identifier-double-quoted`.
             | Some('"') => self
-                .set_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new().define_doctype_name('\0'),
-                ))
+                .set_token(HTMLToken::new_doctype().with_name('\0'))
                 .switch_state_to("doctype-public-identifier-double-quoted")
                 .and_continue(),
 
@@ -427,9 +414,7 @@ where
             // chaîne de caractères vide, passer à l'état
             // `doctype-public-identifier-single-quoted`.
             | Some('\'') => self
-                .set_token(HTMLToken::DOCTYPE(
-                    HTMLDoctypeToken::new().define_doctype_name('\0'),
-                ))
+                .set_token(HTMLToken::new_doctype().with_name('\0'))
                 .switch_state_to("doctype-public-identifier-single-quoted")
                 .and_continue(),
 
@@ -437,11 +422,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `missing-doctype-public-identifier`. Définir le drapeau
-            // force-quirks du jeton `doctype` actuel sur vrai. Passer à
+            // force-quirks du jeton `doctype` actuel sur "on". Passer à
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-public-identifier"),
@@ -450,11 +435,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
-            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // sur "on". Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -464,11 +449,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `missing-quote-before-doctype-public-identifier`. Définir le
-            // drapeau force-quirks du jeton `doctype` actuel sur vrai.
+            // drapeau force-quirks du jeton `doctype` actuel sur "on".
             // Reprendre à l'état `bogus-doctype`.
             | Some(_) => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -504,11 +489,9 @@ where
             // `doctype` actuel.
             | Some('\0') => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .append_character_to_public_identifier(
-                            char::REPLACEMENT_CHARACTER,
-                        );
+                    token.append_character_to_public_identifier(
+                        char::REPLACEMENT_CHARACTER,
+                    );
                 })
                 .and_continue_with_error("unexpected-null-character"),
 
@@ -516,11 +499,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `abrupt-doctype-public-identifier`. Définir le drapeau
-            // force-quirks du jeton `doctype` actuel sur vrai. Passer à
+            // force-quirks du jeton `doctype` actuel sur "on". Passer à
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("abrupt-doctype-public-identifier"),
@@ -529,11 +512,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
-            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // sur "on". Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -545,9 +528,7 @@ where
             // `doctype` actuel.
             | Some(ch) => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .append_character_to_public_identifier(ch);
+                    token.append_character_to_public_identifier(ch);
                 })
                 .and_continue(),
         }
@@ -587,9 +568,7 @@ where
             | Some(ch @ ('"' | '\'')) => {
                 let err = "missing-whitespace-between-doctype-public-and-system-identifiers";
                 self.change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .set_system_identifier(String::new());
+                    token.set_system_identifier(String::new());
                 })
                 .switch_state_to(if ch == '"' {
                     "doctype-system-identifier-double-quoted"
@@ -603,11 +582,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
-            // sur vrai. Émettre le jeton `doctype` actuel. Émettre d'un
+            // sur "on". Émettre le jeton `doctype` actuel. Émettre d'un
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -653,9 +632,7 @@ where
             // `doctype-system-identifier-single-quoted`.
             | Some(ch @ ('"' | '\'')) => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .set_system_identifier(String::new());
+                    token.set_system_identifier(String::new());
                 })
                 .switch_state_to(if ch == '"' {
                     "doctype-system-identifier-double-quoted"
@@ -668,11 +645,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
-            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // sur "on". Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -686,7 +663,7 @@ where
             // dans l'état `bogus-doctype`.
             | Some(_) => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -718,9 +695,7 @@ where
             // `doctype-system-identifier-double-quoted`.
             | Some('"') => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .set_system_identifier(String::new());
+                    token.set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-double-quoted")
                 .and_continue_with_error(
@@ -736,9 +711,7 @@ where
             // `doctype-system-identifier-single-quoted`.
             | Some('\'') => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .set_system_identifier(String::new());
+                    token.set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-single-quoted")
                 .and_continue_with_error(
@@ -749,11 +722,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `missing-doctype-system-identifier`. Définir le drapeau
-            // force-quirks du jeton `doctype` actuel sur vrai. Passer à
+            // force-quirks du jeton `doctype` actuel sur "on". Passer à
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-system-identifier"),
@@ -762,11 +735,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
-            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // sur "on". Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -776,11 +749,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `missing-quote-before-doctype-system-identifier`. Définir le
-            // drapeau force-quirks du jeton `doctype` actuel sur vrai.
+            // drapeau force-quirks du jeton `doctype` actuel sur "on".
             // Reprendre dans l'état `bogus-doctype`.
             | Some(_) => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .set_token(HTMLToken::EOF)
                 .reconsume("bogus-doctype")
@@ -809,9 +782,7 @@ where
             // `doctype-system-identifier-double-quoted`.
             | Some('"') => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .set_system_identifier(String::new());
+                    token.set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-double-quoted")
                 .and_continue(),
@@ -823,9 +794,7 @@ where
             // `doctype-system-identifier-single-quoted`
             | Some('\'') => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .set_system_identifier(String::new());
+                    token.set_system_identifier(String::new());
                 })
                 .switch_state_to("doctype-system-identifier-single-quoted")
                 .and_continue(),
@@ -834,11 +803,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `missing-doctype-system-identifier`. Définir le drapeau
-            // force-quirks du jeton `doctype` actuel sur vrai. Passer à
+            // force-quirks du jeton `doctype` actuel sur "on". Passer à
             // l'état `data`. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("missing-doctype-system-identifier"),
@@ -847,11 +816,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
-            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // sur "on". Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -861,11 +830,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse de type
             // `missing-quote-before-doctype-system-identifier`. Définir
-            // le drapeau force-quirks du jeton `doctype` actuel sur vrai.
+            // le drapeau force-quirks du jeton `doctype` actuel sur "on".
             // Reprendre dans l'état `bogus-doctype`.
             | Some(_) => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .reconsume("bogus-doctype")
                 .and_continue_with_error(
@@ -895,11 +864,9 @@ where
             // DOCTYPE actuel.
             | Some('\0') => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .append_character_to_system_identifier(
-                            char::REPLACEMENT_CHARACTER,
-                        );
+                    token.append_character_to_system_identifier(
+                        char::REPLACEMENT_CHARACTER,
+                    );
                 })
                 .and_continue(),
 
@@ -911,7 +878,7 @@ where
             // données. Émettre le jeton `doctype` actuel.
             | Some('>') => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .switch_state_to("data")
                 .and_emit_with_error("abrupt-doctype-system-identifier"),
@@ -920,12 +887,12 @@ where
             //
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton
-            // `doctype` actuel sur vrai. Émettre le jeton
+            // `doctype` actuel sur "on". Émettre le jeton
             // `doctype` actuel. Émission d'un jeton de
             // fin de fichier.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)
@@ -937,9 +904,7 @@ where
             // DOCTYPE actuel.
             | Some(ch) => self
                 .change_current_token(|token| {
-                    token
-                        .as_doctype()
-                        .append_character_to_system_identifier(ch);
+                    token.append_character_to_system_identifier(ch);
                 })
                 .and_continue(),
         }
@@ -966,11 +931,11 @@ where
             //
             // Il s'agit d'une erreur d'analyse type `eof-in-doctype`.
             // Définir le drapeau force-quirks du jeton `doctype` actuel
-            // sur vrai. Émettre le jeton `doctype` actuel. Émettre un
+            // sur "on". Émettre le jeton `doctype` actuel. Émettre un
             // jeton `end-of-file`.
             | None => self
                 .change_current_token(|token| {
-                    token.as_doctype().set_force_quirks_flag(true);
+                    token.set_force_quirks_flag(ForceQuirksFlag::On);
                 })
                 .and_emit_current_token()
                 .set_token(HTMLToken::EOF)

@@ -95,7 +95,9 @@ impl HTMLTreeConstruction {
             // des conditions ci-dessus.
             //
             // Ensuite, passer le mode d'insertion à "before html".
-            | HTMLToken::DOCTYPE(ref doctype_data) => {
+            | HTMLToken::DOCTYPE { .. } => {
+                let doctype_data = token.as_doctype();
+
                 let is_parse_error = !doctype_data.is_html_name()
                     || !doctype_data.is_public_identifier_missing()
                     || !doctype_data.is_system_identifier_missing()
@@ -109,14 +111,10 @@ impl HTMLTreeConstruction {
                 }
 
                 let mut doctype =
-                    DocumentType::new(doctype_data.name.as_ref());
+                    DocumentType::new(doctype_data.name().into());
 
-                doctype.set_public_id(
-                    doctype_data.public_identifier.as_ref(),
-                );
-                doctype.set_system_id(
-                    doctype_data.system_identifier.as_ref(),
-                );
+                doctype.set_public_id(doctype_data.public_identifier());
+                doctype.set_system_id(doctype_data.system_identifier());
 
                 self.document
                     .get_mut()

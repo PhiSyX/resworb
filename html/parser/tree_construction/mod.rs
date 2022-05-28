@@ -90,7 +90,7 @@ impl HTMLTreeConstruction {
     pub(crate) fn dispatcher(
         &mut self,
         token: Option<HTMLToken>,
-    ) -> ControlFlow<HTMLParserFlag, HTMLParserState> {
+    ) -> HTMLTreeConstructionControlFlow {
         match token {
             | None => ControlFlow::Break(HTMLParserFlag::Stop),
 
@@ -254,7 +254,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE(_) => {
+            | HTMLToken::DOCTYPE {  .. } => {
                 self.parse_error(&token);
             }
 
@@ -1054,7 +1054,7 @@ impl HTMLTreeConstruction {
                     log::error!("Balise de début inattendue: {name}");
                 }
             }
-            | HTMLToken::DOCTYPE(_) => log::error!("DOCTYPE inattendu"),
+            | HTMLToken::DOCTYPE {  .. } => log::error!("DOCTYPE inattendu"),
             | HTMLToken::Comment(_) => {
                 log::error!("Commentaire inattendu")
             }
