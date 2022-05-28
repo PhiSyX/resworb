@@ -12,6 +12,7 @@ use infra::structure::tree::TreeNode;
 // Énumération //
 // ----------- //
 
+#[derive(Debug)]
 #[derive(Default)]
 pub(crate) struct StackOfOpenElements {
     elements: Vec<TreeNode<Node>>,

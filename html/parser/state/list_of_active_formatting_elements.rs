@@ -12,6 +12,7 @@ use infra::structure::tree::TreeNode;
 // Structure //
 // --------- //
 
+#[derive(Debug)]
 #[derive(Default)]
 pub(crate) struct ListOfActiveFormattingElements {
     entries: Vec<Entry>,
@@ -21,6 +22,7 @@ pub(crate) struct ListOfActiveFormattingElements {
 // Énumération //
 // ----------- //
 
+#[derive(Debug)]
 #[derive(PartialEq)]
 pub(crate) enum Entry {
     Marker,

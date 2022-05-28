@@ -4,6 +4,7 @@
 
 use std::{borrow::Cow, collections::VecDeque};
 
+use dom::node::DocumentNode;
 use infra::primitive::codepoint::CodePoint;
 use macros::dd;
 use named_character_references::{
@@ -12,7 +13,9 @@ use named_character_references::{
 use parser::preprocessor::InputStream;
 
 use super::{state::State, HTMLTagToken, HTMLToken};
-use crate::error::HTMLParserError;
+use crate::{
+    error::HTMLParserError, tree_construction::HTMLTreeConstruction,
+};
 
 // --------- //
 // Interface //
@@ -70,6 +73,7 @@ where
     Chars: Iterator<Item = CodePoint>,
 {
     pub(crate) stream: HTMLInputStream<Chars>,
+    pub(crate) tree_construction: HTMLTreeConstruction,
 
     /// Le jeton courant.
     token: Option<HTMLToken>,
@@ -116,10 +120,11 @@ impl<C> HTMLTokenizer<C>
 where
     C: Iterator<Item = CodePoint>,
 {
-    pub fn new(iter: C) -> Self {
+    pub fn new(document: DocumentNode, iter: C) -> Self {
         let stream = HTMLInputStream::new(iter);
         Self {
             stream,
+            tree_construction: HTMLTreeConstruction::new(document),
             token: None,
             state: HTMLTokenizerState::default(),
             output_tokens: VecDeque::default(),
@@ -535,7 +540,7 @@ mod tests {
         input: &'static str,
     ) -> HTMLTokenizer<impl Iterator<Item = CodePoint>> {
         let stream = InputStream::new(input.chars());
-        HTMLTokenizer::new(stream)
+        HTMLTokenizer::new(DocumentNode::default(), stream)
     }
 
     #[test]

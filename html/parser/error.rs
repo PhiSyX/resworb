@@ -439,6 +439,7 @@ define_errors! {
 
 #[cfg(test)]
 mod tests {
+    use dom::node::DocumentNode;
     use infra::primitive::codepoint::CodePoint;
     use parser::preprocessor::InputStream;
 
@@ -450,7 +451,7 @@ mod tests {
         input: &'static str,
     ) -> HTMLTokenizer<impl Iterator<Item = CodePoint>> {
         let stream = InputStream::new(input.chars());
-        HTMLTokenizer::new(stream)
+        HTMLTokenizer::new(DocumentNode::default(), stream)
     }
 
     #[test]

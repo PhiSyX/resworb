@@ -80,8 +80,17 @@ where
             // un jeton `comment` dont les données sont une chaîne de
             // caractères "[CDATA[". Passer à l'état `bogus-comment`.
             else if word == "[CDATA[" {
-                // todo: adjusted current node
                 self.stream.advance(7);
+
+                if !self
+                    .tree_construction
+                    .adjusted_current_node()
+                    .element_ref()
+                    .isin_html_namespace()
+                {
+                    return self.switch_state_to("cdata").and_continue();
+                }
+
                 return self
                     .set_token(HTMLToken::new_comment(word))
                     .switch_state_to("bogus-comment")
