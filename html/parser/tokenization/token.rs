@@ -817,6 +817,7 @@ where
     }
 }
 
+#[allow(non_snake_case)]
 mod DOCTYPE {
     pub(crate) const PUBLIC_ID_DEFINED_RULE_1: [&str; 3] = [
         "-//W3O//DTD W3 HTML Strict 3.0//EN//",

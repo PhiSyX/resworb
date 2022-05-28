@@ -345,7 +345,9 @@ impl str::FromStr for HTMLElement {
             | tag_names::h6) => Self::SectionHeading(
                 html_elements::HTMLHeadingElement::new(heading),
             ),
-            | _ => return Err("Element non pris en charge pour le moment."),
+            | _ => {
+                return Err("Element non pris en charge pour le moment.")
+            }
         })
     }
 }

@@ -1143,6 +1143,7 @@ impl HTMLTreeConstruction {
 
         let size = self.list_of_active_formatting_elements.len();
 
+        #[allow(unused_assignments)]
         let (mut entry, mut idx) = if let Some(last) =
             self.list_of_active_formatting_elements.last_mut()
         {
@@ -1162,6 +1163,8 @@ impl HTMLTreeConstruction {
             return;
         };
 
+        // todo: probablement à améliorer.
+        #[allow(unused_labels)]
         'main: loop {
             // Rewind
             'rewind: loop {
@@ -1210,6 +1213,7 @@ impl HTMLTreeConstruction {
                 }
             }
 
+            #[allow(unused_assignments)]
             'advance: loop {
                 idx += 1;
                 entry = unsafe {
