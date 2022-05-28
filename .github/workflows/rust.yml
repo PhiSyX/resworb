@@ -1,25 +1,41 @@
-name: Rust
+name: Rust CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+        - main
+        - 'feat/**'
   pull_request:
-    branches: [ main ]
+    branches:
+        - main
+        - 'feat/**'
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: nightly
-        override: true
+
+    - name: mise à jour de la toolchain
+      run: |
+        rustup update
+        rustup install nightly
+        rustup default nightly
+        rustup component add clippy rustfmt
+
+    - name: information de la toolchain
+      run: |
+        cargo --version --verbose
+        rustc --version
+        cargo clippy --version
+
+    - name: formatage & linter
+      run: |
+        cargo fmt -- --check
+        cargo clippy -- -D warnings -A dead_code
+
     - name: tests unitaires
       run: cargo test --all --verbose
