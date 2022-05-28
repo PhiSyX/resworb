@@ -6,7 +6,7 @@ use html_elements::{interface::IsOneOfTagsInterface, tag_names};
 
 use crate::{
     state::{Entry, InsertionMode, StackOfOpenElements},
-    tokenization::{HTMLTagToken, HTMLToken},
+    tokenization::HTMLToken,
     tree_construction::{
         HTMLTreeConstruction, HTMLTreeConstructionControlFlow,
     },
@@ -90,7 +90,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE {  .. } => {
+            | HTMLToken::DOCTYPE { .. } => {
                 self.parse_error(&token);
                 /* Ignore */
             }
@@ -103,17 +103,15 @@ impl HTMLTreeConstruction {
             // mise en forme actifs.
             // Insérer un élément HTML pour le jeton, puis passer le mode
             // d'insertion à "in caption".
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::caption == name => {
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if tag_names::caption == name => {
                 clear_stack_back_to_table_context(self);
                 self.list_of_active_formatting_elements
                     .push(Entry::Marker);
-                self.insert_html_element(tag_token);
+                self.insert_html_element(token.as_tag());
                 self.insertion_mode.switch_to(InsertionMode::InCaption);
             }
 
@@ -123,15 +121,13 @@ impl HTMLTreeConstruction {
             // ci-dessus.)
             // Insérer un élément HTML pour le jeton, puis passer le mode
             // d'insertion à "in column group".
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::colgroup == name => {
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if tag_names::colgroup == name => {
                 clear_stack_back_to_table_context(self);
-                self.insert_html_element(tag_token);
+                self.insert_html_element(token.as_tag());
                 self.insertion_mode
                     .switch_to(InsertionMode::InColumnGroup);
             }
@@ -144,14 +140,15 @@ impl HTMLTreeConstruction {
             // "colgroup" sans attributs, puis passer le mode d'insertion à
             // "in column group".
             // Retraiter le jeton actuel.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::col == name => {
+            } if tag_names::col == name => {
                 clear_stack_back_to_table_context(self);
                 self.insert_html_element(
-                    &HTMLTagToken::start().with_name(tag_names::colgroup),
+                    &HTMLToken::new_start_tag()
+                        .with_name(tag_names::colgroup),
                 );
                 self.insertion_mode
                     .switch_to(InsertionMode::InColumnGroup);
@@ -168,20 +165,18 @@ impl HTMLTreeConstruction {
             // ci-dessus.)
             // Insérer un élément HTML pour le jeton, puis passer le mode
             // d'insertion à "in table body".
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if name.is_one_of([
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if name.is_one_of([
                 tag_names::tbody,
                 tag_names::tfoot,
                 tag_names::thead,
             ]) =>
             {
                 clear_stack_back_to_table_context(self);
-                self.insert_html_element(tag_token);
+                self.insert_html_element(token.as_tag());
                 self.insertion_mode.switch_to(InsertionMode::InTableBody);
             }
 
@@ -193,11 +188,11 @@ impl HTMLTreeConstruction {
             // "tbody" sans attributs, puis passer le mode d'insertion à
             // "in table body".
             // Retraiter le jeton actuel.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if name.is_one_of([
+            } if name.is_one_of([
                 tag_names::td,
                 tag_names::th,
                 tag_names::tr,
@@ -205,7 +200,8 @@ impl HTMLTreeConstruction {
             {
                 clear_stack_back_to_table_context(self);
                 self.insert_html_element(
-                    &HTMLTagToken::start().with_name(tag_names::tbody),
+                    &HTMLToken::new_start_tag()
+                        .with_name(tag_names::tbody),
                 );
                 self.insertion_mode.switch_to(InsertionMode::InTableBody);
                 return self.process_using_the_rules_for(
@@ -225,11 +221,11 @@ impl HTMLTreeConstruction {
             // de table ait été sorti de la pile.
             // Réinitialiser le mode d'insertion de manière appropriée.
             // Retraiter le jeton actuel.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::table == name => {
+            } if tag_names::table == name => {
                 self.parse_error(&token);
 
                 if !self.stack_of_open_elements.has_element_in_scope(
@@ -259,11 +255,11 @@ impl HTMLTreeConstruction {
             // Retirer les éléments de cette pile jusqu'à ce qu'un élément
             // de table ait été sorti de la pile.
             // Réinitialiser le mode d'insertion de manière appropriée.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::table == name => {
+            } if tag_names::table == name => {
                 if !self.stack_of_open_elements.has_element_in_scope(
                     tag_names::table,
                     StackOfOpenElements::table_scope_elements(),
@@ -284,11 +280,11 @@ impl HTMLTreeConstruction {
             // "thead", "tr"
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if name.is_one_of([
+            } if name.is_one_of([
                 tag_names::body,
                 tag_names::caption,
                 tag_names::col,
@@ -312,9 +308,9 @@ impl HTMLTreeConstruction {
             //
             // Traiter le jeton en utilisant les règles du mode d'insertion
             // "in head".
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name, is_end, ..
-            }) if !is_end
+            } if !is_end
                 && name.is_one_of([
                     tag_names::style,
                     tag_names::script,
@@ -342,21 +338,19 @@ impl HTMLTreeConstruction {
             // ouverts.
             // Accusé réception du le drapeau self-closing du jeton, s'il
             // est activé.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    ref attributes,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::input == name
+            | HTMLToken::Tag {
+                ref name,
+                ref attributes,
+                is_end: false,
+                ..
+            } if tag_names::input == name
                 && attributes.iter().any(|attr| {
                     attr.name == "type"
                         && attr.value.eq_ignore_ascii_case("hidden")
                 }) =>
             {
                 self.parse_error(&token);
-                let element = self.insert_html_element(tag_token);
+                let element = self.insert_html_element(token.as_tag());
 
                 self.stack_of_open_elements.remove_first_tag_matching(
                     |node| element.contains(node),
@@ -377,13 +371,11 @@ impl HTMLTreeConstruction {
             // créé.
             // Retirer cet élément de formulaire de la pile des éléments
             // ouverts.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::form == name => {
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if tag_names::form == name => {
                 self.parse_error(&token);
 
                 if self
@@ -396,7 +388,7 @@ impl HTMLTreeConstruction {
                     );
                 }
 
-                let element = self.insert_html_element(tag_token);
+                let element = self.insert_html_element(token.as_tag());
                 self.form_element_pointer = element.clone();
 
                 self.stack_of_open_elements.remove_first_tag_matching(
@@ -541,7 +533,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE {  .. } => {
+            | HTMLToken::DOCTYPE { .. } => {
                 self.parse_error(&token);
                 /* Ignore */
             }
@@ -550,11 +542,11 @@ impl HTMLTreeConstruction {
             //
             // Traiter le jeton en utilisant les règles du mode d'insertion
             // "in body".
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::html == name => {
+            } if tag_names::html == name => {
                 return self.process_using_the_rules_for(
                     InsertionMode::InBody,
                     token,
@@ -568,14 +560,12 @@ impl HTMLTreeConstruction {
             // d'éléments ouverts.
             // Accusé réception du le drapeau self-closing du jeton, s'il
             // est activé.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::col == name => {
-                self.insert_html_element(tag_token);
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if tag_names::col == name => {
+                self.insert_html_element(token.as_tag());
                 self.stack_of_open_elements.pop();
                 token.as_tag_mut().set_acknowledge_self_closing_flag();
             }
@@ -586,11 +576,11 @@ impl HTMLTreeConstruction {
             // d'une erreur d'analyse ; ignorer le jeton.
             // Sinon, extraire le nœud actuel de la pile d'éléments
             // ouverts. Passer le mode d'insertion à "in table".
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::colgroup == name => {
+            } if tag_names::colgroup == name => {
                 if let Some(node) = self.current_node() {
                     if node.element_ref().tag_name() != tag_names::colgroup
                     {
@@ -608,11 +598,11 @@ impl HTMLTreeConstruction {
             // A end tag whose tag name is "col"
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::col == name => {
+            } if tag_names::col == name => {
                 self.parse_error(&token);
                 /* Ignore */
             }
@@ -622,7 +612,7 @@ impl HTMLTreeConstruction {
             //
             // Retraiter le jeton en utilisant les règles du mode
             // d'insertion "in head".
-            | HTMLToken::Tag(HTMLTagToken { ref name, .. })
+            | HTMLToken::Tag { ref name, .. }
                 if tag_names::template == name =>
             {
                 return self.process_using_the_rules_for(
@@ -713,15 +703,13 @@ impl HTMLTreeConstruction {
             // Effacer la pile pour revenir à un contexte "table body".
             // Insérer un élément HTML pour le jeton, puis passer le mode
             // d'insertion à "in row".
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::tr == name => {
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if tag_names::tr == name => {
                 clear_stack_back_to_table_body_context(self);
-                self.insert_html_element(tag_token);
+                self.insert_html_element(token.as_tag());
                 self.insertion_mode.switch_to(InsertionMode::InRow);
             }
 
@@ -733,14 +721,14 @@ impl HTMLTreeConstruction {
             // "tr" sans attributs, puis passer le mode d'insertion à
             // "in row".
             // Retraiter le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if name.is_one_of([tag_names::th, tag_names::td]) => {
+            } if name.is_one_of([tag_names::th, tag_names::td]) => {
                 clear_stack_back_to_table_body_context(self);
                 self.insert_html_element(
-                    &HTMLTagToken::start().with_name(tag_names::tr),
+                    &HTMLToken::new_start_tag().with_name(tag_names::tr),
                 );
                 self.insertion_mode.switch_to(InsertionMode::InRow);
                 return self.process_using_the_rules_for(
@@ -760,20 +748,18 @@ impl HTMLTreeConstruction {
             // Effacer la pile pour revenir à un contexte "table body".
             // Retirer le nœud actuel de la pile d'éléments ouverts. Passer
             // le mode d'insertion à "in table".
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: true,
-                    ..
-                },
-            ) if name.is_one_of([
+            | HTMLToken::Tag {
+                ref name,
+                is_end: true,
+                ..
+            } if name.is_one_of([
                 tag_names::tbody,
                 tag_names::tfoot,
                 tag_names::thead,
             ]) =>
             {
                 if !self.stack_of_open_elements.has_element_in_scope(
-                    tag_token.tag_name(),
+                    token.as_tag().tag_name(),
                     StackOfOpenElements::table_scope_elements(),
                 ) {
                     self.parse_error(&token);
@@ -800,9 +786,9 @@ impl HTMLTreeConstruction {
             // Retirer le nœud actuel de la pile d'éléments ouverts. Passer
             // le mode d'insertion à "in table".
             // Retraiter le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name, is_end, ..
-            }) if !is_end
+            } if !is_end
                 && name.is_one_of([
                     tag_names::caption,
                     tag_names::col,
@@ -836,11 +822,11 @@ impl HTMLTreeConstruction {
             // "col", "colgroup", "html", "td", "th", "tr"
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if name.is_one_of([
+            } if name.is_one_of([
                 tag_names::body,
                 tag_names::caption,
                 tag_names::col,
@@ -903,15 +889,13 @@ impl HTMLTreeConstruction {
             // d'insertion à "in cell".
             // Insérer un marqueur à la fin de la liste des éléments de
             // mise en forme actifs.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if name.is_one_of([tag_names::th, tag_names::td]) => {
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if name.is_one_of([tag_names::th, tag_names::td]) => {
                 clear_stack_back_to_table_row_context(self);
-                self.insert_html_element(tag_token);
+                self.insert_html_element(token.as_tag());
                 self.insertion_mode.switch_to(InsertionMode::InCell);
                 self.list_of_active_formatting_elements
                     .push(Entry::Marker);
@@ -927,11 +911,11 @@ impl HTMLTreeConstruction {
             // Retirer le nœud actuel (qui sera un élément tr) de la pile
             // des éléments ouverts. Passer le mode d'insertion à
             // "in table body".
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::tr == name => {
+            } if tag_names::tr == name => {
                 if !self.stack_of_open_elements.has_element_in_scope(
                     tag_names::tr,
                     StackOfOpenElements::table_scope_elements(),
@@ -960,9 +944,9 @@ impl HTMLTreeConstruction {
             // des éléments ouverts. Passer le mode d'insertion à
             // "in table body".
             // Retraiter le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name, is_end, ..
-            }) if !is_end
+            } if !is_end
                 && name.is_one_of([
                     tag_names::caption,
                     tag_names::col,
@@ -1008,20 +992,18 @@ impl HTMLTreeConstruction {
             // des éléments ouverts. Passer le mode d'insertion à
             // "in table body".
             // Retraiter le jeton.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: true,
-                    ..
-                },
-            ) if name.is_one_of([
+            | HTMLToken::Tag {
+                ref name,
+                is_end: true,
+                ..
+            } if name.is_one_of([
                 tag_names::tbody,
                 tag_names::tfoot,
                 tag_names::thead,
             ]) =>
             {
                 if !self.stack_of_open_elements.has_element_in_scope(
-                    tag_token.tag_name(),
+                    token.as_tag().tag_name(),
                     StackOfOpenElements::table_scope_elements(),
                 ) {
                     self.parse_error(&token);
@@ -1052,11 +1034,11 @@ impl HTMLTreeConstruction {
             // "col", "colgroup", "html", "td", "th"
             //
             // Erreur d'analyse: ignorer le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if name.is_one_of([
+            } if name.is_one_of([
                 tag_names::body,
                 tag_names::caption,
                 tag_names::col,
@@ -1141,15 +1123,13 @@ impl HTMLTreeConstruction {
             // Effacer la liste des éléments de mise en forme actifs
             // jusqu'au dernier marqueur.
             // Passer le mode d'insertion sur "in row".
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: true,
-                    ..
-                },
-            ) if name.is_one_of([tag_names::td, tag_names::th]) => {
+            | HTMLToken::Tag {
+                ref name,
+                is_end: true,
+                ..
+            } if name.is_one_of([tag_names::td, tag_names::th]) => {
                 if !self.stack_of_open_elements.has_element_in_scope(
-                    tag_token.tag_name(),
+                    token.as_tag().tag_name(),
                     StackOfOpenElements::table_scope_elements(),
                 ) {
                     self.parse_error(&token);
@@ -1162,14 +1142,14 @@ impl HTMLTreeConstruction {
 
                 if let Some(cnode) = self.current_node() {
                     if cnode.element_ref().tag_name()
-                        != tag_token.tag_name()
+                        != token.as_tag().tag_name()
                     {
                         self.parse_error(&token);
                     }
                 }
 
                 self.stack_of_open_elements
-                    .pop_until_tag(tag_token.tag_name());
+                    .pop_until_tag(token.as_tag().tag_name());
                 self.list_of_active_formatting_elements
                     .clear_up_to_the_last_marker();
                 self.insertion_mode.switch_to(InsertionMode::InRow);
@@ -1183,11 +1163,11 @@ impl HTMLTreeConstruction {
             // d'analyse ; ignorer le jeton. (cas d'un fragment)
             // Sinon, nous devons fermer la cellule puis retraiter le
             // jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if name.is_one_of([
+            } if name.is_one_of([
                 tag_names::caption,
                 tag_names::col,
                 tag_names::colgroup,
@@ -1221,11 +1201,11 @@ impl HTMLTreeConstruction {
             // "col", "colgroup", "html"
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if name.is_one_of([
+            } if name.is_one_of([
                 tag_names::body,
                 tag_names::caption,
                 tag_names::col,
@@ -1246,13 +1226,11 @@ impl HTMLTreeConstruction {
             // d'analyse ; ignorer le jeton.
             // Sinon, nous devons fermer la cellule puis retraiter le
             // jeton.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: true,
-                    ..
-                },
-            ) if name.is_one_of([
+            | HTMLToken::Tag {
+                ref name,
+                is_end: true,
+                ..
+            } if name.is_one_of([
                 tag_names::table,
                 tag_names::tbody,
                 tag_names::tfoot,
@@ -1261,7 +1239,7 @@ impl HTMLTreeConstruction {
             ]) =>
             {
                 if !self.stack_of_open_elements.has_element_in_scope(
-                    tag_token.tag_name(),
+                    token.as_tag().tag_name(),
                     StackOfOpenElements::table_scope_elements(),
                 ) {
                     self.parse_error(&token);

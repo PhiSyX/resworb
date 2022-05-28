@@ -36,7 +36,7 @@ use crate::{
         InsertionMode, ListOfActiveFormattingElements, ScriptingFlag,
         StackOfOpenElements,
     },
-    tokenization::{HTMLTagToken, HTMLToken, HTMLTokenizerState},
+    tokenization::{HTMLToken, HTMLTokenizerState},
     HTMLParserFlag, HTMLParserState,
 };
 
@@ -215,7 +215,7 @@ impl HTMLTreeConstruction {
 
     fn process_using_the_rules_for_foreign_content(
         &mut self,
-        token: HTMLToken,
+        mut token: HTMLToken,
     ) -> HTMLTreeConstructionControlFlow {
         match token {
             // A character token that is U+0000 NULL
@@ -254,7 +254,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE {  .. } => {
+            | HTMLToken::DOCTYPE { .. } => {
                 self.parse_error(&token);
             }
 
@@ -278,11 +278,9 @@ impl HTMLTreeConstruction {
             // correspondant au mode d'insertion actuel dans le contenu
             // HTML.
             #[allow(deprecated)]
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name, is_end, ..
-                },
-            ) if (!is_end
+            | HTMLToken::Tag {
+                ref name, is_end, ..
+            } if (!is_end
                 && (name.is_one_of([
                     tag_names::b,
                     tag_names::big,
@@ -329,7 +327,7 @@ impl HTMLTreeConstruction {
                     tag_names::ul,
                     tag_names::var,
                 ]) || tag_names::font == name
-                    && tag_token.has_attributes([
+                    && token.as_tag().has_attributes([
                         tag_attributes::color,
                         tag_attributes::face,
                         tag_attributes::size,
@@ -395,13 +393,11 @@ impl HTMLTreeConstruction {
             //   - Sinon
             //     - Retirer le nœud actuel de la pile des éléments ouverts
             //       et reconnaître le drapeau de self-closing du jeton.
-            | HTMLToken::Tag(
-                mut tag_token @ HTMLTagToken {
-                    is_end: false,
-                    self_closing_flag,
-                    ..
-                },
-            ) => {
+            | HTMLToken::Tag {
+                is_end: false,
+                self_closing_flag,
+                ..
+            } => {
                 let adjusted_current_node =
                     self.adjusted_current_node().element_ref();
 
@@ -409,16 +405,16 @@ impl HTMLTreeConstruction {
                     adjusted_current_node.namespace();
 
                 if let Some(Namespace::MathML) = maybe_acn_namespace {
-                    self.adjust_mathml_attributes(&mut tag_token);
+                    self.adjust_mathml_attributes(token.as_tag_mut());
                 } else if let Some(Namespace::SVG) = maybe_acn_namespace {
-                    self.adjust_svg_tag_name(&mut tag_token);
-                    self.adjust_svg_attributes(&mut tag_token);
+                    self.adjust_svg_tag_name(token.as_tag_mut());
+                    self.adjust_svg_attributes(token.as_tag_mut());
                 }
 
-                self.adjust_foreign_attributes(&mut tag_token);
+                self.adjust_foreign_attributes(token.as_tag_mut());
 
                 self.insert_foreign_element(
-                    &tag_token,
+                    token.as_tag(),
                     maybe_acn_namespace
                         .expect("Devrait être un espace de noms valide"),
                 );
@@ -430,13 +426,13 @@ impl HTMLTreeConstruction {
                 }
 
                 let cnode = self.current_node().expect("Le noeud actuel.");
-                if tag_names::script == tag_token.name
+                if tag_names::script == token.name()
                     && cnode.element_ref().isin_svg_namespace()
                 {
-                    tag_token.set_acknowledge_self_closing_flag();
+                    token.as_tag_mut().set_acknowledge_self_closing_flag();
                     return self.process_using_the_rules_for(
                         self.insertion_mode,
-                        HTMLToken::Tag(tag_token),
+                        token,
                     );
                 } else {
                     self.stack_of_open_elements.pop();
@@ -484,7 +480,7 @@ impl HTMLTreeConstruction {
                 && token.is_start_tag()
                 && !token
                     .as_tag()
-                    .name
+                    .name()
                     .is_one_of([tag_names::mglyph, tag_names::malignmark])
             || self
                 .adjusted_current_node()
@@ -493,7 +489,7 @@ impl HTMLTreeConstruction {
             || self.adjusted_current_node().element_ref().tag_name()
                 == tag_names::annotationXml
                 && token.is_start_tag()
-                && tag_names::svg == token.as_tag().name
+                && tag_names::svg == token.as_tag().name()
             || (self
                 .adjusted_current_node()
                 .is_html_text_integration_point()
@@ -504,7 +500,7 @@ impl HTMLTreeConstruction {
 
 impl HTMLTreeConstruction {
     /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-foreign-attributes>
-    fn adjust_foreign_attributes(&mut self, tag_token: &mut HTMLTagToken) {
+    fn adjust_foreign_attributes(&mut self, tag_token: &mut HTMLToken) {
         [
             ("xlink:actuate", "xlink", "actuate", Namespace::XLink),
             ("xlink:arcrole", "xlink", "arcrole", Namespace::XLink),
@@ -527,7 +523,7 @@ impl HTMLTreeConstruction {
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-mathml-attributes>
-    fn adjust_mathml_attributes(&mut self, tag_token: &mut HTMLTagToken) {
+    fn adjust_mathml_attributes(&mut self, tag_token: &mut HTMLToken) {
         [("definitionurl", "definitionURL")].into_iter().for_each(
             |(old_name, new_name)| {
                 tag_token.adjust_attribute_name(old_name, new_name);
@@ -535,7 +531,7 @@ impl HTMLTreeConstruction {
         );
     }
 
-    fn adjust_svg_tag_name(&mut self, tag_token: &mut HTMLTagToken) {
+    fn adjust_svg_tag_name(&mut self, tag_token: &mut HTMLToken) {
         [
             ("altglyph", "altGlyph"),
             ("altglyphdef", "altGlyphDef"),
@@ -582,7 +578,7 @@ impl HTMLTreeConstruction {
     }
 
     /// <https://html.spec.whatwg.org/multipage/parsing.html#adjust-svg-attributes>
-    fn adjust_svg_attributes(&mut self, tag_token: &mut HTMLTagToken) {
+    fn adjust_svg_attributes(&mut self, tag_token: &mut HTMLToken) {
         [
             ("attributename", "attributeName"),
             ("attributetype", "attributeType"),
@@ -652,37 +648,42 @@ impl HTMLTreeConstruction {
     /// <https://html.spec.whatwg.org/multipage/parsing.html#create-an-element-for-the-token>
     fn create_element_for(
         &mut self,
-        token: &HTMLTagToken,
+        token: &HTMLToken,
         namespace: Namespace,
         intended_parent: Option<&TreeNode<Node>>,
     ) -> Option<TreeNode<Node>> {
-        let HTMLTagToken {
-            name: local_name,
-            attributes,
-            ..
-        } = token;
+        assert!(token.is_start_tag());
 
         let document = intended_parent.unwrap_or(&self.document);
 
-        let maybe_element = Document::create_element(
-            local_name,
-            Some(CreateElementOptions {
-                is: None,
-                namespace: Some(namespace),
-            }),
-        );
+        if let HTMLToken::Tag {
+            name: local_name,
+            attributes,
+            ..
+        } = token
+        {
+            let maybe_element = Document::create_element(
+                local_name,
+                Some(CreateElementOptions {
+                    is: None,
+                    namespace: Some(namespace),
+                }),
+            );
 
-        if let Ok(element) = maybe_element.as_ref() {
-            element.set_document(document);
+            if let Ok(element) = maybe_element.as_ref() {
+                element.set_document(document);
 
-            attributes.iter().for_each(|attribute| {
-                element
-                    .element_ref()
-                    .set_attribute(&attribute.name, &attribute.value);
-            });
+                attributes.iter().for_each(|attribute| {
+                    element
+                        .element_ref()
+                        .set_attribute(&attribute.name, &attribute.value);
+                });
+            }
+
+            maybe_element.ok()
+        } else {
+            None
         }
-
-        maybe_element.ok()
     }
 
     /// L'endroit approprié pour insérer un nœud, en utilisant
@@ -1008,7 +1009,7 @@ impl HTMLTreeConstruction {
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-an-html-element>
     fn insert_html_element(
         &mut self,
-        token: &HTMLTagToken,
+        token: &HTMLToken,
     ) -> Option<TreeNode<Node>> {
         self.insert_foreign_element(token, Namespace::HTML)
     }
@@ -1016,7 +1017,7 @@ impl HTMLTreeConstruction {
     /// <https://html.spec.whatwg.org/multipage/parsing.html#insert-a-foreign-element>
     fn insert_foreign_element(
         &mut self,
-        token: &HTMLTagToken,
+        token: &HTMLToken,
         namespace: Namespace,
     ) -> Option<TreeNode<Node>> {
         let adjusted_insertion_location =
@@ -1047,14 +1048,16 @@ impl HTMLTreeConstruction {
     /// <https://html.spec.whatwg.org/multipage/parsing.html#parse-errors>
     fn parse_error(&self, token: &HTMLToken) {
         match token {
-            | HTMLToken::Tag(HTMLTagToken { name, is_end, .. }) => {
+            | HTMLToken::Tag { name, is_end, .. } => {
                 if *is_end {
                     log::error!("Balise de fin inattendue: {name}");
                 } else {
                     log::error!("Balise de début inattendue: {name}");
                 }
             }
-            | HTMLToken::DOCTYPE {  .. } => log::error!("DOCTYPE inattendu"),
+            | HTMLToken::DOCTYPE { .. } => {
+                log::error!("DOCTYPE inattendu")
+            }
             | HTMLToken::Comment(_) => {
                 log::error!("Commentaire inattendu")
             }
@@ -1083,7 +1086,7 @@ impl HTMLTreeConstruction {
     ///   4. Ensuite, faire passer le mode d'insertion à "text".
     fn parse_generic_element(
         &mut self,
-        tag_token: &HTMLTagToken,
+        tag_token: &HTMLToken,
         state: HTMLTokenizerState,
     ) -> HTMLTreeConstructionControlFlow {
         self.insert_html_element(tag_token);
@@ -1192,7 +1195,7 @@ impl HTMLTreeConstruction {
                     });
 
                 let element = {
-                    let tag_token = HTMLTagToken::start()
+                    let tag_token = HTMLToken::new_start_tag()
                         .with_name(element.element_ref().local_name());
                     self.insert_html_element(&tag_token)
                 }
@@ -1509,7 +1512,7 @@ impl HTMLTreeConstruction {
 
                 let el = node.element_ref();
                 let tag_token =
-                    HTMLTagToken::start().with_name(el.local_name());
+                    HTMLToken::new_start_tag().with_name(el.local_name());
                 let node_el = self
                     .create_element_for(
                         &tag_token,
@@ -1552,7 +1555,7 @@ impl HTMLTreeConstruction {
 
             let el = node.element_ref();
             let tag_token =
-                HTMLTagToken::start().with_name(el.local_name());
+                HTMLToken::new_start_tag().with_name(el.local_name());
             let node_el = self
                 .create_element_for(
                     &tag_token,

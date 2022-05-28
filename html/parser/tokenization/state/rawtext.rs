@@ -10,7 +10,7 @@ use crate::{
         tokenizer::{
             HTMLTokenizerProcessInterface, HTMLTokenizerProcessResult,
         },
-        HTMLTagToken, HTMLToken, HTMLTokenizer,
+        HTMLToken, HTMLTokenizer,
     },
 };
 
@@ -88,7 +88,7 @@ where
             // balise en une chaîne de caractères vide. Reprendre dans
             // l'état `rawtext-end-tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::Tag(HTMLTagToken::end()))
+                .set_token(HTMLToken::new_end_tag())
                 .reconsume("rawtext-end-tag-name")
                 .and_continue(),
 

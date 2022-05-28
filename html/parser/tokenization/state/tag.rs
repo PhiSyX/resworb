@@ -10,7 +10,7 @@ use crate::{
         tokenizer::{
             HTMLTokenizerProcessInterface, HTMLTokenizerProcessResult,
         },
-        HTMLTagAttribute, HTMLTagToken, HTMLToken, HTMLTokenizer,
+        HTMLTagAttribute, HTMLToken, HTMLTokenizer,
     },
 };
 
@@ -41,7 +41,7 @@ where
             // Créer un nouveau jeton `start tag`, et définir son nom
             // en une chaîne de caractères vide. Reprendre dans `tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::Tag(HTMLTagToken::start()))
+                .set_token(HTMLToken::new_start_tag())
                 .reconsume("tag-name")
                 .and_continue(),
 
@@ -94,7 +94,7 @@ where
             // comme une chaîne de caractères vide. Reprendre l'état
             // `tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::Tag(HTMLTagToken::end()))
+                .set_token(HTMLToken::new_end_tag())
                 .reconsume("tag-name")
                 .and_continue(),
 

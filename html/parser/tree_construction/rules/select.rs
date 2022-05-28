@@ -6,7 +6,7 @@ use html_elements::{interface::IsOneOfTagsInterface, tag_names};
 
 use crate::{
     state::{InsertionMode, StackOfOpenElements},
-    tokenization::{HTMLTagToken, HTMLToken},
+    tokenization::HTMLToken,
     tree_construction::{
         HTMLTreeConstruction, HTMLTreeConstructionControlFlow,
     },
@@ -44,7 +44,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE {  .. } => {
+            | HTMLToken::DOCTYPE { .. } => {
                 self.parse_error(&token);
                 /* Ignore */
             }
@@ -53,11 +53,11 @@ impl HTMLTreeConstruction {
             //
             // Traiter le jeton en utilisant les règles du mode d'insertion
             // "in body".
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::html == name => {
+            } if tag_names::html == name => {
                 return self.process_using_the_rules_for(
                     InsertionMode::InBody,
                     token,
@@ -69,13 +69,11 @@ impl HTMLTreeConstruction {
             // Si le noeud actuel est un élément d'option, il faut retirer
             // ce noeud de la pile des éléments ouverts.
             // Insérer un élément HTML pour le jeton.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::option == name => {
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if tag_names::option == name => {
                 if let Some(cnode) = self.current_node() {
                     if cnode.element_ref().tag_name() == tag_names::option
                     {
@@ -83,7 +81,7 @@ impl HTMLTreeConstruction {
                     }
                 }
 
-                self.insert_html_element(tag_token);
+                self.insert_html_element(token.as_tag());
             }
 
             // A start tag whose tag name is "optgroup"
@@ -93,13 +91,11 @@ impl HTMLTreeConstruction {
             // Si le noeud actuel est un élément optgroup, il faut
             // retirer ce noeud de la pile des éléments ouverts.
             // Insérer un élément HTML pour le jeton.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::optgroup == name => {
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if tag_names::optgroup == name => {
                 if let Some(cnode) = self.current_node() {
                     if cnode.element_ref().tag_name() == tag_names::option
                     {
@@ -115,7 +111,7 @@ impl HTMLTreeConstruction {
                     }
                 }
 
-                self.insert_html_element(tag_token);
+                self.insert_html_element(token.as_tag());
             }
 
             // An end tag whose tag name is "optgroup"
@@ -127,11 +123,11 @@ impl HTMLTreeConstruction {
             // Si le noeud actuel est un élément d'optgroup, alors il faut
             // sortir ce noeud de la pile des éléments ouverts. Sinon, il
             // s'agit d'une erreur d'analyse ; ignorer le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::optgroup == name => {
+            } if tag_names::optgroup == name => {
                 if let (Some(pnode), Some(cnode)) =
                     (self.before_current_node(), self.current_node())
                 {
@@ -162,11 +158,11 @@ impl HTMLTreeConstruction {
             // Si le noeud actuel est un élément option, alors il faut
             // sortir ce noeud de la pile des éléments ouverts. Sinon, il
             // s'agit d'une erreur d'analyse ; ignorer le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::option == name => {
+            } if tag_names::option == name => {
                 if let Some(cnode) = self.current_node() {
                     if cnode.element_ref().tag_name() == tag_names::option
                     {
@@ -189,11 +185,11 @@ impl HTMLTreeConstruction {
             // Réinitialiser le mode d'insertion de manière appropriée.
             //
             // Note: Il est juste traité comme une balise de fin.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::select == name => {
+            } if tag_names::select == name => {
                 if !self
                     .stack_of_open_elements
                     .has_element_in_scope_except(
@@ -225,11 +221,11 @@ impl HTMLTreeConstruction {
             // Réinitialiser le mode d'insertion de manière appropriée.
             // Retraiter le jeton.
             #[allow(deprecated)]
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if name.is_one_of([
+            } if name.is_one_of([
                 tag_names::input,
                 tag_names::keygen,
                 tag_names::textarea,
@@ -262,9 +258,9 @@ impl HTMLTreeConstruction {
             //
             // Traiter le jeton en utilisant les règles du mode d'insertion
             // "in head".
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name, is_end, ..
-            }) if !is_end
+            } if !is_end
                 && name.is_one_of([
                     tag_names::script,
                     tag_names::template,
@@ -315,11 +311,11 @@ impl HTMLTreeConstruction {
             // ce qu'un élément select ait été retiré de la pile.
             // Réinitialiser le mode d'insertion de manière appropriée.
             // Retraiter le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if name.is_one_of([
+            } if name.is_one_of([
                 tag_names::caption,
                 tag_names::table,
                 tag_names::tbody,
@@ -353,13 +349,11 @@ impl HTMLTreeConstruction {
             // ce qu'un élément sélect ait été retiré de la pile.
             // Réinitialiser le mode d'insertion de manière appropriée.
             // Retraiter le jeton.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: true,
-                    ..
-                },
-            ) if name.is_one_of([
+            | HTMLToken::Tag {
+                ref name,
+                is_end: true,
+                ..
+            } if name.is_one_of([
                 tag_names::caption,
                 tag_names::table,
                 tag_names::tbody,
@@ -373,7 +367,7 @@ impl HTMLTreeConstruction {
                 self.parse_error(&token);
 
                 if !self.stack_of_open_elements.has_element_in_scope(
-                    tag_token.tag_name(),
+                    token.as_tag().tag_name(),
                     StackOfOpenElements::table_scope_elements(),
                 ) {
                     return HTMLTreeConstructionControlFlow::Continue(

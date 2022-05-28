@@ -8,7 +8,7 @@ use infra::namespace::Namespace;
 
 use crate::{
     state::InsertionMode,
-    tokenization::{HTMLTagToken, HTMLToken},
+    tokenization::HTMLToken,
     tree_construction::{
         HTMLTreeConstruction, HTMLTreeConstructionControlFlow,
     },
@@ -24,7 +24,7 @@ impl HTMLTreeConstruction {
             // A DOCTYPE token
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::DOCTYPE {  .. } => {
+            | HTMLToken::DOCTYPE { .. } => {
                 self.parse_error(&token);
                 /* ignore */
             }
@@ -54,15 +54,17 @@ impl HTMLTreeConstruction {
             // avec le [Document] comme parent prévu. L'ajouter à l'objet
             // [Document]. Placer l'élément dans la pile des éléments
             // ouverts.
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::html == name => {
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if tag_names::html == name => {
                 let element = self
-                    .create_element_for(tag_token, Namespace::HTML, None)
+                    .create_element_for(
+                        token.as_tag(),
+                        Namespace::HTML,
+                        None,
+                    )
                     .expect("Un élément DOM HTMLHtmlElement");
                 self.document.append_child(element.to_owned());
                 self.stack_of_open_elements.put(element);
@@ -75,11 +77,11 @@ impl HTMLTreeConstruction {
             //
             // Toute autre nom de balise de fin:
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if !name.is_one_of([
+            } if !name.is_one_of([
                 tag_names::head,
                 tag_names::body,
                 tag_names::html,

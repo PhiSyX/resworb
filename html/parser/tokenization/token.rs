@@ -19,24 +19,6 @@ pub type HTMLTagAttributeValue = String;
 // Structure //
 // --------- //
 
-/// Les jetons `start-tag` (ou `tag`) ont :
-/// Les jetons `end-tag`   (ou `tag`) ont :
-///   - un nom, un nom de balise ;
-///   - un drapeau permettant de savoir s'il s'agit d'une balise
-///     auto-fermante ;
-///   - une liste d'attributs: chacun d'entre eux ayant un nom et une
-///     valeur.
-#[derive(Debug)]
-#[derive(Clone)]
-#[derive(PartialEq)]
-pub struct HTMLTagToken {
-    pub(crate) name: String,
-    pub(crate) self_closing_flag: bool,
-    pub(crate) self_closing_flag_acknowledge: bool,
-    pub(crate) attributes: Vec<HTMLTagAttribute>,
-    pub(crate) is_end: bool,
-}
-
 #[derive(Debug)]
 #[derive(Clone)]
 #[derive(Default)]
@@ -85,7 +67,20 @@ pub enum HTMLToken {
         force_quirks_flag: ForceQuirksFlag,
     },
 
-    Tag(HTMLTagToken),
+    /// Les jetons `start-tag` (ou `tag`) ont :
+    /// Les jetons `end-tag`   (ou `tag`) ont :
+    ///   - un nom, un nom de balise ;
+    ///   - un drapeau permettant de savoir s'il s'agit d'une balise
+    ///     auto-fermante ;
+    ///   - une liste d'attributs: chacun d'entre eux ayant un nom et une
+    ///     valeur.
+    Tag {
+        name: String,
+        self_closing_flag: bool,
+        self_closing_flag_acknowledge: bool,
+        attributes: Vec<HTMLTagAttribute>,
+        is_end: bool,
+    },
 
     /// Le jeton `comment` contient une chaîne de caractères.
     /// Pour cet exemple : `<!-- Hello World -->`. La chaîne de caractères
@@ -106,19 +101,34 @@ pub enum HTMLToken {
 impl HTMLToken {
     /// Ajoute un caractère au nom du jeton `DOCTYPE`, ou au nom du jeton
     /// `tag` ou à un jeton `comment`.
-    pub fn append_character(&mut self, ch: CodePoint) {
+    pub(crate) fn append_character(&mut self, ch: CodePoint) {
         assert!(matches!(
             self,
-            Self::DOCTYPE { .. } | Self::Tag(_) | Self::Comment(_)
+            Self::DOCTYPE { .. } | Self::Tag { .. } | Self::Comment(_)
         ));
 
         if let Self::DOCTYPE {
             name: Some(name), ..
         }
-        | Self::Tag(HTMLTagToken { name, .. })
+        | Self::Tag { name, .. }
         | Self::Comment(name) = self
         {
             name.push(ch);
+        }
+    }
+
+    pub(crate) fn update_name(&mut self, new_name: impl ToString) {
+        assert!(matches!(
+            self,
+            Self::DOCTYPE { .. } | Self::Tag { .. } | Self::Comment(_)
+        ));
+
+        if let Self::DOCTYPE {
+            name: Some(name), ..
+        }
+        | Self::Tag { name, .. } = self
+        {
+            *name = new_name.to_string();
         }
     }
 
@@ -127,7 +137,7 @@ impl HTMLToken {
             | Self::DOCTYPE {
                 name: Some(name), ..
             } => name,
-            | Self::Tag(HTMLTagToken { name, .. }) => name,
+            | Self::Tag { name, .. } => name,
             | Self::Comment(name) => name,
             | _ => {
                 panic!("Impossible d'obtenir le nom du jeton.");
@@ -142,10 +152,19 @@ impl HTMLToken {
 
 impl HTMLToken {
     /// Défini un nom pour le [DOCTYPE](HTMLToken::DOCTYPE).
+    /// Défini un nom pour le [tag](HTMLToken::Tag).
     pub fn with_name(mut self, new_name: impl ToString) -> Self {
-        assert!(matches!(self, Self::DOCTYPE { name: None, .. }));
+        assert!(matches!(
+            self,
+            Self::DOCTYPE { name: None, .. } | Self::Tag { .. }
+        ));
+
         if let Self::DOCTYPE { ref mut name, .. } = self {
             *name = Some(new_name.to_string());
+        }
+
+        if let Self::Tag { ref mut name, .. } = self {
+            *name = new_name.to_string();
         }
         self
     }
@@ -489,55 +508,14 @@ impl HTMLToken {
 // Jeton tag //
 // --------- //
 
+// Self
 impl HTMLToken {
-    pub const fn as_tag(&self) -> &HTMLTagToken {
-        assert!(matches!(self, Self::Tag(HTMLTagToken { .. })));
-        if let Self::Tag(tag) = self {
-            return tag;
-        }
-        unreachable!()
-    }
-
-    pub fn as_tag_mut(&mut self) -> &mut HTMLTagToken {
-        assert!(matches!(self, Self::Tag(HTMLTagToken { .. })));
-        if let Self::Tag(tag) = self {
-            return tag;
-        }
-        unreachable!()
-    }
-
-    pub const fn is_start_tag(&self) -> bool {
-        if let Self::Tag(HTMLTagToken {
-            is_end: is_end_token,
-            ..
-        }) = self
-        {
-            !(*is_end_token)
-        } else {
-            false
-        }
-    }
-
-    pub const fn is_end_tag(&self) -> bool {
-        if let Self::Tag(HTMLTagToken {
-            is_end: is_end_token,
-            ..
-        }) = self
-        {
-            *is_end_token
-        } else {
-            false
-        }
-    }
-}
-
-impl HTMLTagToken {
     /// Lorsqu'un jeton [start-tag](HTMLToken::Tag) est créé,
     /// son drapeau de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
     /// doit être vide.
-    pub const fn start() -> Self {
-        Self {
+    pub const fn new_start_tag() -> Self {
+        Self::Tag {
             name: String::new(),
             self_closing_flag: false,
             self_closing_flag_acknowledge: false,
@@ -550,8 +528,8 @@ impl HTMLTagToken {
     /// son indicateur de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
     /// doit être vide.
-    pub const fn end() -> Self {
-        Self {
+    pub const fn new_end_tag() -> Self {
+        Self::Tag {
             name: String::new(),
             self_closing_flag: false,
             self_closing_flag_acknowledge: false,
@@ -560,82 +538,88 @@ impl HTMLTagToken {
         }
     }
 
-    /// Définit le nom du jeton d'une balise [start-tag](HTMLToken::Tag).
-    pub fn with_name(mut self, name: impl ToString) -> Self {
-        self.name = name.to_string();
-        self
-    }
-
-    /// Définit des attributs à un jeton d'une balise.
+    /// Définie des attributs à un jeton d'une balise.
     pub fn with_attributes(
         mut self,
-        attributes: impl IntoIterator<Item = impl Into<HTMLTagAttribute>>,
+        attrs: impl IntoIterator<Item = impl Into<HTMLTagAttribute>>,
     ) -> Self {
-        self.attributes =
-            attributes.into_iter().map(|x| x.into()).collect();
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag {
+            ref mut attributes, ..
+        } = self
+        {
+            *attributes =
+                attrs.into_iter().map(|x| x.into()).collect::<Vec<_>>();
+        }
         self
     }
 
     /// Définit le drapeau de fermeture automatique d'un jeton d'une balise
     /// [start-tag](HTMLToken::Tag).
     pub fn with_self_closing_flag(mut self) -> Self {
-        self.self_closing_flag = true;
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag {
+            ref mut self_closing_flag,
+            ..
+        } = self
+        {
+            *self_closing_flag = true;
+        }
         self
     }
 }
 
-// &HTMLTagToken
-impl HTMLTagToken {
-    pub fn local_name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn tag_name(&self) -> tag_names {
-        let Self { name, .. } = self;
-        name.parse().expect("Devrait être un nom de balise valide")
-    }
-}
-
-// &mut HTMLTagToken
-impl HTMLTagToken {
-    pub fn adjust_attribute_name(
-        &mut self,
-        old_name: impl ToString,
-        new_name: impl ToString,
-    ) {
-        let old_name = old_name.to_string();
-        let new_name = new_name.to_string();
-
-        for attr in self.attributes.iter_mut() {
-            if attr.name == old_name {
-                attr.name = new_name.to_string();
-            }
-        }
-    }
-
-    pub fn adjust_foreign_attribute(
+// &mut Self
+impl HTMLToken {
+    pub(crate) fn adjust_foreign_attribute(
         &mut self,
         old_name: impl ToString,
         prefix: impl ToString,
         local_name: impl ToString,
         namespace: Namespace,
     ) {
-        self.attributes.iter_mut().for_each(|attr| {
-            if *attr.name == old_name.to_string() {
-                attr.name = local_name.to_string();
-                attr.prefix.replace(prefix.to_string());
-                attr.namespace_uri.replace(namespace);
-            }
-        });
+        assert!(matches!(self, Self::Tag { .. }));
+
+        if let Self::Tag { attributes, .. } = self {
+            attributes.iter_mut().for_each(|attr| {
+                if *attr.name == old_name.to_string() {
+                    attr.name = local_name.to_string();
+                    attr.prefix.replace(prefix.to_string());
+                    attr.namespace_uri.replace(namespace);
+                }
+            });
+        }
     }
 
-    pub fn adjust_tag_name(
+    pub(crate) fn adjust_attribute_name(
         &mut self,
         old_name: impl ToString,
         new_name: impl ToString,
     ) {
-        if self.name == old_name.to_string() {
-            self.name = new_name.to_string();
+        assert!(matches!(self, Self::Tag { .. }));
+
+        let old_name = old_name.to_string();
+        let new_name = new_name.to_string();
+
+        if let Self::Tag { attributes, .. } = self {
+            attributes.iter_mut().for_each(|attr| {
+                if attr.name == old_name {
+                    attr.name = new_name.to_string();
+                }
+            });
+        }
+    }
+
+    pub(crate) fn adjust_tag_name(
+        &mut self,
+        old_name: impl ToString,
+        new_name: impl ToString,
+    ) {
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag { name, .. } = self {
+            if *name == old_name.to_string() {
+                *name = new_name.to_string();
+            }
         }
     }
 
@@ -643,56 +627,133 @@ impl HTMLTagToken {
     /// (attr-name), le dernier attribut trouvé.
     ///
     /// attr-name="attr-value"
-    pub fn append_character_to_attribute_name(&mut self, ch: CodePoint) {
-        let Self { attributes, .. } = self;
-        let attr = attributes.iter_mut().last().unwrap();
-        attr.name.push(ch);
+    pub(crate) fn append_character_to_attribute_name(
+        &mut self,
+        ch: CodePoint,
+    ) {
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag { attributes, .. } = self {
+            let attr = attributes.iter_mut().last().unwrap();
+            attr.name.push(ch);
+        }
     }
 
     /// Ajoute un caractère à un jeton `tag`, au nom d'un attribut
     /// (attr-value), le dernier attribut trouvé.
     ///
     /// attr-name="attr-value"
-    pub fn append_character_to_attribute_value(&mut self, ch: CodePoint) {
-        let Self { attributes, .. } = self;
-        let attr = attributes.iter_mut().last().unwrap();
-        attr.value.push(ch);
+    pub(crate) fn append_character_to_attribute_value(
+        &mut self,
+        ch: CodePoint,
+    ) {
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag { attributes, .. } = self {
+            let attr = attributes.iter_mut().last().unwrap();
+            attr.value.push(ch);
+        }
     }
 
-    pub fn append_tag_attributes(
+    pub(crate) fn append_tag_attributes(
         &mut self,
         attribute: impl Into<HTMLTagAttribute>,
     ) {
-        let Self { attributes, .. } = self;
-        attributes.push(attribute.into());
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag { attributes, .. } = self {
+            attributes.push(attribute.into());
+        }
     }
 
+    pub(crate) fn clear_attributes(&mut self) {
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag { attributes, .. } = self {
+            attributes.clear();
+        }
+    }
+
+    pub(crate) fn set_acknowledge_self_closing_flag(&mut self) {
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag {
+            self_closing_flag,
+            self_closing_flag_acknowledge,
+            ..
+        } = self
+        {
+            if *self_closing_flag {
+                *self_closing_flag_acknowledge = true;
+            }
+        }
+    }
+
+    pub(crate) fn set_self_closing_tag(&mut self, to: bool) {
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag {
+            self_closing_flag, ..
+        } = self
+        {
+            *self_closing_flag = to;
+        }
+    }
+}
+
+// &Self
+impl HTMLToken {
     pub fn has_attributes(
         &self,
         attribute_names: impl IntoIterator<Item = tag_attributes> + Copy,
     ) -> bool {
-        let Self { attributes, .. } = self;
-        attributes
-            .iter()
-            .any(|attribute| attribute.name.is_one_of(attribute_names))
-    }
-
-    pub fn set_self_closing_tag(&mut self, to: bool) {
-        let Self {
-            self_closing_flag, ..
-        } = self;
-        *self_closing_flag = to;
-    }
-
-    pub fn set_acknowledge_self_closing_flag(&mut self) {
-        let Self {
-            self_closing_flag,
-            self_closing_flag_acknowledge,
-            ..
-        } = self;
-        if *self_closing_flag {
-            *self_closing_flag_acknowledge = true;
+        if let Self::Tag { attributes, .. } = self {
+            attributes
+                .iter()
+                .any(|attribute| attribute.name.is_one_of(attribute_names))
+        } else {
+            false
         }
+    }
+
+    pub const fn is_end_tag(&self) -> bool {
+        if let Self::Tag { is_end, .. } = self {
+            *is_end
+        } else {
+            false
+        }
+    }
+
+    pub const fn is_start_tag(&self) -> bool {
+        if let Self::Tag { is_end, .. } = self {
+            !(*is_end)
+        } else {
+            false
+        }
+    }
+
+    pub fn local_name(&self) -> &str {
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag { name, .. } = self {
+            name
+        } else {
+            ""
+        }
+    }
+
+    pub fn tag_name(&self) -> tag_names {
+        assert!(matches!(self, Self::Tag { .. }));
+        if let Self::Tag { name, .. } = self {
+            name.parse().expect("Devrait être un nom de balise valide")
+        } else {
+            tag_names::unknown
+        }
+    }
+}
+
+impl HTMLToken {
+    pub const fn as_tag(&self) -> &HTMLToken {
+        assert!(matches!(self, Self::Tag { .. }));
+        self
+    }
+
+    pub fn as_tag_mut(&mut self) -> &mut HTMLToken {
+        assert!(matches!(self, Self::Tag { .. }));
+        self
     }
 }
 

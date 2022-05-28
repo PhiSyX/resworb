@@ -6,7 +6,7 @@ use html_elements::{interface::IsOneOfTagsInterface, tag_names};
 
 use crate::{
     state::{InsertionMode, StackOfOpenElements},
-    tokenization::{HTMLTagToken, HTMLToken},
+    tokenization::HTMLToken,
     tree_construction::{
         HTMLTreeConstruction, HTMLTreeConstructionControlFlow,
     },
@@ -33,11 +33,11 @@ impl HTMLTreeConstruction {
             // Effacer la liste des éléments de mise en forme actifs
             // jusqu'au dernier marqueur.
             // Passer le mode d'insertion à "in table".
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::caption == name => {
+            } if tag_names::caption == name => {
                 if !self.stack_of_open_elements.has_element_in_scope(
                     tag_names::caption,
                     StackOfOpenElements::table_scope_elements(),
@@ -81,9 +81,9 @@ impl HTMLTreeConstruction {
             // jusqu'au dernier marqueur.
             // Passer le mode d'insertion à "in table".
             // Retraiter le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name, is_end, ..
-            }) if !is_end
+            } if !is_end
                 && name.is_one_of([
                     tag_names::caption,
                     tag_names::col,
@@ -130,11 +130,11 @@ impl HTMLTreeConstruction {
             // "tr"
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if name.is_one_of([
+            } if name.is_one_of([
                 tag_names::body,
                 tag_names::col,
                 tag_names::colgroup,

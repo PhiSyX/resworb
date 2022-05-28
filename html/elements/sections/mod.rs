@@ -5,7 +5,4 @@
 mod body;
 mod heading;
 
-pub use self::{
-    body::HTMLBodyElement,
-    heading::HTMLHeadingElement
-};
+pub use self::{body::HTMLBodyElement, heading::HTMLHeadingElement};

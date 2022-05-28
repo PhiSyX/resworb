@@ -7,7 +7,7 @@ use html_elements::tag_names;
 
 use crate::{
     state::InsertionMode,
-    tokenization::{HTMLTagToken, HTMLToken},
+    tokenization::HTMLToken,
     tree_construction::{
         HTMLTreeConstruction, HTMLTreeConstructionControlFlow,
     },
@@ -50,11 +50,11 @@ impl HTMLTreeConstruction {
             //
             // Traiter le jeton en utilisant les règles du mode d'insertion
             // "in body".
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::html == name => {
+            } if tag_names::html == name => {
                 return self.process_using_the_rules_for(
                     InsertionMode::InBody,
                     token,
@@ -65,14 +65,12 @@ impl HTMLTreeConstruction {
             //
             // Insérer un élément HTML pour le jeton.
             #[allow(deprecated)]
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::frameset == name => {
-                self.insert_html_element(tag_token);
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if tag_names::frameset == name => {
+                self.insert_html_element(token.as_tag());
             }
 
             // An end tag whose tag name is "frameset"
@@ -86,11 +84,11 @@ impl HTMLTreeConstruction {
             // frameset, le mode d'insertion doit alors passer à "after
             // frameset".
             #[allow(deprecated)] // frameset
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::frameset == name => {
+            } if tag_names::frameset == name => {
                 if let Some(cnode) = self.current_node() {
                     if cnode.element_ref().tag_name() == tag_names::html {
                         self.parse_error(&token);
@@ -115,14 +113,12 @@ impl HTMLTreeConstruction {
             // Accuser réception du drapeau de fermeture automatique du
             // jeton, si défini.
             #[allow(deprecated)] // frame
-            | HTMLToken::Tag(
-                ref tag_token @ HTMLTagToken {
-                    ref name,
-                    is_end: false,
-                    ..
-                },
-            ) if tag_names::frame == name => {
-                self.insert_html_element(tag_token);
+            | HTMLToken::Tag {
+                ref name,
+                is_end: false,
+                ..
+            } if tag_names::frame == name => {
+                self.insert_html_element(token.as_tag());
                 self.stack_of_open_elements.pop();
                 token.as_tag_mut().set_acknowledge_self_closing_flag();
             }
@@ -132,11 +128,11 @@ impl HTMLTreeConstruction {
             // Traiter le jeton en utilisant les règles du mode d'insertion
             // "in head".
             #[allow(deprecated)] // noframes
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::noframes == name => {
+            } if tag_names::noframes == name => {
                 return self.process_using_the_rules_for(
                     InsertionMode::InHead,
                     token,
@@ -215,11 +211,11 @@ impl HTMLTreeConstruction {
             //
             // Traiter le jeton en utilisant les règles du mode d'insertion
             // "in body".
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::html == name => {
+            } if tag_names::html == name => {
                 return self.process_using_the_rules_for(
                     InsertionMode::InBody,
                     token,
@@ -229,11 +225,11 @@ impl HTMLTreeConstruction {
             // An end tag whose tag name is "html"
             //
             // Passer le mode d'insertion à "after after frameset".
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::html == name => {
+            } if tag_names::html == name => {
                 self.insertion_mode
                     .switch_to(InsertionMode::AfterAfterFrameset);
             }
@@ -297,11 +293,11 @@ impl HTMLTreeConstruction {
                     token,
                 );
             }
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::html == name => {
+            } if tag_names::html == name => {
                 return self.process_using_the_rules_for(
                     InsertionMode::InBody,
                     token,
@@ -322,11 +318,11 @@ impl HTMLTreeConstruction {
             // Traiter le jeton en utilisant les règles du mode d'insertion
             // "in head".
             #[allow(deprecated)]
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::noframes == name => {
+            } if tag_names::noframes == name => {
                 return self.process_using_the_rules_for(
                     InsertionMode::InHead,
                     token,

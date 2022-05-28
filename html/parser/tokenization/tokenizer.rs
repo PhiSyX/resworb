@@ -12,7 +12,7 @@ use named_character_references::{
 };
 use parser::preprocessor::InputStream;
 
-use super::{state::State, HTMLTagToken, HTMLToken};
+use super::{state::State, HTMLToken};
 use crate::{
     error::HTMLParserError, tree_construction::HTMLTreeConstruction,
 };
@@ -250,9 +250,7 @@ where
         if self.state.is_character_of_attribute() {
             self.temporary_buffer.to_owned().chars().for_each(|ch| {
                 self.change_current_token(|token| {
-                    token
-                        .as_tag_mut()
-                        .append_character_to_attribute_value(ch);
+                    token.append_character_to_attribute_value(ch);
                 });
             });
         } else {
@@ -270,16 +268,16 @@ where
     /// aucune balise de fin n'est appropriée.
     pub(crate) fn is_appropriate_end_tag(&self) -> bool {
         if let (
-            Some(HTMLToken::Tag(HTMLTagToken {
+            Some(HTMLToken::Tag {
                 name: current_tag_name,
                 is_end: true,
                 ..
-            })),
-            Some(HTMLToken::Tag(HTMLTagToken {
+            }),
+            Some(HTMLToken::Tag {
                 name: last_tag_name,
                 is_end: true,
                 ..
-            })),
+            }),
         ) = (self.token.as_ref(), self.last_start_tag_token.as_ref())
         {
             current_tag_name == last_tag_name
@@ -555,11 +553,11 @@ mod tests {
 
         assert_eq!(
             token.next_token(),
-            Some(HTMLToken::Tag(
-                HTMLTagToken::start()
+            Some(
+                HTMLToken::new_start_tag()
                     .with_name("a")
                     .with_attributes([(attr_name, attr_value)])
-            )),
+            ),
         );
     }
 
@@ -582,11 +580,11 @@ mod tests {
 
         assert_eq!(
             token.next_token(),
-            Some(HTMLToken::Tag(
-                HTMLTagToken::start()
+            Some(
+                HTMLToken::new_start_tag()
                     .with_name("div")
                     .with_attributes([("id", "foo")])
-            )),
+            ),
         );
 
         // Hello World</div> ...
@@ -594,12 +592,12 @@ mod tests {
 
         assert_eq!(
             token.next_token(),
-            Some(HTMLToken::Tag(
-                HTMLTagToken::start()
+            Some(
+                HTMLToken::new_start_tag()
                     .with_name("input")
                     .with_attributes([("value", "Hello World")])
                     .with_self_closing_flag()
-            ))
+            )
         );
     }
 }

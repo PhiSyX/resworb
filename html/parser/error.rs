@@ -443,7 +443,7 @@ mod tests {
     use infra::primitive::codepoint::CodePoint;
     use parser::preprocessor::InputStream;
 
-    use crate::tokenization::{HTMLTagToken, HTMLToken, HTMLTokenizer};
+    use crate::tokenization::{HTMLToken, HTMLTokenizer};
 
     fn get_tokenizer_html(
         input: &'static str,
@@ -624,11 +624,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(
-                HTMLTagToken::start()
+            Some(
+                HTMLToken::new_start_tag()
                     .with_name("div")
                     .with_attributes([("id", "")])
-            ))
+            )
         );
     }
 
@@ -679,7 +679,7 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(HTMLTagToken::start().with_name("div")))
+            Some(HTMLToken::new_start_tag().with_name("div"))
         );
 
         html_tok.next_token();
@@ -767,11 +767,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(
-                HTMLTagToken::start()
+            Some(
+                HTMLToken::new_start_tag()
                     .with_name("div")
                     .with_attributes([("id", "foo"), ("class", "bar")])
-            ))
+            )
         );
     }
 
@@ -817,11 +817,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(
-                HTMLTagToken::start()
+            Some(
+                HTMLToken::new_start_tag()
                     .with_name("div")
                     .with_attributes([("foo<div", "")])
-            ))
+            )
         );
 
         html_tok.next_token();
@@ -829,11 +829,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(
-                HTMLTagToken::start()
+            Some(
+                HTMLToken::new_start_tag()
                     .with_name("div")
                     .with_attributes([("id'bar'", "")])
-            ))
+            )
         );
     }
 
@@ -845,11 +845,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(
-                HTMLTagToken::start()
+            Some(
+                HTMLToken::new_start_tag()
                     .with_name("div")
                     .with_attributes([("foo", "b'ar'")])
-            ))
+            )
         );
     }
 
@@ -862,11 +862,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(
-                HTMLTagToken::start()
+            Some(
+                HTMLToken::new_start_tag()
                     .with_name("div")
                     .with_attributes([("foo", "bar"), (r#"="baz""#, "")])
-            ))
+            )
         );
     }
 
@@ -896,11 +896,11 @@ mod tests {
 
         assert_eq!(
             html_tok.next_token(),
-            Some(HTMLToken::Tag(
-                HTMLTagToken::start()
+            Some(
+                HTMLToken::new_start_tag()
                     .with_name("div")
                     .with_attributes([("id", "foo")])
-            ))
+            )
         );
     }
 }

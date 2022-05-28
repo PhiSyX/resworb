@@ -5,7 +5,7 @@
 use html_elements::tag_names;
 
 use crate::{
-    tokenization::{HTMLTagToken, HTMLToken},
+    tokenization::HTMLToken,
     tree_construction::{
         HTMLTreeConstruction, HTMLTreeConstructionControlFlow,
     },
@@ -58,11 +58,11 @@ impl HTMLTreeConstruction {
 
             // TODO: active spéculative html tree
             // An end tag whose tag name is "script"
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
-            }) if tag_names::script == name => {
+            } if tag_names::script == name => {
                 todo!()
             }
 
@@ -71,7 +71,7 @@ impl HTMLTreeConstruction {
             // Retirer le nœud actuel de la pile des éléments ouverts.
             // Passer le mode d'insertion sur le mode d'insertion
             // d'origine.
-            | HTMLToken::Tag(HTMLTagToken { is_end: true, .. }) => {
+            | HTMLToken::Tag { is_end: true, .. } => {
                 self.stack_of_open_elements.pop();
                 self.insertion_mode = self.original_insertion_mode;
             }

@@ -6,7 +6,7 @@ use html_elements::{interface::IsOneOfTagsInterface, tag_names};
 
 use crate::{
     state::InsertionMode,
-    tokenization::{HTMLTagToken, HTMLToken},
+    tokenization::HTMLToken,
     tree_construction::{
         HTMLTreeConstruction, HTMLTreeConstructionControlFlow,
     },
@@ -27,7 +27,7 @@ impl HTMLTreeConstruction {
             // "in body".
             | HTMLToken::Character(_)
             | HTMLToken::Comment(_)
-            | HTMLToken::DOCTYPE {  .. } => {
+            | HTMLToken::DOCTYPE { .. } => {
                 return self.process_using_the_rules_for(
                     InsertionMode::InBody,
                     token,
@@ -42,9 +42,9 @@ impl HTMLTreeConstruction {
             // Traiter le jeton selon les règles du mode d'insertion
             // "in head".
             #[allow(deprecated)]
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name, is_end, ..
-            }) if !is_end
+            } if !is_end
                 && name.is_one_of([
                     tag_names::base,
                     tag_names::basefont,
@@ -75,11 +75,11 @@ impl HTMLTreeConstruction {
             // de template actuel.
             // Passer le mode d'insertion à "in table", puis retraiter le
             // jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if name.is_one_of([
+            } if name.is_one_of([
                 tag_names::caption,
                 tag_names::colgroup,
                 tag_names::tbody,
@@ -106,11 +106,11 @@ impl HTMLTreeConstruction {
             // d'insertion de template actuel.
             // Passer le mode d'insertion à "in column group", puis
             // retraiter le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::col == name => {
+            } if tag_names::col == name => {
                 self.stack_of_template_insertion_modes.pop();
                 self.stack_of_template_insertion_modes
                     .push(InsertionMode::InColumnGroup);
@@ -131,11 +131,11 @@ impl HTMLTreeConstruction {
             // d'insertion de template actuel.
             // Passer le mode d'insertion à "in table body", puis
             // retraiter le jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if tag_names::tr == name => {
+            } if tag_names::tr == name => {
                 self.stack_of_template_insertion_modes.pop();
                 self.stack_of_template_insertion_modes
                     .push(InsertionMode::InTableBody);
@@ -155,11 +155,11 @@ impl HTMLTreeConstruction {
             // de template actuel.
             // Passer le mode d'insertion à "in row", puis retraiter le
             // jeton.
-            | HTMLToken::Tag(HTMLTagToken {
+            | HTMLToken::Tag {
                 ref name,
                 is_end: false,
                 ..
-            }) if name.is_one_of([tag_names::td, tag_names::th]) => {
+            } if name.is_one_of([tag_names::td, tag_names::th]) => {
                 self.stack_of_template_insertion_modes.pop();
                 self.stack_of_template_insertion_modes
                     .push(InsertionMode::InRow);
@@ -179,7 +179,7 @@ impl HTMLTreeConstruction {
             // de template actuel.
             // Passer le mode d'insertion à "in body", puis retraiter le
             // jeton.
-            | HTMLToken::Tag(HTMLTagToken { is_end: false, .. }) => {
+            | HTMLToken::Tag { is_end: false, .. } => {
                 self.stack_of_template_insertion_modes.pop();
                 self.stack_of_template_insertion_modes
                     .push(InsertionMode::InBody);
@@ -193,7 +193,7 @@ impl HTMLTreeConstruction {
             // Any other end tag
             //
             // Erreur d'analyse. Ignorer le jeton.
-            | HTMLToken::Tag(HTMLTagToken { is_end: true, .. }) => {
+            | HTMLToken::Tag { is_end: true, .. } => {
                 self.parse_error(&token);
                 /* Ignore */
             }

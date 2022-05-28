@@ -10,7 +10,7 @@ use crate::{
         tokenizer::{
             HTMLTokenizerProcessInterface, HTMLTokenizerProcessResult,
         },
-        HTMLTagToken, HTMLToken, HTMLTokenizer,
+        HTMLToken, HTMLTokenizer,
     },
 };
 
@@ -99,7 +99,7 @@ where
             // en une chaîne de caractères vide. Reprendre dans l'état
             // `script-data-end-tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::Tag(HTMLTagToken::end()))
+                .set_token(HTMLToken::new_end_tag())
                 .reconsume("script-data-end-tag-name")
                 .and_continue(),
 
@@ -441,7 +441,7 @@ where
             // en une chaîne de caractères vide. Reprendre dans l'état
             // `script-data-escaped-end-tag-name`.
             | Some(ch) if ch.is_ascii_alphabetic() => self
-                .set_token(HTMLToken::Tag(HTMLTagToken::end()))
+                .set_token(HTMLToken::new_end_tag())
                 .reconsume("script-data-escaped-end-tag-name")
                 .and_continue(),
 
