@@ -20,7 +20,7 @@ pub struct TextNode {
 }
 
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct Text {
     data: String,
 }

@@ -9,5 +9,5 @@
 #[derive(Debug)]
 #[derive(Default)]
 #[derive(Clone)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct ShadowRoot {}

@@ -1,6 +1,6 @@
 [package]
 name = "resworb-dom"
-version = "0.1.17"
+version = "0.1.18"
 license-file = "../LICENSE"
 edition = "2021"
 

@@ -23,7 +23,7 @@ use crate::{
 
 #[derive(Debug)]
 #[derive(Clone)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct DocumentNode {
     tree: TreeNode<Node>,
 }
@@ -42,7 +42,7 @@ pub struct Document {
 
 #[derive(Debug)]
 #[derive(Clone)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum QuirksMode {
     No,
     Yes,
@@ -192,3 +192,5 @@ impl PartialEq for Document {
                 == *other.quirks_mode.read().unwrap()
     }
 }
+
+impl Eq for Document {}

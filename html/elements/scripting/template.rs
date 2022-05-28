@@ -52,3 +52,8 @@ where
                 == *other.content.read().unwrap()
     }
 }
+
+impl<DocumentFragment> Eq for HTMLTemplateElement<DocumentFragment> where
+    DocumentFragment: Eq
+{
+}

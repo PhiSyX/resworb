@@ -76,3 +76,4 @@ where
                 == other.non_blocking.load(Ordering::Relaxed)
     }
 }
+impl<D> Eq for HTMLScriptElement<D> where D: Clone + Eq {}

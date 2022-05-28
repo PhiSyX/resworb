@@ -23,7 +23,7 @@ pub(crate) struct ListOfActiveFormattingElements {
 // ----------- //
 
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub(crate) enum Entry {
     Marker,
     Element(TreeNode<Node>),

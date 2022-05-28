@@ -69,7 +69,7 @@ pub(crate) struct NodeBuilder {
 // ----------- //
 
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum NodeData {
     Document(Document),
     DocumentType(DocumentType),
@@ -84,7 +84,7 @@ pub enum NodeData {
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 #[repr(u8)]
 pub enum NodeType {
     INVALID = 0,
@@ -231,3 +231,5 @@ impl PartialEq for Node {
             && self.node_data == other.node_data
     }
 }
+
+impl Eq for Node {}

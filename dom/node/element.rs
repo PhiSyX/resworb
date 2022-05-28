@@ -36,7 +36,7 @@ pub struct Element {
 
 /// 4 The elements of HTML
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum HTMLElement {
     // 4.1 The document element
     DocumentHtml(
@@ -263,6 +263,8 @@ impl PartialEq for Element {
             && *self.id.read().unwrap() == *other.id.read().unwrap()
     }
 }
+
+impl Eq for Element {}
 
 impl str::FromStr for HTMLElement {
     type Err = &'static str;

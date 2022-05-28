@@ -7,14 +7,14 @@
 // ----------- //
 
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub(crate) enum ScriptingFlag {
     Enabled = 1,
     Disabled = 0,
 }
 
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub(crate) enum FramesetOkFlag {
     Ok = 1,
     NotOk = 0,

@@ -22,7 +22,7 @@ pub struct CommentNode {
 }
 
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct Comment {
     data: String,
 }

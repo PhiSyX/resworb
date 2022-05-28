@@ -15,7 +15,7 @@ macro_rules! enumerate_html_tag_attributes {
         #[allow(non_camel_case_types)]
         #[derive(Debug)]
         #[derive(Copy, Clone)]
-        #[derive(PartialEq)]
+        #[derive(PartialEq, Eq)]
         pub enum tag_attributes {
         $(
             #[allow(non_upper_case_globals)]

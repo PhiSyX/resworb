@@ -8,5 +8,5 @@
 
 #[derive(Debug)]
 #[derive(Default)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct HTMLAnchorElement {}

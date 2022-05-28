@@ -17,7 +17,7 @@ pub struct CharacterData {
 }
 
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum CharacterDataInner {
     Text(Text),
     Comment(Comment),
@@ -51,3 +51,5 @@ impl PartialEq for CharacterData {
             && *self.data.read() == *other.data.read()
     }
 }
+
+impl Eq for CharacterData {}

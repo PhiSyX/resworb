@@ -9,7 +9,7 @@ use crate::{interface::HTMLElementInterface, tag_names};
 // --------- //
 
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct HTMLHeadingElement {
     level: u8,
 }

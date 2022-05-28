@@ -24,7 +24,7 @@ pub type NamedCharacterReferencesEntities =
 pub struct NamedCharacterReferences(NamedCharacterReferencesEntities);
 
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 #[derive(Deserialize)]
 pub struct NamedCharacterReferenceEntity {
     pub codepoints: Vec<u32>,

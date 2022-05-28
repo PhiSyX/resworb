@@ -22,7 +22,7 @@ pub type HTMLTagAttributeValue = String;
 #[derive(Debug)]
 #[derive(Clone)]
 #[derive(Default)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct HTMLTagAttribute {
     pub(crate) name: HTMLTagAttributeName,
     pub(crate) value: HTMLTagAttributeValue,
@@ -36,7 +36,7 @@ pub struct HTMLTagAttribute {
 
 #[derive(Debug)]
 #[derive(Copy, Clone)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum ForceQuirksFlag {
     On = 1,
     Off = 0,
@@ -52,7 +52,7 @@ pub enum ForceQuirksFlag {
 ///   - fin de fichier
 #[derive(Debug)]
 #[derive(Clone)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum HTMLToken {
     /// Les jetons `DOCTYPE` ont :

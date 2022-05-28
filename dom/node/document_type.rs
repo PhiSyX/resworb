@@ -11,7 +11,7 @@ use infra::primitive::string::DOMString;
 /// Les doctypes ont un nom associé, un ID public et un ID système.
 #[derive(Clone)]
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct DocumentType {
     pub name: DOMString,
     pub public_id: DOMString,

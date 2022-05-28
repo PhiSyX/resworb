@@ -18,7 +18,7 @@ pub use self::weak::TreeNodeWeak;
 /// Un arbre est une structure arborescente hiérarchique finie. L'ordre
 /// d'un arbre est un pré-ordre, une traversée en profondeur d'un arbre.
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct TreeNode<T> {
     node_ref: Arc<Node<T>>,
 }

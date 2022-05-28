@@ -15,7 +15,7 @@ use crate::node::{Node, NodeData, NodeType};
 // --------- //
 
 #[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct DocumentFragmentNode {
     tree: TreeNode<Node>,
 }
@@ -23,7 +23,7 @@ pub struct DocumentFragmentNode {
 #[derive(Debug)]
 #[derive(Default)]
 #[derive(Clone)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct DocumentFragment {}
 
 // -------------- //

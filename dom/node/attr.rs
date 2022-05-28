@@ -24,3 +24,5 @@ impl PartialEq for Attr {
             && *self.value.read() == *other.value.read()
     }
 }
+
+impl Eq for Attr {}

@@ -74,3 +74,5 @@ impl<T: PartialEq> PartialEq for Node<T> {
         self.data == other.data
     }
 }
+
+impl<T: Eq> Eq for Node<T> {}

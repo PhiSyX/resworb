@@ -12,7 +12,7 @@
 /// CDATA sont supportées.
 #[derive(Debug)]
 #[derive(Copy, Clone)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub(crate) enum InsertionMode {
     Initial,
     BeforeHTML,
