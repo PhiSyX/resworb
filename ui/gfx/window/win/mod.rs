@@ -4,4 +4,4 @@
 
 mod window;
 
-pub use window::{Window, WindowProc};
+pub use self::window::Window;

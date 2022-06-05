@@ -3,6 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 pub mod api;
+#[cfg(target_os = "windows")]
 mod win;
 
 use core::ops;
