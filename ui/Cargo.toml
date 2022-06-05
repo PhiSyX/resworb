@@ -1,0 +1,11 @@
+[package]
+name = "resworb-ui"
+version = "0.1.0"
+license-file = "../LICENSE"
+edition = "2021"
+
+[lib]
+path = "./lib.rs"
+
+[dependencies]
+gfx = { path = "./gfx", package = "resworb-gfx" }

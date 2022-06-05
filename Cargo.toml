@@ -12,6 +12,8 @@ members = [
     "html/elements",
     "html/named-character-references",
     "html/parser",
+    "ui",
+    "ui/gfx",
 ]
 
 [[bin]]
@@ -26,3 +28,4 @@ path = "./bin/html_parser.rs"
 parser = { path = "parser", package = "resworb-parser" }
 dom = { path = "dom", package = "resworb-dom" }
 html = { path = "html", package = "resworb-html" }
+ui = { path = "ui", package = "resworb-ui" }
