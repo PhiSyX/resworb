@@ -41,6 +41,13 @@ pub struct WindowOptions {
     pub width: i32,
     pub height: i32,
     // TODO(phisyx): ajouter des options de style.
+    pub style: WindowOptionsStyle,
+}
+
+/// Options de style d'une fenêtre.
+#[non_exhaustive]
+pub struct WindowOptionsStyle {
+    pub resizable: bool,
 }
 
 #[derive(Default)]
@@ -49,6 +56,7 @@ pub struct WindowBuilder<W> {
     title: String,
     width: i32,
     height: i32,
+    style: WindowOptionsStyle,
     _marker: PhantomData<W>,
 }
 
@@ -56,13 +64,14 @@ pub struct WindowBuilder<W> {
 // Implémentation //
 // -------------- //
 
-impl<W: WindowAPI> WindowBuilder<W> {
+impl<Window: WindowAPI> WindowBuilder<Window> {
     pub fn new() -> Self {
         Self {
             cname: Default::default(),
             title: Default::default(),
             width: Default::default(),
             height: Default::default(),
+            style: Default::default(),
             _marker: Default::default(),
         }
     }
@@ -93,13 +102,33 @@ impl<W: WindowAPI> WindowBuilder<W> {
         self
     }
 
-    pub fn build(self) -> W {
+    pub fn resizable(mut self) -> Self {
+        self.style.resizable = true;
+        self
+    }
+
+    pub fn build(self) -> Window {
+        let style = WindowOptionsStyle {
+            resizable: self.style.resizable,
+        };
+
         let options = WindowOptions {
             cname: self.cname,
             title: self.title,
             width: self.width,
             height: self.height,
+            style,
         };
-        W::new(options)
+        Window::new(options)
+    }
+}
+
+// -------------- //
+// Implémentation // -> Interface
+// -------------- //
+
+impl Default for WindowOptionsStyle {
+    fn default() -> Self {
+        Self { resizable: false }
     }
 }

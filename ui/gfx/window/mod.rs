@@ -3,15 +3,15 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 pub mod api;
+
 #[cfg(target_os = "windows")]
 mod win;
 
 use core::ops;
 
-#[cfg(target_os = "windows")]
-use win as platform;
-
 use self::api::{WindowAPI, WindowOptions};
+#[cfg(target_os = "windows")]
+use self::win as platform;
 
 // --------- //
 // Structure //
@@ -24,7 +24,7 @@ pub struct Window(platform::Window);
 // -------------- //
 
 impl WindowAPI for Window {
-    type Window = Self;
+    type Window = platform::Window;
 
     fn new(options: WindowOptions) -> Self {
         Self(platform::Window::new(options))

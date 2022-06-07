@@ -22,7 +22,8 @@ use windows::{
                 WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATEAPP, WM_CLOSE,
                 WM_DESTROY, WM_KEYDOWN, WM_KEYUP, WM_QUIT, WM_SIZE,
                 WM_SYSKEYDOWN, WM_SYSKEYUP, WNDCLASSW, WNDCLASS_STYLES,
-                WS_OVERLAPPEDWINDOW, WS_VISIBLE,
+                WS_MINIMIZEBOX, WS_OVERLAPPED, WS_OVERLAPPEDWINDOW,
+                WS_SYSMENU, WS_VISIBLE,
             },
         },
     },
@@ -66,8 +67,8 @@ pub trait WindowProcInterface {
 // --------- //
 
 pub struct Window {
-    pub handle: HWND,
-    pub proc: WindowProc,
+    handle: HWND,
+    proc: WindowProc,
 }
 
 #[derive(Debug)]
@@ -101,8 +102,16 @@ impl Window {
         //               options.
         let ex_style = WINDOW_EX_STYLE::default();
         let mut style = WINDOW_STYLE::default();
-        style |= WS_OVERLAPPEDWINDOW;
+
         style |= WS_VISIBLE;
+
+        if options.style.resizable {
+            style |= WS_OVERLAPPEDWINDOW;
+        } else {
+            style |= WS_OVERLAPPED;
+            style |= WS_SYSMENU;
+            style |= WS_MINIMIZEBOX;
+        }
 
         let width = if options.width < 500 {
             CW_USEDEFAULT

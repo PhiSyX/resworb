@@ -25,6 +25,7 @@ impl App {
         let window = Window::builder()
             .define_cname(Self::WINDOW_CNAME)
             .with_title(Self::WINDOW_TITLE_BAR)
+            .resizable()
             .build();
         Self { window }
     }
