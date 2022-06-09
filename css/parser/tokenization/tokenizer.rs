@@ -345,6 +345,11 @@ where
             // Retourner un <delim-token> dont la valeur est fixée
             // au point de code d'entrée actuel.
             | Some('+') => self.stream.current.map(CSSToken::Delim),
+
+            // U+002C COMMA (,)
+            //
+            // Retourner un <comma-token>.
+            | Some(',') => Some(CSSToken::Comma),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
