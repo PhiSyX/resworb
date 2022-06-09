@@ -19,15 +19,10 @@ pub type InputStream<T, I> = InputStreamPreprocessor<T, I>;
 // Structure //
 // --------- //
 
-#[derive(Debug)]
 /// Le flux d'entrée est constitué de caractères qui y sont insérés lors
 /// du décodage du flux d'octets d'entrée ou par les diverses API qui
 /// manipulent directement le flux d'entrée.
-pub struct InputStreamPreprocessor<T, I>
-where
-    T: Iterator<Item = I>,
-    I: Clone,
-{
+pub struct InputStreamPreprocessor<T, I> {
     iter: ListQueue<T, I>,
     is_replayed: bool,
     pub current: Option<I>,
@@ -41,15 +36,12 @@ where
 impl<T, I> InputStreamPreprocessor<T, I>
 where
     T: Iterator<Item = I>,
-    I: Clone,
 {
     /// Crée un nouveau flux d'entrée.
-    pub fn new(tokenizer: T) -> Self {
-        let queue = ListQueue::new(tokenizer);
+    pub fn new(iter: T) -> Self {
+        let queue = ListQueue::new(iter);
         Self {
             iter: queue,
-            // queue: vec![],
-            // offset: 0,
             is_replayed: false,
             current: None,
             last_consumed_item: None,
@@ -85,12 +77,17 @@ where
     }
 
     /// Consomme le prochain élément du flux.
-    pub fn next_input(&mut self) -> Option<I> {
         self.next().and_then(|item| {
+    pub fn consume_next_input(&mut self) -> Option<I> {
             let some_item = Some(item);
             self.current = some_item.to_owned();
             some_item
         })
+    }
+
+    pub fn next_input(&mut self) -> Option<I> {
+        let item = self.meanwhile().peek().cloned();
+            item
     }
 }
 
@@ -101,8 +98,27 @@ where
     /// Alias de [InputStreamPreprocessor::next_input]
     ///
     /// Consomme le prochain caractère du flux.
-    pub fn next_input_char(&mut self) -> Option<Chars::Item> {
+    pub fn consume_next_input_character(&mut self) -> Option<Chars::Item> {
+        self.consume_next_input()
+    }
+
+    pub fn next_input_codepoint(&mut self) -> Option<u8> {
+        self.next_input().map(|item| item as u8)
+    }
+
+    pub fn next_input_character(&mut self) -> Option<Chars::Item> {
         self.next_input()
+    }
+
+    pub fn next_n_input_character(&mut self, offset: usize) -> Cow<str> {
+        self.slice_until(offset)
+    }
+
+    pub fn next_n_input_codepoint(&mut self, offset: usize) -> Vec<u8> {
+        self.iter
+            .peek_until::<String>(offset)
+            .unwrap_or_default()
+            .into()
     }
 
     /// Récupère les prochains caractères du flux jusqu'à une certaine

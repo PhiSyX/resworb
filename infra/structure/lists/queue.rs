@@ -11,12 +11,9 @@ use super::peekable::PeekableInterface;
 // --------- //
 
 #[derive(Debug)]
-pub struct ListQueue<T, I>
-where
-    T: Iterator<Item = I>,
-{
-    pub iter: T,
-    queue: Vec<Option<T::Item>>,
+pub struct ListQueue<T, I> {
+    iter: T,
+    queue: Vec<Option<I>>,
     offset: usize,
 }
 
@@ -24,10 +21,7 @@ where
 // Implémentation //
 // -------------- //
 
-impl<T, I> ListQueue<T, I>
-where
-    T: Iterator<Item = I>,
-{
+impl<T, I> ListQueue<T, I> {
     pub fn new(iter: T) -> Self {
         Self {
             iter,

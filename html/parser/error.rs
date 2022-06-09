@@ -441,14 +441,15 @@ define_errors! {
 mod tests {
     use dom::node::DocumentNode;
     use infra::primitive::codepoint::CodePoint;
-    use parser::preprocessor::InputStream;
 
-    use crate::tokenization::{HTMLToken, HTMLTokenizer};
+    use crate::tokenization::{
+        tokenizer::HTMLInputStream, HTMLToken, HTMLTokenizer,
+    };
 
     fn get_tokenizer_html(
         input: &'static str,
     ) -> HTMLTokenizer<impl Iterator<Item = CodePoint>> {
-        let stream = InputStream::new(input.chars());
+        let stream = HTMLInputStream::new(input.chars());
         HTMLTokenizer::new(DocumentNode::default(), stream)
     }
 
