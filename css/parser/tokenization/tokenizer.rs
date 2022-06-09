@@ -2,9 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    ops::{AddAssign, MulAssign},
+};
 
-use infra::primitive::codepoint::CodePoint;
+use infra::primitive::codepoint::{CodePoint, CodePointInterface};
 use parser::preprocessor::InputStream;
 
 use super::CSSToken;
@@ -165,9 +168,10 @@ where
             // Consomme autant d'espace blanc que possible. Retourne un
             // <whitespace-token>.
             | Some(ch) if ch.is_css_whitespace() => {
-                self.stream.advance_as_long_as(|next_ch| {
-                    next_ch.is_css_whitespace()
-                });
+                self.stream.advance_as_long_as(
+                    |next_ch| next_ch.is_css_whitespace(),
+                    None,
+                );
                 Some(CSSToken::Whitespace)
             }
 
@@ -176,10 +180,244 @@ where
             //
             // Consomme un jeton de chaîne et le renvoie.
             | Some(ch @ ('"' | '\'')) => self.consume_string_token(ch),
+
+            // U+0023 NUMBER SIGN (#)
+            //
+            // Si le point de code d'entrée suivant est un point de code
+            // ident ou si les deux points de code d'entrée suivants sont
+            // un échappement valide, alors nous devons:
+            //   1. Créer un <hash-token>.
+            //   2. Si les 3 points de code d'entrée suivants commencent
+            // une par une séquence ident, nous devons définir un drapeau
+            // de type <hash-token> sur "id".
+            //   3. Consommer une séquence ident, et définir la valeur du
+            // <hash-token> à la chaîne retournée.
+            //   4. Retourner le <hash-token>.
+            //
+            // Sinon, retourner un <delim-token> avec sa valeur définie sur
+            // le point de code d'entrée actuel.
+            | Some('#') => {
+                fn then<C>(
+                    tokenizer: &mut CSSTokenizer<C>,
+                ) -> Option<CSSToken>
+                where
+                    C: Iterator<Item = CodePoint>,
+                {
+                    let mut flag = Default::default();
+                    let mut hash = String::new();
+
+                    if check_3_codepoints_would_start_an_ident_sequence(
+                        tokenizer.stream.next_n_input_character(3),
+                    ) {
+                        flag = HashFlag::ID;
+                    }
+
+                    hash.push_str(&tokenizer.consume_ident_sequence());
+
+                    CSSToken::Hash(hash, flag).into()
+                }
+
+                if let Some(ch) = self.stream.next_input_character() {
+                    if ch.is_ident_codepoint() {
+                        return then(self);
+                    }
+                }
+
+                if check_2_codepoints_are_a_valid_escape(
+                    self.stream.next_n_input_character(2),
+                ) {
+                    return then(self);
+                }
+
+                self.stream.current.map(CSSToken::Delim)
+            }
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
     }
+
+    fn consume_ident_sequence(&mut self) -> String {
+        let mut result = String::new();
+
+        loop {
+            let maybe_next_ch = self.stream.consume_next_input();
+
+            if let Some(next_ch) = maybe_next_ch {
+                if next_ch.is_ident_codepoint() {
+                    result.push(next_ch);
+                    continue;
+                }
+
+                if let Some(next_peek_ch) =
+                    self.stream.next_input_character()
+                {
+                    if check_2_codepoints_are_a_valid_escape(format!(
+                        "{next_ch}{next_peek_ch}"
+                    )) {
+                        result.push(self.consume_escaped());
+                        continue;
+                    }
+                }
+
+                self.stream.rollback();
+            }
+
+            break;
+        }
+
+        result
+    }
+
+    /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-escaped-code-point>
+    fn consume_escaped(&mut self) -> CodePoint {
+        match self.stream.consume_next_input_character() {
+            // hex digit
+            //
+            // Consommer autant de chiffres hexadécimaux que possible, mais
+            // pas plus de 5.
+            // NOTE(css): cela signifie que 1 à 6 chiffres hexadécimaux ont
+            // été consommés au total.
+            // Si le prochain point de code d'entrée est un espace blanc,
+            // nous devons le consommer. Interpréter les chiffres
+            // hexadécimaux comme un nombre hexadécimal. Si ce nombre est
+            // zéro, ou s'il s'agit d'un substitut, ou s'il est supérieur
+            // au point de code maximum autorisé, renvoyer U+FFFD
+            // REPLACEMENT CHARACTER (�). Sinon, renvoyer le point de code
+            // avec cette valeur.
+            | Some(ch) if ch.is_ascii_hexdigit() => {
+                const HEXARADIX: u32 = 16;
+
+                // NOTE(phisyx): nous pouvons utiliser .expect() ici, sans
+                // que ce soit problématique, car la condition ci-dessus
+                // vérifie que `ch` s' agit bien d'une valeur hexadécimale.
+                let total_hexdigits =
+                    dbg!(self.stream.advance_as_long_as(
+                        |ch| ch.is_ascii_digit(),
+                        Some(5)
+                    ))
+                    .iter()
+                    .fold(
+                        ch.to_digit(HEXARADIX)
+                            .expect("Voir la note ci-dessus"),
+                        |mut total, ch| {
+                            total.mul_assign(HEXARADIX);
+                            total.add_assign(
+                                ch.to_digit(HEXARADIX)
+                                    .expect("Voir la note ci-dessus"),
+                            );
+                            total
+                        },
+                    );
+
+                let next_peek_ch = self.stream.next_input_character();
+                if let Some('\n') = next_peek_ch {
+                    self.stream.advance(1);
+                }
+
+                let hexnumber = CodePoint::from_u32(total_hexdigits)
+                    .unwrap_or(CodePoint::REPLACEMENT_CHARACTER);
+
+                // NOTE(phisyx): n'a peut-être pas le comportement attendue
+                // par la spécification ; à tester.
+                if hexnumber == '\0'
+                    || hexnumber.is_surrogate()
+                    || hexnumber.is_gt_maximum_allowed_codepoint()
+                {
+                    CodePoint::REPLACEMENT_CHARACTER
+                } else {
+                    hexnumber
+                }
+            }
+
+            // EOF
+            //
+            // Il s'agit d'une erreur d'analyse. Renvoyer U+FFFD
+            // REPLACEMENT CHARACTER (�).
+            // TODO(phisyx): gérer cette erreur d'analyse.
+            | None => CodePoint::REPLACEMENT_CHARACTER,
+
+            // Anything else
+            //
+            // Retourner le point de code d'entrée actuel.
+            | _ => self.stream.current.expect(
+                "Le caractère courant, qui a forcément déjà été assigné.",
+            ),
+        }
+    }
+}
+
+/// Vérifie si trois points de code permettent de lancer une séquence
+/// ident.
+fn check_3_codepoints_would_start_an_ident_sequence(
+    maybe_ident_sequence: Cow<str>,
+) -> bool {
+    let mut chars = maybe_ident_sequence.chars();
+
+    let first_codepoint = chars.next();
+    match first_codepoint {
+        // U+002D HYPHEN-MINUS
+        //
+        // Si le deuxième point de code est un point de code de début
+        // ident ou un HYPHEN-MINUS U+002D, ou si le deuxième et
+        // troisième points de code sont des échappements valides,
+        // nous devons alors retourner true. Sinon false.
+        | Some('-') => {
+            let second_codepoint = chars.next();
+            match second_codepoint {
+                | Some(ch) if ch.is_ident_start_codepoint() => true,
+                | Some('-') => true,
+                | Some('\\') => {
+                    let third_codepoint = chars.next();
+                    match third_codepoint {
+                        | Some('\\') => true,
+                        | _ => false,
+                    }
+                }
+                | _ => false,
+            }
+        }
+
+        // ident-start code point
+        | Some(ch) if ch.is_ident_start_codepoint() => true,
+
+        // U+005C REVERSE SOLIDUS (\)
+        //
+        // Si le premier et le second point de code sont des
+        // échappements valides, nous devons retourner
+        // true. Sinon false.
+        | Some('\\') => {
+            let second_codepoint = chars.next();
+            match second_codepoint {
+                | Some('\\') => true,
+                | _ => false,
+            }
+        }
+
+        // Anything else
+        //
+        // Retourner false.
+        | _ => false,
+    }
+}
+/// Vérifie si deux points de code constituent un échappement valide.
+fn check_2_codepoints_are_a_valid_escape(
+    maybe_valid_escape: impl AsRef<str>,
+) -> bool {
+    let mut chars = maybe_valid_escape.as_ref().chars();
+
+    let first_codepoint = chars.next();
+    if first_codepoint != Some('\\') {
+        return false;
+    }
+
+    let second_codepoint = chars.next();
+    if second_codepoint == Some('\n') {
+        return false;
+    }
+
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -205,8 +443,8 @@ mod tests {
             "/* comment 1 */\r\n#id { color: red }/* comment 2 */"
         );
 
-        // NOTE: tester si le premier jeton n'est pas '/'
-        //       actuellement le script retourne None.
+        // NOTE(phisyx): tester si le premier jeton n'est pas '/'
+        //               actuellement le script retourne None.
         assert_eq!(tokenizer.consume_token(), Some(CSSToken::Whitespace));
     }
 
@@ -238,5 +476,24 @@ mod tests {
 
         let mut tokenizer = test_the_str!("\"bad\nstring\"");
         assert_eq!(tokenizer.consume_token(), Some(CSSToken::BadString));
+    }
+
+    #[test]
+    fn test_consume_token_number_sign() {
+        let mut tokenizer = test_the_str!("#id { color: #000 }");
+
+        assert_eq!(
+            tokenizer.consume_token(),
+            Some(CSSToken::Hash("id".into(), HashFlag::ID))
+        );
+
+        let mut tokenizer = test_the_str!("#id\\:2 {color: red; }");
+
+        assert_eq!(
+            tokenizer.consume_token(),
+            Some(CSSToken::Hash("id:2".into(), HashFlag::ID))
+        );
+
+        // TODO(phisyx): tester les couleurs de ce test.
     }
 }

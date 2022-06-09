@@ -15,7 +15,7 @@ use infra::{
 
 pub type InputStream<T, I> = InputStreamPreprocessor<T, I>;
 
-// NOTE: améliorer ce type.
+// NOTE(phisyx): améliorer ce type.
 type PreScanFn<I> = fn(Option<I>) -> Option<I>;
 
 // --------- //
@@ -77,10 +77,26 @@ where
         self.nth(n)
     }
 
-    pub fn advance_as_long_as(&mut self, predicate: impl Fn(&I) -> bool) {
-        while predicate(self.meanwhile().peek().unwrap()) {
-            self.advance(1);
+    // NOTE(phisyx): utiliser un générique pour le second paramètre?
+    pub fn advance_as_long_as(
+        &mut self,
+        predicate: impl Fn(&I) -> bool,
+        with_limit: Option<usize>,
+    ) -> Vec<I> {
+        let mut limit = with_limit.map(|n| n + 1).unwrap_or(0);
+        let mut result = vec![];
+
+        // NOTE(phisyx): code qui peut être amélioré.
+        while (self.meanwhile().peek().is_some()
+            && predicate(self.meanwhile().peek().unwrap()))
+            && (limit > 0 || with_limit.is_none())
+        {
+            result.push(self.advance(1).unwrap());
+            if with_limit.is_some() {
+                limit -= 1;
+            }
         }
+        result
     }
 
     /// Permet de revenir en arrière dans le flux.
