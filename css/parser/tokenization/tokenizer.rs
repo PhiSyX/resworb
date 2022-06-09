@@ -508,6 +508,58 @@ fn check_3_codepoints_would_start_an_ident_sequence(
     }
 }
 
+/// Vérifier si trois points de code permettent de commencer un numéro
+fn check_3_codepoints_would_start_a_number(
+    maybe_number: Cow<str>,
+) -> bool {
+    let mut chars = maybe_number.chars();
+
+    let first_codepoint = chars.next();
+    match first_codepoint {
+        // U+002B PLUS SIGN (+)
+        // U+002D HYPHEN-MINUS (-)
+        //
+        // Si le deuxième point de code est un chiffre, nous devons
+        // retourner true.
+        // Sinon, si le deuxième point de code est un U+002E FULL STOP (.)
+        // et le troisième point de code est un chiffre, nous devons
+        // retourner true.
+        // Sinon false.
+        | Some('+' | '-') => {
+            let second_codepoint = chars.next();
+            match second_codepoint {
+                | Some(ch) if ch.is_css_digit() => true,
+                | Some('.') => {
+                    let third_codepoint = chars.next();
+                    match third_codepoint {
+                        | Some(ch) if ch.is_css_digit() => true,
+                        | _ => false,
+                    }
+                }
+                | _ => false,
+            }
+        }
+
+        // U+002E FULL STOP (.)
+        //
+        // Si le deuxième point de code est un chifre, nous devons
+        // retourner true. Sinon false.
+        | Some('.') => {
+            let second_codepoint = chars.next();
+            match second_codepoint {
+                | Some(ch) if ch.is_css_digit() => true,
+                | _ => false,
+            }
+        }
+
+        // digit
+        | Some(ch) if ch.is_css_digit() => true,
+
+        // Anything else
+        | _ => false,
+    }
+}
+
 /// Vérifie si deux points de code constituent un échappement valide.
 fn check_2_codepoints_are_a_valid_escape(
     maybe_valid_escape: impl AsRef<str>,
