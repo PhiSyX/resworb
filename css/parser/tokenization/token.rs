@@ -6,6 +6,8 @@
 // Structure //
 // --------- //
 
+use infra::primitive::codepoint::CodePoint;
+
 #[derive(Debug)]
 #[derive(Default)]
 #[derive(PartialEq, Eq)]
@@ -111,6 +113,20 @@ pub enum NumberFlag {
 // -------------- //
 // Implémentation //
 // -------------- //
+
+impl CSSToken {
+    pub(crate) fn append_character(&mut self, ch: CodePoint) {
+        match self {
+            | Self::Ident(s)
+            | Self::Function(s)
+            | Self::AtKeyword(s)
+            | Self::Hash(s, _)
+            | Self::Url(s)
+            | Self::String(s) => s.push(ch),
+            | _ => (),
+        }
+    }
+}
 
 impl DimensionUnit {
     pub fn new(unit: String) -> Self {

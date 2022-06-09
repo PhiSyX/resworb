@@ -60,6 +60,13 @@ pub trait CSSCodePoint: Copy {
     /// <control>
     fn is_non_ascii_codepoint(self) -> bool;
 
+    /// non-printable code point
+    ///
+    /// Un point de code entre U+0000 NULL et U+0008 BACKSPACE inclus, ou
+    /// U+000B LINE TABULATION, ou un point de code entre U+000E SHIFT OUT
+    /// et U+001F INFORMATION SEPARATOR ONE inclus, ou U+007F DELETE.
+    fn is_non_printable_codepoint(self) -> bool;
+
     /// maximum allowed code point
     ///
     /// Le plus grand point de code défini par Unicode : U+10FFFF.
@@ -108,6 +115,10 @@ impl CSSCodePoint for CodePoint {
 
     fn is_non_ascii_codepoint(self) -> bool {
         self as u32 >= 0x80
+    }
+
+    fn is_non_printable_codepoint(self) -> bool {
+        matches!(self, '\0'..='\x08' | '\x0B' | '\x0E'..='\x1F' | '\x7F')
     }
 
     fn is_gt_maximum_allowed_codepoint(self) -> bool {

@@ -27,7 +27,6 @@ type PreScanFn<I> = fn(Option<I>) -> Option<I>;
 /// manipulent directement le flux d'entrée.
 pub struct InputStreamPreprocessor<T, I> {
     iter: ListQueue<T, I>,
-    is_replayed: bool,
     pub current: Option<I>,
     last_consumed_item: Option<I>,
     pre_scan: Option<PreScanFn<I>>,
@@ -46,7 +45,6 @@ where
         let queue = ListQueue::new(iter);
         Self {
             iter: queue,
-            is_replayed: false,
             current: None,
             last_consumed_item: None,
             pre_scan: None,
@@ -101,7 +99,7 @@ where
 
     /// Permet de revenir en arrière dans le flux.
     pub fn rollback(&mut self) {
-        self.is_replayed = true;
+        self.iter.rollback(self.last_consumed_item.clone())
     }
 
     pub fn meanwhile(&mut self) -> &mut impl PeekableInterface<T, I> {
@@ -184,11 +182,6 @@ where
     type Item = I;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.is_replayed {
-            self.is_replayed = false;
-            return self.last_consumed_item.to_owned();
-        };
-
         self.last_consumed_item = self.iter.next();
         self.last_consumed_item.to_owned()
     }

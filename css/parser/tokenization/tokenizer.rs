@@ -71,6 +71,7 @@ impl<C> CSSTokenizer<C>
 where
     C: Iterator<Item = CodePoint>,
 {
+    /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-comment>
     fn consume_comments(&mut self) {
         'f: loop {
             let start = self.stream.next_n_input_character(2);
@@ -92,6 +93,43 @@ where
                 }
             }
         }
+    }
+
+    /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-an-ident-like-token>
+    fn consume_ident_like_token(&mut self) -> Option<CSSToken> {
+        let result = self.consume_ident_sequence();
+
+        if result.eq_ignore_ascii_case("url") {
+            if let Some('(') = self.stream.next_input_character() {
+                self.stream.advance(1);
+
+                self.stream.advance_as_long_as(
+                    |ch| ch.is_css_whitespace(),
+                    Some(2),
+                );
+
+                if let Some(v) =
+                    self.stream.meanwhile().peek_until::<Vec<_>>(2)
+                {
+                    let cond0 = v[0] == '\'' || v[0] == '"';
+                    let cond1 = v[1] == '\'' || v[1] == '"';
+                    let cond2 = v[0] == ' ' && cond1;
+
+                    if cond0 && cond1 || cond2 {
+                        return Some(CSSToken::Function(result));
+                    }
+                }
+
+                return self.consume_url_token();
+            }
+        }
+
+        if let Some('(') = self.stream.next_input_character() {
+            self.stream.advance(1);
+            return Some(CSSToken::Function(result));
+        }
+
+        Some(CSSToken::Ident(result))
     }
 
     /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-number>
@@ -149,6 +187,7 @@ where
         value.map(|v| (v, flag))
     }
 
+    /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-numeric-token>
     fn consume_numeric_token(&mut self) -> Option<CSSToken> {
         let (number, number_flag) =
             self.consume_number().expect("Nombre attendu");
@@ -241,6 +280,7 @@ where
         Some(CSSToken::String(string))
     }
 
+    /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-token>
     fn consume_token(&mut self) -> Option<CSSToken> {
         // Consume comments.
         self.consume_comments();
@@ -350,18 +390,62 @@ where
             //
             // Retourner un <comma-token>.
             | Some(',') => Some(CSSToken::Comma),
+
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Si le flux d'entrée commence par un nombre, nous devons
+            // re-consommer le point de code d'entrée actuel, consommer un
+            // jeton numérique et le renvoyer.
+            | Some('-')
+                if check_3_codepoints_would_start_a_number(
+                    self.stream.next_n_input_character(3),
+                ) =>
+            {
+                self.stream.rollback();
+                self.consume_numeric_token()
+            }
+
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Si les 2 prochains points de code d'entrée sont U+002D
+            // HYPHEN-MINUS U+003E GREATER-THAN SIGN (->), les consommer et
+            // retourner un <CDC-token>.
+            | Some('-') if self.stream.next_n_input_character(2) == "->" =>
+            {
+                self.stream.advance(2);
+                Some(CSSToken::Cdc)
+            }
+
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // si le flux d'entrée commence par une séquence ident,
+            // re-consommer le point de code d'entrée actuel, consommer un
+            // jeton de type ident, et le retourner.
+            | Some('-')
+                if check_3_codepoints_would_start_an_ident_sequence(
+                    self.stream.next_n_input_character(3),
+                ) =>
+            {
+                self.stream.rollback();
+                self.consume_ident_like_token()
+            }
+
+            // U+002D HYPHEN-MINUS (-)
+            //
+            // Retourner un <delim-token> dont la valeur est fixée au
+            // point de code d'entrée actuel.
+            | Some('-') => self.stream.current.map(CSSToken::Delim),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
     }
 
+    /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-name>
     fn consume_ident_sequence(&mut self) -> String {
         let mut result = String::new();
 
         loop {
-            let maybe_next_ch = self.stream.consume_next_input();
-
-            if let Some(next_ch) = maybe_next_ch {
+            if let Some(next_ch) = self.stream.consume_next_input() {
                 if next_ch.is_ident_codepoint() {
                     result.push(next_ch);
                     continue;
@@ -373,7 +457,7 @@ where
                     if check_2_codepoints_are_a_valid_escape(format!(
                         "{next_ch}{next_peek_ch}"
                     )) {
-                        result.push(self.consume_escaped());
+                        result.push(self.consume_escaped_codepoint());
                         continue;
                     }
                 }
@@ -388,7 +472,7 @@ where
     }
 
     /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-escaped-code-point>
-    fn consume_escaped(&mut self) -> CodePoint {
+    fn consume_escaped_codepoint(&mut self) -> CodePoint {
         match self.stream.consume_next_input_character() {
             // hex digit
             //
@@ -409,11 +493,9 @@ where
                 // NOTE(phisyx): nous pouvons utiliser .expect() ici, sans
                 // que ce soit problématique, car la condition ci-dessus
                 // vérifie que `ch` s' agit bien d'une valeur hexadécimale.
-                let total_hexdigits =
-                    dbg!(self.stream.advance_as_long_as(
-                        |ch| ch.is_ascii_digit(),
-                        Some(5)
-                    ))
+                let total_hexdigits = self
+                    .stream
+                    .advance_as_long_as(|ch| ch.is_ascii_digit(), Some(5))
                     .iter()
                     .fold(
                         ch.to_digit(HEXARADIX)
@@ -462,6 +544,148 @@ where
                 "Le caractère courant, qui a forcément déjà été assigné.",
             ),
         }
+    }
+
+    /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-remnants-of-bad-url>
+    fn consume_remnants_of_bad_url(&mut self) {
+        loop {
+            match self.stream.consume_next_input() {
+                // U+0029 RIGHT PARENTHESIS ())
+                // EOF
+                //
+                // Retourner.
+                | Some(')') | None => break,
+
+                // Anything else
+                | Some(ch) => {
+                    // the input stream starts with a valid escape
+                    //
+                    // Consommer un point de code échappé.
+                    // NOTE(css): cela permet de rencontrer une parenthèse
+                    // droite échappée ("\)") sans terminer le
+                    // <bad-url-token>. Cette clause est par ailleurs
+                    // identique à la clause "anything else".
+                    if let Some(next_peek_ch) =
+                        self.stream.next_input_character()
+                    {
+                        if check_2_codepoints_are_a_valid_escape(format!(
+                            "{ch}{next_peek_ch}"
+                        )) {
+                            self.consume_escaped_codepoint();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-url-token>
+    fn consume_url_token(&mut self) -> Option<CSSToken> {
+        self.stream.advance_as_long_as(
+            |next_ch| next_ch.is_css_whitespace(),
+            None,
+        );
+
+        let mut url_token = CSSToken::Url(String::default());
+
+        loop {
+            match self.stream.consume_next_input() {
+                // U+0029 RIGHT PARENTHESIS ())
+                //
+                // Retourner un <url-token>.
+                | Some(')') => break,
+
+                // EOF
+                | None => break,
+
+                // whitespace
+                //
+                // Consommer autant d'espace blanc que possible. Si le
+                // prochain point de code d'entrée est U+0029 RIGHT
+                // PARENTHESIS ()) ou EOF, nous devons le consommer et
+                // renvoyer le <url-token> (si EOF a été rencontré, c'est
+                // une erreur d'analyse) ; sinon, nous devons consommer les
+                // restes d'une mauvaise url, créer un <bad-url-token>, et
+                // le retourner.
+                | Some(ch) if ch.is_css_whitespace() => {
+                    self.stream.advance_as_long_as(
+                        |next_ch| next_ch.is_css_whitespace(),
+                        None,
+                    );
+
+                    if let next_peek_ch @ (Some(')') | None) =
+                        self.stream.next_input_character()
+                    {
+                        self.stream.advance(1);
+
+                        if next_peek_ch.is_none() { // eof
+                             // TODO(phisyx): gérer les erreurs.
+                        }
+
+                        break;
+                    }
+
+                    self.consume_remnants_of_bad_url();
+                    return Some(CSSToken::BadUrl);
+                }
+
+                // U+0022 QUOTATION MARK (")
+                // U+0027 APOSTROPHE (')
+                // U+0028 LEFT PARENTHESIS (()
+                //
+                // Il s'agit d'une erreur d'analyse. Consommer les
+                // restes d'une mauvaise url, créer un <bad-url-token>,
+                // et le retourner.
+                | Some('"' | '\'' | '(') => {
+                    self.consume_remnants_of_bad_url();
+                    return Some(CSSToken::BadUrl);
+                }
+                // non-printable code point
+                //
+                // Il s'agit d'une erreur d'analyse. Consommer les
+                // restes d'une mauvaise url, créer un <bad-url-token>,
+                // et le retourner.
+                | Some(ch) if ch.is_non_printable_codepoint() => {
+                    self.consume_remnants_of_bad_url();
+                    return Some(CSSToken::BadUrl);
+                }
+
+                // U+005C REVERSE SOLIDUS (\)
+                //
+                // Si le flux commence par un échappement valide, nous
+                // devons consommer un point de code échappé et ajoute le
+                // point de code renvoyé à la valeur de <url-token>.
+                //
+                // Sinon, il s'agit d'une erreur d'analyse. Consomme les
+                // restes d'une mauvaise url, crée un <bad-url-token>, et
+                // le renvoie.
+                | Some(ch @ '\\') => {
+                    if let Some(next_peek_ch) =
+                        self.stream.next_input_character()
+                    {
+                        if check_2_codepoints_are_a_valid_escape(format!(
+                            "{ch}{next_peek_ch}",
+                        )) {
+                            url_token.append_character(
+                                self.consume_escaped_codepoint(),
+                            );
+                        } else {
+                            // TODO(phisyx): gérer les erreurs.
+                            self.consume_remnants_of_bad_url();
+                            return Some(CSSToken::BadUrl);
+                        }
+                    }
+                }
+
+                // Anything else
+                //
+                // Ajouter le point de code d'entrée actuel à la valeur de
+                // <url-token>.
+                | Some(ch) => url_token.append_character(ch),
+            }
+        }
+
+        Some(url_token)
     }
 }
 
@@ -673,5 +897,43 @@ mod tests {
         );
 
         // TODO(phisyx): tester les couleurs de ce test.
+    }
+
+    #[test]
+    fn test_consume_ident_like() {
+        let mut tokenizer =
+            test_the_str!("#id { background: url(img.png); }");
+
+        for _ in 0..7 {
+            tokenizer.consume_token();
+        }
+
+        assert_eq!(
+            tokenizer.consume_token(),
+            Some(CSSToken::Url("img.png".into()))
+        );
+
+        let mut tokenizer =
+            test_the_str!("#id { transform: translateX(0deg); }");
+
+        for _ in 0..7 {
+            tokenizer.consume_token();
+        }
+
+        assert_eq!(
+            tokenizer.consume_token(),
+            Some(CSSToken::Function("translateX".into()))
+        );
+
+        let mut tokenizer = test_the_str!("#id { color: red; }");
+
+        for _ in 0..7 {
+            tokenizer.consume_token();
+        }
+
+        assert_eq!(
+            tokenizer.consume_token(),
+            Some(CSSToken::Ident("red".into()))
+        );
     }
 }
