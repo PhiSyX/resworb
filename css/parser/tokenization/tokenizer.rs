@@ -483,6 +483,27 @@ where
             // Retourner un <delim-token> dont la valeur est fixée au
             // point de code d'entrée actuel.
             | Some('<') => self.stream.current.map(CSSToken::Delim),
+
+            // U+0040 COMMERCIAL AT (@)
+            //
+            // Si les 3 points de code d'entrée qui suivent démarrent une
+            // séquence d'identification, consommer une séquence
+            // d'identification, créer un <at-keyword-token> avec sa
+            // valeur définie sur la valeur renvoyée, et le retourner.
+            | Some('@')
+                if check_3_codepoints_would_start_an_ident_sequence(
+                    self.stream.next_n_input_character(3),
+                ) =>
+            {
+                self.stream.rollback();
+                CSSToken::AtKeyword(self.consume_ident_sequence()).into()
+            }
+
+            // U+0040 COMMERCIAL AT (@)
+            //
+            // Retourner un <delim-token> dont la valeur est fixée au
+            // point de code d'entrée actuel.
+            | Some('@') => self.stream.current.map(CSSToken::Delim),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
