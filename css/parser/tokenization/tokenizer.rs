@@ -460,6 +460,11 @@ where
             //
             // Retourner un <colon-token>.
             | Some(':') => Some(CSSToken::Colon),
+
+            // U+003B SEMICOLON (;)
+            //
+            // Retourner un <semicolon-token>.
+            | Some(';') => Some(CSSToken::Semicolon),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
