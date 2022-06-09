@@ -2,6 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+// --------- //
+// Structure //
+// --------- //
+
+#[derive(Debug)]
+#[derive(Default)]
+#[derive(PartialEq, Eq)]
+pub struct DimensionUnit(String);
+
 // ----------- //
 // Énumération //
 // ----------- //
@@ -46,7 +55,8 @@ pub enum CSSToken {
 
     /// Les `<dimension-token>` ont en outre une unité composée d'un ou
     /// plusieurs points de code.
-    Dimension(f64, NumberFlag, String),
+    Dimension(f64, NumberFlag, DimensionUnit),
+
     Whitespace,
 
     /// Suite de points de code "<!--"
@@ -99,7 +109,19 @@ pub enum NumberFlag {
 }
 
 // -------------- //
+// Implémentation //
+// -------------- //
+
+impl DimensionUnit {
+    pub fn new(unit: String) -> Self {
+        Self(unit)
+    }
+}
+
+// -------------- //
 // Implémentation // -> Interface
 // -------------- //
 
+// NOTE(phisyx): obligé de faire ceci à cause du type f64 dans notre
+//               énumération.
 impl Eq for CSSToken {}

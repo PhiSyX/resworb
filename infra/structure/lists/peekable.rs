@@ -21,6 +21,12 @@ where
     /// l'itération.
     ///
     /// Le type générique est obligatoire.
+    ///
+    /// NOTE(phisyx): ce type vaut None si la position demandée est
+    /// supérieure à la longueur de l'itération, tant bien qu'il y ait
+    /// des éléments à l'intérieur du flux. Exemple: si `lookahead_offset`
+    /// vaut 5, et le flux a dans son flux `[0, 1, 2]` cela retournera
+    /// `None`.
     fn peek_until<R: FromIterator<I>>(
         &mut self,
         lookahead_offset: usize,

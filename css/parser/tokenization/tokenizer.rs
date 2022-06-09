@@ -7,10 +7,16 @@ use std::{
     ops::{AddAssign, MulAssign},
 };
 
-use infra::primitive::codepoint::{CodePoint, CodePointInterface};
+use infra::{
+    primitive::codepoint::{CodePoint, CodePointInterface},
+    structure::lists::peekable::PeekableInterface,
+};
 use parser::preprocessor::InputStream;
 
-use super::CSSToken;
+use super::{
+    token::{DimensionUnit, NumberFlag},
+    CSSToken,
+};
 use crate::{codepoint::CSSCodePoint, tokenization::token::HashFlag};
 
 // ---- //
@@ -86,6 +92,83 @@ where
                 }
             }
         }
+    }
+
+    /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-number>
+    //
+    // NOTE(phisyx): `type` est un mot clé réservé de Rust.
+    //               C'est pour cela qu'on ne respecte pas vraiment la
+    //               nomenclature de la présente spécification dans le
+    //               cas présent.
+    fn consume_number(&mut self) -> Option<(f64, NumberFlag)> {
+        let mut flag = NumberFlag::Integer;
+        // ---- ^^^^ : voir la NOTE ci-haut.
+        let mut repr = String::new();
+
+        if let Some(ch @ ('+' | '-')) = self.stream.next_input_character()
+        {
+            repr.push(ch);
+            self.stream.advance(1);
+        }
+
+        let digits = self
+            .stream
+            .advance_as_long_as(|next_ch| next_ch.is_css_digit(), None);
+        repr.extend(&digits);
+
+        if let Some(v) = self.stream.meanwhile().peek_until::<Vec<_>>(2) {
+            if v[0] == '.' && v[1].is_css_digit() {
+                self.stream.advance(2);
+                repr.extend(&v);
+                flag = NumberFlag::Number;
+                repr.extend(&self.stream.advance_as_long_as(
+                    |next_ch| next_ch.is_css_digit(),
+                    None,
+                ));
+            }
+        }
+
+        if let Some(v) = self.stream.meanwhile().peek_until::<Vec<_>>(3) {
+            let is_minus_or_plus = v[1] == '-' || v[1] == '+';
+            if v[0].to_ascii_lowercase() == 'e'
+                && (is_minus_or_plus && v[2].is_css_digit())
+                || v[1].is_css_digit()
+            {
+                let offset = if is_minus_or_plus { 3 } else { 2 };
+                self.stream.advance(offset);
+                repr.extend(&v[..offset]);
+                flag = NumberFlag::Number;
+                repr.extend(&self.stream.advance_as_long_as(
+                    |next_ch| next_ch.is_css_digit(),
+                    None,
+                ));
+            }
+        }
+
+        let value = convert_string_to_number(repr);
+        value.map(|v| (v, flag))
+    }
+
+    fn consume_numeric_token(&mut self) -> Option<CSSToken> {
+        let (number, number_flag) =
+            self.consume_number().expect("Nombre attendu");
+
+        if check_3_codepoints_would_start_an_ident_sequence(
+            self.stream.next_n_input_character(3),
+        ) {
+            return Some(CSSToken::Dimension(
+                number,
+                number_flag,
+                DimensionUnit::new(self.consume_ident_sequence()),
+            ));
+        }
+
+        if let Some('%') = self.stream.next_input_character() {
+            self.stream.advance(1);
+            return Some(CSSToken::Percentage(number));
+        }
+
+        Some(CSSToken::Number(number, number_flag))
     }
 
     fn consume_string_token(
@@ -242,6 +325,20 @@ where
             //
             // Retourne un <)-token>.
             | Some(')') => Some(CSSToken::RightParenthesis),
+
+            // U+002B PLUS SIGN (+)
+            //
+            // Si le flux d'entrée commence par un nombre, nous devons
+            // reprendre le point de code d'entrée actuel, consommer un
+            // jeton numérique et le renvoyer.
+            | Some('+')
+                if check_3_codepoints_would_start_a_number(
+                    self.stream.next_n_input_character(3),
+                ) =>
+            {
+                self.stream.rollback();
+                self.consume_numeric_token()
+            }
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
@@ -428,6 +525,12 @@ fn check_2_codepoints_are_a_valid_escape(
     }
 
     true
+}
+
+/// Voir <https://www.w3.org/TR/css-syntax-3/#convert-string-to-number>
+/// Le langage Rust implémente déjà cela.
+fn convert_string_to_number(s: String) -> Option<f64> {
+    s.parse().ok()
 }
 
 #[cfg(test)]
