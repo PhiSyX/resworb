@@ -90,6 +90,16 @@ where
 
         // Consume the next input code point.
         match self.stream.consume_next_input_character() {
+            // whitespace
+            //
+            // Consomme autant d'espace blanc que possible. Retourne un
+            // <whitespace-token>.
+            | Some(ch) if ch.is_css_whitespace() => {
+                self.stream.advance_as_long_as(|next_ch| {
+                    next_ch.is_css_whitespace()
+                });
+                Some(CSSToken::Whitespace)
+            }
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
@@ -121,5 +131,6 @@ mod tests {
 
         // NOTE: tester si le premier caractère n'est pas '/'
         //       actuellement le script retourne None.
+        assert_eq!(tokenizer.consume_token(), Some(CSSToken::Whitespace));
     }
 }

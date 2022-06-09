@@ -77,6 +77,12 @@ where
         self.nth(n)
     }
 
+    pub fn advance_as_long_as(&mut self, predicate: impl Fn(&I) -> bool) {
+        while predicate(self.meanwhile().peek().unwrap()) {
+            self.advance(1);
+        }
+    }
+
     /// Permet de revenir en arrière dans le flux.
     pub fn rollback(&mut self) {
         self.is_replayed = true;
