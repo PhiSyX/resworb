@@ -455,6 +455,11 @@ where
             // Retourner un <delim-token> dont la valeur est fixée au
             // point de code d'entrée actuel.
             | Some('.') => self.stream.current.map(CSSToken::Delim),
+
+            // U+003A COLON (:)
+            //
+            // Retourner un <colon-token>.
+            | Some(':') => Some(CSSToken::Colon),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
