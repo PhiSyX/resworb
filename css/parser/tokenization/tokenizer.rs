@@ -84,6 +84,76 @@ where
             }
         }
     }
+
+    fn consume_string_token(
+        &mut self,
+        ending_codepoint: CodePoint,
+    ) -> Option<CSSToken> {
+        let mut string = String::new();
+
+        loop {
+            match self.stream.consume_next_input_character() {
+                // ending code point
+                //
+                // Retourner un <string-token>.
+                | Some(ch) if ch == ending_codepoint => break,
+
+                // EOF
+                //
+                // Il s'agit d'une erreur d'analyse. Retourner un
+                // <string-token>.
+                | None => {
+                    // TODO(phisyx): gérer l'erreur.
+                    break;
+                }
+
+                // newline
+                //
+                // Il s'agit d'une erreur d'analyse. Re-consommer le
+                // point de code d'entrée actuel, créer un
+                // <bad-string-token> et le renvoyer.
+                | Some(ch) if ch.is_newline() => {
+                    // TODO(phisyx): gérer l'erreur.
+                    self.stream.rollback();
+                    return Some(CSSToken::BadString);
+                }
+
+                // U+005C REVERSE SOLIDUS (\)
+                //
+                // Si le prochain point de code d'entrée est EOF, ne rien
+                // faire.
+                // Sinon, si le prochain point de code d'entrée est une
+                // nouvelle ligne, nous devons le consommer.
+                // Sinon, (le flux commence par un échappement valide)
+                // consommer un point de code échappé et ajouter le point
+                // de code renvoyé à la valeur de <string-token>.
+                | Some('\\') => {
+                    match self.stream.next_input_character() {
+                        | Some(ch) if ch.is_newline() => {
+                            self.stream.advance(1);
+                        }
+                        | _ => {}
+                    };
+
+                    if check_2_codepoints_are_a_valid_escape(
+                        self.stream.next_n_input_character(2),
+                    ) {
+                        self.stream.advance(2);
+                        string.push_str("\\\\");
+                    }
+                }
+
+                // Anything else
+                //
+                // Ajouter le point de code d'entrée actuel à la valeur de
+                // <string-token>.
+                | _ => string
+                    .push(self.stream.current.expect("Caractère courant")),
+            }
+        }
+
+        Some(CSSToken::String(string))
+    }
     fn consume_token(&mut self) -> Option<CSSToken> {
         // Consume comments.
         self.consume_comments();
@@ -100,6 +170,12 @@ where
                 });
                 Some(CSSToken::Whitespace)
             }
+
+            // U+0022 QUOTATION MARK (")
+            // U+0027 APOSTROPHE (')
+            //
+            // Consomme un jeton de chaîne et le renvoie.
+            | Some(ch @ ('"' | '\'')) => self.consume_string_token(ch),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
@@ -129,8 +205,38 @@ mod tests {
             "/* comment 1 */\r\n#id { color: red }/* comment 2 */"
         );
 
-        // NOTE: tester si le premier caractère n'est pas '/'
+        // NOTE: tester si le premier jeton n'est pas '/'
         //       actuellement le script retourne None.
         assert_eq!(tokenizer.consume_token(), Some(CSSToken::Whitespace));
+    }
+
+    #[test]
+    fn test_consume_token_quotation_mark() {
+        let mut tokenizer = test_the_str!("'hello world'");
+        assert_eq!(
+            tokenizer.consume_token(),
+            Some(CSSToken::String("hello world".into()))
+        );
+
+        let mut tokenizer = test_the_str!(r#""foo bar""#);
+        assert_eq!(
+            tokenizer.consume_token(),
+            Some(CSSToken::String("foo bar".into()))
+        );
+
+        let mut tokenizer = test_the_str!(r#""foo'bar""#);
+        assert_eq!(
+            tokenizer.consume_token(),
+            Some(CSSToken::String("foo'bar".into()))
+        );
+
+        let mut tokenizer = test_the_str!(r#""foo"bar""#);
+        assert_eq!(
+            tokenizer.consume_token(),
+            Some(CSSToken::String("foo".into()))
+        );
+
+        let mut tokenizer = test_the_str!("\"bad\nstring\"");
+        assert_eq!(tokenizer.consume_token(), Some(CSSToken::BadString));
     }
 }
