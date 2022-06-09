@@ -157,6 +157,7 @@ where
 
         Some(CSSToken::String(string))
     }
+
     fn consume_token(&mut self) -> Option<CSSToken> {
         // Consume comments.
         self.consume_comments();
@@ -231,6 +232,16 @@ where
 
                 self.stream.current.map(CSSToken::Delim)
             }
+
+            // U+0028 LEFT PARENTHESIS (()
+            //
+            // Consomme un jeton de type <(-token>.
+            | Some('(') => Some(CSSToken::LeftParenthesis),
+
+            // U+0029 RIGHT PARENTHESIS ())
+            //
+            // Retourne un <)-token>.
+            | Some(')') => Some(CSSToken::RightParenthesis),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
@@ -399,6 +410,7 @@ fn check_3_codepoints_would_start_an_ident_sequence(
         | _ => false,
     }
 }
+
 /// Vérifie si deux points de code constituent un échappement valide.
 fn check_2_codepoints_are_a_valid_escape(
     maybe_valid_escape: impl AsRef<str>,
