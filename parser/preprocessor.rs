@@ -15,6 +15,9 @@ use infra::{
 
 pub type InputStream<T, I> = InputStreamPreprocessor<T, I>;
 
+// NOTE: améliorer ce type.
+type PreScanFn<I> = fn(Option<I>) -> Option<I>;
+
 // --------- //
 // Structure //
 // --------- //
@@ -27,6 +30,7 @@ pub struct InputStreamPreprocessor<T, I> {
     is_replayed: bool,
     pub current: Option<I>,
     last_consumed_item: Option<I>,
+    pre_scan: Option<PreScanFn<I>>,
 }
 
 // -------------- //
@@ -45,7 +49,13 @@ where
             is_replayed: false,
             current: None,
             last_consumed_item: None,
+            pre_scan: None,
         }
+    }
+
+    pub fn with_pre_scan(mut self, scan_fn: PreScanFn<I>) -> Self {
+        self.pre_scan.replace(scan_fn);
+        self
     }
 }
 
@@ -77,8 +87,13 @@ where
     }
 
     /// Consomme le prochain élément du flux.
-        self.next().and_then(|item| {
     pub fn consume_next_input(&mut self) -> Option<I> {
+        if let Some(pre_scan) = &self.pre_scan {
+            (pre_scan)(self.next())
+        } else {
+            self.next()
+        }
+        .and_then(|item| {
             let some_item = Some(item);
             self.current = some_item.to_owned();
             some_item
@@ -87,7 +102,11 @@ where
 
     pub fn next_input(&mut self) -> Option<I> {
         let item = self.meanwhile().peek().cloned();
+        if let Some(pre_scan) = &self.pre_scan {
+            (pre_scan)(item)
+        } else {
             item
+        }
     }
 }
 
