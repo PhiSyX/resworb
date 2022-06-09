@@ -465,6 +465,24 @@ where
             //
             // Retourner un <semicolon-token>.
             | Some(';') => Some(CSSToken::Semicolon),
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Si les 3 points de code d'entrée suivants sont U+0021
+            // EXCLAMATION MARK U+002D HYPHEN-MINUS U+002D HYPHEN-MINUS
+            // (!--), les consommer et retourner un <CDO-token>.
+            | Some('<')
+                if self.stream.next_n_input_character(3) == "!--" =>
+            {
+                self.stream.advance(3);
+                Some(CSSToken::Cdo)
+            }
+
+            // U+003C LESS-THAN SIGN (<)
+            //
+            // Retourner un <delim-token> dont la valeur est fixée au
+            // point de code d'entrée actuel.
+            | Some('<') => self.stream.current.map(CSSToken::Delim),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
