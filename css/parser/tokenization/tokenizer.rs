@@ -339,6 +339,12 @@ where
                 self.stream.rollback();
                 self.consume_numeric_token()
             }
+
+            // U+002B PLUS SIGN (+)
+            //
+            // Retourner un <delim-token> dont la valeur est fixée
+            // au point de code d'entrée actuel.
+            | Some('+') => self.stream.current.map(CSSToken::Delim),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
