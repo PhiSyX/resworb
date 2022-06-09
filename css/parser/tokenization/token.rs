@@ -98,6 +98,34 @@ pub enum NumberFlag {
     Number,
 }
 
+// -------------- //
+// Implémentation //
+// -------------- //
+
+impl CSSToken {
+    pub(crate) fn define_hash_flag(mut self, flag: HashFlag) -> Self {
+        assert!(matches!(self, CSSToken::Hash(_, _)));
+
+        if let CSSToken::Hash(_, ref mut current_flag) = self {
+            *current_flag = flag;
+        }
+
+        self
+    }
+
+    pub(crate) fn define_hash_value(
+        mut self,
+        value: impl ToString,
+    ) -> Self {
+        assert!(matches!(self, CSSToken::Hash(_, _)));
+
+        if let CSSToken::Hash(ref mut current_value, _) = self {
+            *current_value = value.to_string();
+        }
+
+        self
+    }
+}
 
 // -------------- //
 // Implémentation // -> Interface

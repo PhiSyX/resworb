@@ -57,3 +57,69 @@ where
         Self { stream }
     }
 }
+
+impl<C> CSSTokenizer<C>
+where
+    C: Iterator<Item = CodePoint>,
+{
+    fn consume_comments(&mut self) {
+        'f: loop {
+            let start = self.stream.next_n_input_character(2);
+
+            if start != "/*" {
+                break 'f;
+            }
+
+            self.stream.advance(2);
+
+            's: loop {
+                let last = self.stream.next_n_input_character(2);
+
+                if last == "*/" {
+                    self.stream.advance(2);
+                    break 's;
+                } else {
+                    self.stream.advance(1);
+                }
+            }
+        }
+    }
+    fn consume_token(&mut self) -> Option<CSSToken> {
+        // Consume comments.
+        self.consume_comments();
+
+        // Consume the next input code point.
+        match self.stream.consume_next_input_character() {
+            // Anything else
+            | _ => self.stream.current.map(CSSToken::Delim),
+        }
+    }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tokenization::token::HashFlag;
+
+    macro_rules! load_fixture {
+        ($filename:literal) => {{
+            let css_file = include_str!($filename);
+            CSSTokenizer::new(css_file.chars())
+        }};
+    }
+
+    macro_rules! test_the_str {
+        ($str:literal) => {{
+            let s = $str;
+            CSSTokenizer::new(s.chars())
+        }};
+    }
+
+    #[test]
+    fn test_consume_comments() {
+        let mut tokenizer = test_the_str!(
+            "/* comment 1 */\r\n#id { color: red }/* comment 2 */"
+        );
+
+        // NOTE: tester si le premier caractère n'est pas '/'
+        //       actuellement le script retourne None.
+    }
+}
