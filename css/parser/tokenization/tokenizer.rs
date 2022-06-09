@@ -236,7 +236,7 @@ where
                 //
                 // Il s'agit d'une erreur d'analyse. Re-consommer le
                 // point de code d'entrée actuel, créer un
-                // <bad-string-token> et le renvoyer.
+                // <bad-string-token> et le retourner.
                 | Some(ch) if ch.is_newline() => {
                     // TODO(phisyx): gérer l'erreur.
                     self.stream.rollback();
@@ -370,7 +370,7 @@ where
             //
             // Si le flux d'entrée commence par un nombre, nous devons
             // reprendre le point de code d'entrée actuel, consommer un
-            // jeton numérique et le renvoyer.
+            // jeton numérique et le retourner.
             | Some('+')
                 if check_3_codepoints_would_start_a_number(
                     self.stream.next_n_input_character(3),
@@ -395,7 +395,7 @@ where
             //
             // Si le flux d'entrée commence par un nombre, nous devons
             // re-consommer le point de code d'entrée actuel, consommer un
-            // jeton numérique et le renvoyer.
+            // jeton numérique et le retourner.
             | Some('-')
                 if check_3_codepoints_would_start_a_number(
                     self.stream.next_n_input_character(3),
@@ -435,6 +435,26 @@ where
             // Retourner un <delim-token> dont la valeur est fixée au
             // point de code d'entrée actuel.
             | Some('-') => self.stream.current.map(CSSToken::Delim),
+
+            // U+002E FULL STOP (.)
+            //
+            // Si le flux d'entrée commence par un nombre, nous devons
+            // re-consommer le point de code d'entrée actuel, consommer un
+            // jeton numérique et le retourner.
+            | Some('.')
+                if check_3_codepoints_would_start_a_number(
+                    self.stream.next_n_input_character(3),
+                ) =>
+            {
+                self.stream.rollback();
+                self.consume_numeric_token()
+            }
+
+            // U+002E FULL STOP (.)
+            //
+            // Retourner un <delim-token> dont la valeur est fixée au
+            // point de code d'entrée actuel.
+            | Some('.') => self.stream.current.map(CSSToken::Delim),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
@@ -484,8 +504,8 @@ where
             // nous devons le consommer. Interpréter les chiffres
             // hexadécimaux comme un nombre hexadécimal. Si ce nombre est
             // zéro, ou s'il s'agit d'un substitut, ou s'il est supérieur
-            // au point de code maximum autorisé, renvoyer U+FFFD
-            // REPLACEMENT CHARACTER (�). Sinon, renvoyer le point de code
+            // au point de code maximum autorisé, retourner U+FFFD
+            // REPLACEMENT CHARACTER (�). Sinon, retourner le point de code
             // avec cette valeur.
             | Some(ch) if ch.is_ascii_hexdigit() => {
                 const HEXARADIX: u32 = 16;
@@ -532,7 +552,7 @@ where
 
             // EOF
             //
-            // Il s'agit d'une erreur d'analyse. Renvoyer U+FFFD
+            // Il s'agit d'une erreur d'analyse. Retourner U+FFFD
             // REPLACEMENT CHARACTER (�).
             // TODO(phisyx): gérer cette erreur d'analyse.
             | None => CodePoint::REPLACEMENT_CHARACTER,
@@ -603,7 +623,7 @@ where
                 // Consommer autant d'espace blanc que possible. Si le
                 // prochain point de code d'entrée est U+0029 RIGHT
                 // PARENTHESIS ()) ou EOF, nous devons le consommer et
-                // renvoyer le <url-token> (si EOF a été rencontré, c'est
+                // retourner le <url-token> (si EOF a été rencontré, c'est
                 // une erreur d'analyse) ; sinon, nous devons consommer les
                 // restes d'une mauvaise url, créer un <bad-url-token>, et
                 // le retourner.
