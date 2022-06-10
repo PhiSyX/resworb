@@ -544,6 +544,15 @@ where
             //
             // Retourner un <}-token>.
             | Some('}') => Some(CSSToken::RightCurlyBracket),
+
+            // digit
+            //
+            // Re-consommer le point de code d'entrée actuel, consommer un
+            // jeton numérique et le retourner.
+            | Some(ch) if ch.is_css_digit() => {
+                self.stream.rollback();
+                self.consume_numeric_token()
+            }
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
