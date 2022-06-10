@@ -143,8 +143,8 @@ impl HTMLTreeConstruction {
             //
             // Si le nœud actuel n'est pas l'élément html racine, il s'agit
             // d'une erreur d'analyse.
-            // Note: Le nœud actuel ne peut être que l'élément html racine
-            // dans le cas d'un fragment.
+            // NOTE(html): Le nœud actuel ne peut être que l'élément html
+            // racine dans le cas d'un fragment.
             // Arrêter l'analyse.
             | HTMLToken::EOF => {
                 if let Some(cnode) = self.current_node() {

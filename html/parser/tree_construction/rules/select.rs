@@ -184,7 +184,7 @@ impl HTMLTreeConstruction {
             // ce qu'un élément select ait été retiré de la pile.
             // Réinitialiser le mode d'insertion de manière appropriée.
             //
-            // Note: Il est juste traité comme une balise de fin.
+            // NOTE(html): Il est juste traité comme une balise de fin.
             | HTMLToken::Tag {
                 ref name,
                 is_end: true,

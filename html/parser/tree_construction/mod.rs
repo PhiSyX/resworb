@@ -439,7 +439,9 @@ impl HTMLTreeConstruction {
                 }
             }
 
-            | _ => todo!(),
+            // NOTE(phisyx): la spécification n'indique pas de traitement
+            //               pour les autres types de jetons.
+            | _ => unreachable!(),
         };
 
         HTMLTreeConstructionControlFlow::Continue(
@@ -699,8 +701,8 @@ impl HTMLTreeConstruction {
     ///    2.1. Si le `foster parenting` est activée et que la cible est
     /// un élément table, tbody, tfoot, thead ou tr.
     ///
-    ///    Note: Le `foster parenting` se produit lorsque le contenu est
-    /// mal intégré dans les table's.
+    ///    NOTE(html): Le `foster parenting` se produit lorsque le contenu
+    /// est mal intégré dans les table's.
     ///
     ///      2.1.1. Le dernier template est le dernier élément template
     /// dans la pile d'éléments ouverts, s'il y en a.
@@ -734,11 +736,11 @@ impl HTMLTreeConstruction {
     /// l'intérieur de l'élément précédent, après son dernier enfant (le
     /// cas échéant).
     ///
-    ///    Note: Ces étapes sont nécessaires en partie parce qu'il est
-    /// possible que des éléments, en particulier l'élément table dans ce
-    /// cas, aient été déplacés par un script dans le DOM, ou même
-    /// entièrement retirés du DOM, après que l'élément ait été inséré par
-    /// l'analyseur.
+    ///    NOTE(html): Ces étapes sont nécessaires en partie parce qu'il
+    /// est possible que des éléments, en particulier l'élément table
+    /// dans ce cas, aient été déplacés par un script dans le DOM, ou
+    /// même entièrement retirés du DOM, après que l'élément ait été
+    /// inséré par l'analyseur.
     ///
     ///    2.2. Sinon : l'emplacement d'insertion ajusté doit être à
     /// l'intérieur de la cible, après son dernier enfant (s'il y en a).
@@ -1131,7 +1133,7 @@ impl HTMLTreeConstruction {
     /// ont été ouverts dans le body, cell ou caption courant (selon le
     /// plus jeune) et qui n'ont pas été explicitement fermés.
     ///
-    /// Note: La liste des éléments de formatage actifs est toujours
+    /// NOTE(html): La liste des éléments de formatage actifs est toujours
     /// constituée d'éléments dans l'ordre chronologique, l'élément le
     /// moins récemment ajouté étant le premier et l'élément le plus
     /// récemment ajouté le dernier (sauf pendant l'exécution des étapes 7
@@ -1163,7 +1165,8 @@ impl HTMLTreeConstruction {
             return;
         };
 
-        // todo: probablement à améliorer.
+        // NOTE(phisyx): code qui est à propice à des bugs; à améliorer et
+        //               à tester.
         #[allow(unused_labels)]
         'main: loop {
             // Rewind
