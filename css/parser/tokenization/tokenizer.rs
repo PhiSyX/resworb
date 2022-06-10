@@ -562,6 +562,12 @@ where
                 self.stream.rollback();
                 self.consume_ident_like_token()
             }
+
+            // EOF
+            //
+            // Retourner un <EOF-token>.
+            | None => Some(CSSToken::EOF),
+
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
