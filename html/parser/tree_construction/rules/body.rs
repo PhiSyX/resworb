@@ -999,10 +999,11 @@ impl HTMLTreeConstruction {
             // Insérer un élément HTML pour le jeton.
             // Passer le tokenizer à l'état PLAINTEXT.
             //
-            // Note: Une fois qu'une balise de début avec le nom de balise
-            // "plaintext" a été vue, ce sera le dernier jeton vu autre que
-            // les jetons de caractères (et le jeton de fin de fichier),
-            // car il n'y a aucun moyen de sortir de l'état PLAINTEXT.
+            // NOTE(html): Une fois qu'une balise de début avec le nom de
+            // balise "plaintext" a été vue, ce sera le dernier jeton vu
+            // autre que les jetons de caractères (et le jeton de fin de
+            // fichier), car il n'y a aucun moyen de sortir de l'état
+            // PLAINTEXT.
             #[allow(deprecated)]
             | HTMLToken::Tag {
                 ref name,
@@ -1808,7 +1809,7 @@ impl HTMLTreeConstruction {
                 ..
             } if tag_names::textarea == name => {
                 self.insert_html_element(token.as_tag());
-                // todo(fixme): améliorer cette partie ci.
+                // TODO(phisyx): améliorer cette partie ci.
                 return HTMLTreeConstructionControlFlow::Continue(
                     HTMLParserState::CustomRcdata,
                 );
@@ -1997,8 +1998,8 @@ impl HTMLTreeConstruction {
                 self.insert_html_element(token.as_tag());
             }
 
-            // todo: A start tag whose tag name is one of: "math"
-            // todo: A start tag whose tag name is one of: "svg"
+            // TODO(html): A start tag whose tag name is one of: "math"
+            // TODO(html): A start tag whose tag name is one of: "svg"
 
             // A start tag whose tag name is one of: "caption", "col",
             // "colgroup", "frame", "head", "tbody", "td", "tfoot", "th",
@@ -2034,7 +2035,7 @@ impl HTMLTreeConstruction {
             // a.
             // Insérer un élément HTML pour le jeton.
             //
-            // Note: Cet élément sera un élément ordinaire.
+            // NOTE(html): Cet élément sera un élément ordinaire.
             | HTMLToken::Tag { is_end: false, .. } => {
                 self.reconstruct_active_formatting_elements();
                 self.insert_html_element(token.as_tag());

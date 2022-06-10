@@ -19,7 +19,7 @@ where
     pub(crate) fn handle_data_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0026 AMPERSAND (&)
             //
             // Définir l'état de retour à l'état `data`. Passer à l'état

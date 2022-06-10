@@ -147,7 +147,8 @@ impl Node {
     }
 
     /// Retourne la donnée du noeud, qui est l'élément courant.
-    // FIXME: au lieux de panic comme un demeuré: mieux gérer les erreurs.
+    // NOTE(phisyx): au lieux de panic comme un demeuré: mieux gérer les
+    // erreurs.
     pub fn element_ref(&self) -> &Element {
         match self.node_data.as_ref() {
             | Some(NodeData::Element(element)) => element,
@@ -156,7 +157,8 @@ impl Node {
     }
 
     /// Retourne la donnée du noeud, qui est le document courant.
-    // FIXME: au lieux de panic comme un demeuré: mieux gérer les erreurs.
+    // NOTE(phisyx): au lieux de panic comme un demeuré: mieux gérer les
+    // erreurs.
     pub fn document_ref(&self) -> &Document {
         match self.node_data.as_ref() {
             | Some(NodeData::Document(ref d)) => d,
@@ -165,7 +167,8 @@ impl Node {
     }
 
     /// Retourne la donnée du noeud, qui est l'élément script.
-    // FIXME: au lieux de panic comme un demeuré: mieux gérer les erreurs.
+    // NOTE(phisyx): au lieux de panic comme un demeuré: mieux gérer les
+    // erreurs.
     pub fn script_ref(&self) -> &HTMLScriptElement<DocumentNode> {
         match self.node_data.as_ref() {
             | Some(NodeData::Element(element)) => element.script(),
@@ -175,7 +178,8 @@ impl Node {
 
     /// Défini une suite de caractères au noeud courant dans lequel nous
     /// pouvons définir des [données de caractères](CharacterData).
-    // FIXME: au lieux de panic comme un demeuré: mieux gérer les erreurs.
+    // NOTE(phisyx): au lieux de panic comme un demeuré: mieux gérer les
+    // erreurs.
     pub fn set_data(&self, data: &str) {
         match self.node_data.as_ref() {
             | Some(NodeData::CharacterData(cd)) => cd.set_data(data),

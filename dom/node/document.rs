@@ -67,7 +67,6 @@ impl Document {
         }
     }
 
-    /// todo: FIXME
     pub fn create_element(
         local_name: impl AsRef<str>,
         options: Option<CreateElementOptions>,

@@ -18,7 +18,7 @@ where
     pub(crate) fn handle_plaintext_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0000 NULL
             //
             // Il s'agit d'une erreur d'analyse de type

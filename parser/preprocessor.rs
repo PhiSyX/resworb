@@ -5,6 +5,7 @@
 use std::borrow::Cow;
 
 use infra::{
+    algorithms::Parameter,
     primitive::codepoint::CodePoint,
     structure::lists::{peekable::PeekableInterface, queue::ListQueue},
 };
@@ -15,23 +16,21 @@ use infra::{
 
 pub type InputStream<T, I> = InputStreamPreprocessor<T, I>;
 
+// NOTE(phisyx): améliorer ce type.
+type PreScanFn<I> = fn(Option<I>) -> Option<I>;
+
 // --------- //
 // Structure //
 // --------- //
 
-#[derive(Debug)]
 /// Le flux d'entrée est constitué de caractères qui y sont insérés lors
 /// du décodage du flux d'octets d'entrée ou par les diverses API qui
 /// manipulent directement le flux d'entrée.
-pub struct InputStreamPreprocessor<T, I>
-where
-    T: Iterator<Item = I>,
-    I: Clone,
-{
+pub struct InputStreamPreprocessor<T, I> {
     iter: ListQueue<T, I>,
-    is_replayed: bool,
     pub current: Option<I>,
     last_consumed_item: Option<I>,
+    pre_scan: Option<PreScanFn<I>>,
 }
 
 // -------------- //
@@ -41,19 +40,21 @@ where
 impl<T, I> InputStreamPreprocessor<T, I>
 where
     T: Iterator<Item = I>,
-    I: Clone,
 {
     /// Crée un nouveau flux d'entrée.
-    pub fn new(tokenizer: T) -> Self {
-        let queue = ListQueue::new(tokenizer);
+    pub fn new(iter: T) -> Self {
+        let queue = ListQueue::new(iter);
         Self {
             iter: queue,
-            // queue: vec![],
-            // offset: 0,
-            is_replayed: false,
             current: None,
             last_consumed_item: None,
+            pre_scan: None,
         }
+    }
+
+    pub fn with_pre_scan(mut self, scan_fn: PreScanFn<I>) -> Self {
+        self.pre_scan.replace(scan_fn);
+        self
     }
 }
 
@@ -75,9 +76,31 @@ where
         self.nth(n)
     }
 
+    pub fn advance_as_long_as<'a, Limit: Parameter<'a, usize>>(
+        &mut self,
+        predicate: impl Fn(&I) -> bool,
+        with_limit: Limit,
+    ) -> Vec<I> {
+        let with_limit = unsafe { with_limit.param().value() };
+        let mut limit = with_limit.map(|n| n + 1).unwrap_or(0);
+        let mut result = vec![];
+
+        // NOTE(phisyx): code qui peut être amélioré.
+        while (self.meanwhile().peek().is_some()
+            && predicate(self.meanwhile().peek().unwrap()))
+            && (limit > 0 || with_limit.is_none())
+        {
+            result.push(self.advance(1).unwrap());
+            if with_limit.is_some() {
+                limit -= 1;
+            }
+        }
+        result
+    }
+
     /// Permet de revenir en arrière dans le flux.
     pub fn rollback(&mut self) {
-        self.is_replayed = true;
+        self.iter.rollback(self.last_consumed_item.clone())
     }
 
     pub fn meanwhile(&mut self) -> &mut impl PeekableInterface<T, I> {
@@ -85,12 +108,26 @@ where
     }
 
     /// Consomme le prochain élément du flux.
-    pub fn next_input(&mut self) -> Option<I> {
-        self.next().and_then(|item| {
+    pub fn consume_next_input(&mut self) -> Option<I> {
+        if let Some(pre_scan) = &self.pre_scan {
+            (pre_scan)(self.next())
+        } else {
+            self.next()
+        }
+        .and_then(|item| {
             let some_item = Some(item);
             self.current = some_item.to_owned();
             some_item
         })
+    }
+
+    pub fn next_input(&mut self) -> Option<I> {
+        let item = self.meanwhile().peek().cloned();
+        if let Some(pre_scan) = &self.pre_scan {
+            (pre_scan)(item)
+        } else {
+            item
+        }
     }
 }
 
@@ -101,8 +138,27 @@ where
     /// Alias de [InputStreamPreprocessor::next_input]
     ///
     /// Consomme le prochain caractère du flux.
-    pub fn next_input_char(&mut self) -> Option<Chars::Item> {
+    pub fn consume_next_input_character(&mut self) -> Option<Chars::Item> {
+        self.consume_next_input()
+    }
+
+    pub fn next_input_codepoint(&mut self) -> Option<u8> {
+        self.next_input().map(|item| item as u8)
+    }
+
+    pub fn next_input_character(&mut self) -> Option<Chars::Item> {
         self.next_input()
+    }
+
+    pub fn next_n_input_character(&mut self, offset: usize) -> Cow<str> {
+        self.slice_until(offset)
+    }
+
+    pub fn next_n_input_codepoint(&mut self, offset: usize) -> Vec<u8> {
+        self.iter
+            .peek_until::<String>(offset)
+            .unwrap_or_default()
+            .into()
     }
 
     /// Récupère les prochains caractères du flux jusqu'à une certaine
@@ -127,11 +183,6 @@ where
     type Item = I;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.is_replayed {
-            self.is_replayed = false;
-            return self.last_consumed_item.to_owned();
-        };
-
         self.last_consumed_item = self.iter.next();
         self.last_consumed_item.to_owned()
     }

@@ -25,7 +25,7 @@ where
     pub(crate) fn handle_doctype_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -68,7 +68,7 @@ where
     pub(crate) fn handle_before_doctype_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -141,7 +141,7 @@ where
     pub(crate) fn handle_doctype_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -209,7 +209,7 @@ where
     pub(crate) fn handle_after_doctype_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -299,7 +299,7 @@ where
     pub(crate) fn handle_after_doctype_public_keyword_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -389,7 +389,7 @@ where
     pub(crate) fn handle_before_doctype_public_identifier_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -466,7 +466,7 @@ where
         &mut self,
         quote: CodePoint,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0022 QUOTATION MARK (")
             //
             // Passer à l'état `after-doctype-public-identifier`.
@@ -537,7 +537,7 @@ where
     pub(crate) fn handle_after_doctype_public_identifier_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -609,7 +609,7 @@ where
     pub(crate) fn handle_between_doctype_public_and_system_identifiers_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -675,7 +675,7 @@ where
     pub(crate) fn handle_after_doctype_system_keyword_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -766,7 +766,7 @@ where
     pub(crate) fn handle_before_doctype_system_identifier_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -847,7 +847,7 @@ where
         &mut self,
         quote: CodePoint,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0022 QUOTATION MARK (")
             // U+0027 APOSTROPHE (')
             //
@@ -913,7 +913,7 @@ where
     pub(crate) fn handle_after_doctype_system_identifier_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -958,7 +958,7 @@ where
     pub(crate) fn handle_bogus_doctype_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `doctype`.

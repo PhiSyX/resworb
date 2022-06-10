@@ -67,11 +67,7 @@ pub(crate) type HTMLTokenizerProcessResult = Result<
 // Structure //
 // --------- //
 
-#[derive(Debug)]
-pub struct HTMLTokenizer<Chars>
-where
-    Chars: Iterator<Item = CodePoint>,
-{
+pub struct HTMLTokenizer<Chars> {
     pub(crate) stream: HTMLInputStream<Chars>,
     pub(crate) tree_construction: HTMLTreeConstruction,
 

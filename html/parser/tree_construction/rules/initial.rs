@@ -14,7 +14,7 @@ use crate::{
 };
 
 impl HTMLTreeConstruction {
-    // TODO: si le document n'est pas un document iframe srcdoc
+    // TODO(html): si le document n'est pas un document iframe srcdoc
     pub(crate) fn handle_initial_insertion_mode(
         &mut self,
         token: HTMLToken,
@@ -56,9 +56,9 @@ impl HTMLTreeConstruction {
             // le [HTMLToken::DOCTYPE], ou la chaîne de caractères vide si
             // l'identifiant système est manquant.
             //
-            // Note: cela garantit également que le noeud [DocumentType]
-            // est renvoyé comme valeur de l'attribut doctype de l'objet
-            // [Document].
+            // NOTE(html): cela garantit également que le noeud
+            // [DocumentType] est renvoyé comme valeur de l'attribut
+            // doctype de l'objet [Document].
             //
             // Ensuite, si le document n'est pas un document iframe srcdoc,
             // et que l'analyseur syntaxique ne peut pas changer le drapeau
