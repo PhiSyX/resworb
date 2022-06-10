@@ -73,9 +73,9 @@ pub enum CSSToken {
     /// Caractère ','
     Comma,
     /// Caractère '['
-    LeftBracket,
+    LeftSquareBracket,
     /// Caractère ']'
-    RightBracket,
+    RightSquareBracket,
     /// Caractère '('
     LeftParenthesis,
     /// Caractère ')'

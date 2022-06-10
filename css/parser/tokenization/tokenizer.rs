@@ -504,6 +504,15 @@ where
             // Retourner un <delim-token> dont la valeur est fixée au
             // point de code d'entrée actuel.
             | Some('@') => self.stream.current.map(CSSToken::Delim),
+
+            // U+005B LEFT SQUARE BRACKET ([)
+            //
+            // Retourner un <[-token>.
+            | Some('[') => Some(CSSToken::LeftSquareBracket),
+            // U+005D RIGHT SQUARE BRACKET (])
+            //
+            // Retourner un <]-token>.
+            | Some(']') => Some(CSSToken::RightSquareBracket),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
