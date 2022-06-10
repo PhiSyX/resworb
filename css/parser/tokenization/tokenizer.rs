@@ -553,6 +553,15 @@ where
                 self.stream.rollback();
                 self.consume_numeric_token()
             }
+
+            // ident-start code point
+            //
+            // Re-consommer le point de code d'entrée actuel, consommer un
+            // jeton de type ident-like, et le retourner.
+            | Some(ch) if ch.is_ident_start_codepoint() => {
+                self.stream.rollback();
+                self.consume_ident_like_token()
+            }
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
