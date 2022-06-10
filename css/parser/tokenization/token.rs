@@ -2,6 +2,17 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+// --------- //
+// Structure //
+// --------- //
+
+use infra::primitive::codepoint::CodePoint;
+
+#[derive(Debug)]
+#[derive(Default)]
+#[derive(PartialEq, Eq)]
+pub struct DimensionUnit(String);
+
 // ----------- //
 // Énumération //
 // ----------- //
@@ -46,7 +57,8 @@ pub enum CSSToken {
 
     /// Les `<dimension-token>` ont en outre une unité composée d'un ou
     /// plusieurs points de code.
-    Dimension(f64, NumberFlag, String),
+    Dimension(f64, NumberFlag, DimensionUnit),
+
     Whitespace,
 
     /// Suite de points de code "<!--"
@@ -61,17 +73,17 @@ pub enum CSSToken {
     /// Caractère ','
     Comma,
     /// Caractère '['
-    LeftBracket,
+    LeftSquareBracket,
     /// Caractère ']'
-    RightBracket,
+    RightSquareBracket,
     /// Caractère '('
     LeftParenthesis,
     /// Caractère ')'
     RightParenthesis,
     /// Caractère '{'
-    LeftBrace,
+    LeftCurlyBracket,
     /// Caractère '}'
-    RightBrace,
+    RightCurlyBracket,
 
     EOF,
 }
@@ -98,9 +110,34 @@ pub enum NumberFlag {
     Number,
 }
 
+// -------------- //
+// Implémentation //
+// -------------- //
+
+impl CSSToken {
+    pub(crate) fn append_character(&mut self, ch: CodePoint) {
+        match self {
+            | Self::Ident(s)
+            | Self::Function(s)
+            | Self::AtKeyword(s)
+            | Self::Hash(s, _)
+            | Self::Url(s)
+            | Self::String(s) => s.push(ch),
+            | _ => (),
+        }
+    }
+}
+
+impl DimensionUnit {
+    pub fn new(unit: String) -> Self {
+        Self(unit)
+    }
+}
 
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
 
+// NOTE(phisyx): obligé de faire ceci à cause du type f64 dans notre
+//               énumération.
 impl Eq for CSSToken {}

@@ -71,7 +71,7 @@ where
         loop {
             let token = self.tokenizer.next_token();
 
-            // todo: améliorer cette partie-ci.
+            // TODO(phisyx): à améliorer ASAP.
             match self.tokenizer.tree_construction.dispatcher(token) {
                 | ControlFlow::Continue(HTMLParserState::SwitchTo(
                     state,
@@ -95,7 +95,7 @@ where
                     }
                 }
 
-                // todo(fixme): à améliorer asap.
+                // TODO(phisyx): à améliorer ASAP.
                 | ControlFlow::Continue(HTMLParserState::CustomRcdata) => {
                     if let Some(HTMLToken::Character('\n')) =
                         self.tokenizer.next_token()
@@ -125,8 +125,8 @@ where
                     continue;
                 }
 
-                | ControlFlow::Break(HTMLParserFlag::Pause) => break, /* todo */
-                | ControlFlow::Break(HTMLParserFlag::Stop) => break, /* todo */
+                | ControlFlow::Break(HTMLParserFlag::Pause) => break, /* Voir TODO ci-haut */
+                | ControlFlow::Break(HTMLParserFlag::Stop) => break, /* Voir TODO ci-haut */
             }
         }
     }

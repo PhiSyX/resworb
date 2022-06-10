@@ -34,6 +34,7 @@ impl<T, I> ListQueue<T, I> {
 impl<T, I> ListQueue<T, I>
 where
     T: Iterator<Item = I>,
+    I: Clone,
 {
     fn fill_queue_max(&mut self) {
         let stored_elements = self.queue.len();
@@ -66,6 +67,12 @@ where
 
     pub fn dequeue(&mut self) -> Option<T::Item> {
         self.queue.remove(0)
+    }
+
+    // NOTE(phisyx): ceci ajoute un élément au début de la queue.
+    pub fn rollback(&mut self, last_consumed_item: Option<T::Item>) {
+        let mut temp = vec![last_consumed_item];
+        self.queue.splice(..0, temp.drain(..));
     }
 }
 
@@ -114,6 +121,7 @@ where
 impl<T, I> Iterator for ListQueue<T, I>
 where
     T: Iterator<Item = I>,
+    I: Clone,
 {
     type Item = T::Item;
 

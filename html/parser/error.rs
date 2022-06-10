@@ -146,10 +146,10 @@ define_errors! {
     /// à l'intérieur du contenu d'un élément de script (par exemple,
     /// `<script><!-- foo`).
     ///
-    /// Note: les structures syntaxiques qui ressemblent à des commentaires
-    /// HTML dans les éléments de script sont analysées comme du contenu
-    /// textuel. Elles peuvent faire partie d'une structure syntaxique
-    /// spécifique au langage de script ou être traitées comme un
+    /// NOTE(html): les structures syntaxiques qui ressemblent à des
+    /// commentaires HTML dans les éléments de script sont analysées comme
+    /// du contenu textuel. Elles peuvent faire partie d'une structure
+    /// syntaxique spécifique au langage de script ou être traitées comme un
     /// commentaire de type HTML, si le langage de script les prend en
     /// charge (par exemple, les règles d'analyse des commentaires de type
     /// HTML se trouvent à l'annexe B de la spécification JavaScript). La
@@ -171,8 +171,8 @@ define_errors! {
     /// présent) ou jusqu'à la fin du flux d'entrée est traité comme un
     /// commentaire.
     ///
-    /// Note: une cause possible de cette erreur est l'utilisation d'une
-    /// déclaration de balisage XML (par exemple, `<!ELEMENT br EMPTY>`)
+    /// NOTE(html): une cause possible de cette erreur est l'utilisation
+    /// d'une déclaration de balisage XML (par exemple, `<!ELEMENT br EMPTY>`)
     /// dans l'HTML.
     IncorrectlyOpenedComment = "incorrectly-opened-comment",
 
@@ -210,7 +210,7 @@ define_errors! {
     ///         |- #text: <42>
     ///         |- #comment: 42
     ///
-    /// Note: alors que le premier point de code d'un nom de balise est
+    /// NOTE(html): alors que le premier point de code d'un nom de balise est
     /// limité à un alpha ASCII, un large éventail de points de code (y
     /// compris des chiffres ASCII) est autorisé dans les positions
     /// suivantes.
@@ -340,7 +340,7 @@ define_errors! {
     /// d'attribut. L'analyseur syntaxique inclut ces points de code dans
     /// le nom de l'attribut.
     ///
-    /// Note: les points de code qui déclenchent cette erreur font
+    /// NOTE(html): les points de code qui déclenchent cette erreur font
     /// généralement partie d'une autre construction syntaxique et peuvent
     /// être le signe d'une faute de frappe autour du nom de l'attribut.
     ///
@@ -361,12 +361,12 @@ define_errors! {
     /// U+0060 (`) dans une valeur d'attribut (unquoted). L'analyseur
     /// syntaxique inclut ces points de code dans la valeur de l'attribut.
     ///
-    /// Note 1: les points de code qui déclenchent cette erreur font
+    /// NOTE(html) 1: les points de code qui déclenchent cette erreur font
     /// généralement partie d'une autre construction syntaxique et peuvent
     /// être le signe d'une faute de frappe autour de la valeur de
     /// l'attribut.
     ///
-    /// Note 2: U+0060 (`) figure dans la liste des points de code qui
+    /// NOTE(html) 2: U+0060 (`) figure dans la liste des points de code qui
     /// déclenchent cette erreur parce que certains agents utilisateurs
     /// anciens le traitent comme un guillemet.
     ///
@@ -380,7 +380,7 @@ define_errors! {
     /// l'analyseur syntaxique traite U+003D (=) comme le premier point de
     /// code du nom de l'attribut.
     ///
-    /// Note: la raison courante de cette erreur est un nom d'attribut
+    /// NOTE(html): la raison courante de cette erreur est un nom d'attribut
     /// oublié.
     ///
     /// Example: `<div foo="bar" ="baz">`
@@ -413,8 +413,8 @@ define_errors! {
     ///      | - head
     ///      | - body
     ///
-    /// Note: la raison courante de cette erreur est une instruction de
-    /// traitement XML (par exemple, `<?xml-stylesheet type="text/css"
+    /// NOTE(html): la raison courante de cette erreur est une instruction
+    /// de traitement XML (par exemple, `<?xml-stylesheet type="text/css"
     /// href="style.css"?>`) ou une déclaration XML (par exemple, `<?xml
     /// version="1.0" encoding="UTF-8"?>`) utilisée dans HTML.
     UnexpectedQuestionMarkInsteadOfTagName = "unexpected-question-mark-instead-of-tag-name",

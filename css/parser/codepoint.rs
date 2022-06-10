@@ -49,10 +49,29 @@ pub trait CSSCodePoint: Copy {
 
     /// Saut de ligne.
     ///
-    /// Note: U+000D CARRIAGE RETURN et U+000C FORM FEED ne sont pas inclus
-    /// dans cette définition, car ils sont convertis en U+000A LINE FEED
-    /// lors du prétraitement.
+    /// NOTE(css): U+000D CARRIAGE RETURN et U+000C FORM FEED ne sont pas
+    /// inclus dans cette définition, car ils sont convertis en U+000A LINE
+    /// FEED lors du prétraitement.
     fn is_newline(self) -> bool;
+
+    /// non-ASCII code point
+    ///
+    /// Un point de code dont la valeur est égale ou supérieure à U+0080
+    /// <control>
+    fn is_non_ascii_codepoint(self) -> bool;
+
+    /// non-printable code point
+    ///
+    /// Un point de code entre U+0000 NULL et U+0008 BACKSPACE inclus, ou
+    /// U+000B LINE TABULATION, ou un point de code entre U+000E SHIFT OUT
+    /// et U+001F INFORMATION SEPARATOR ONE inclus, ou U+007F DELETE.
+    fn is_non_printable_codepoint(self) -> bool;
+
+    /// maximum allowed code point
+    ///
+    /// Le plus grand point de code défini par Unicode : U+10FFFF.
+    fn is_gt_maximum_allowed_codepoint(self) -> bool;
+    fn is_lt_maximum_allowed_codepoint(self) -> bool;
 }
 
 // -------------- //
@@ -75,7 +94,7 @@ impl CSSCodePoint for CodePoint {
     }
 
     fn is_ident_start_codepoint(self) -> bool {
-        self.is_letter()
+        self.is_letter() || self.is_non_ascii_codepoint() || self == '_'
     }
 
     fn is_letter(self) -> bool {
@@ -92,5 +111,21 @@ impl CSSCodePoint for CodePoint {
 
     fn is_newline(self) -> bool {
         self == '\n'
+    }
+
+    fn is_non_ascii_codepoint(self) -> bool {
+        self as u32 >= 0x80
+    }
+
+    fn is_non_printable_codepoint(self) -> bool {
+        matches!(self, '\0'..='\x08' | '\x0B' | '\x0E'..='\x1F' | '\x7F')
+    }
+
+    fn is_gt_maximum_allowed_codepoint(self) -> bool {
+        self > '\u{10FFFF}'
+    }
+
+    fn is_lt_maximum_allowed_codepoint(self) -> bool {
+        self < '\u{10FFFF}'
     }
 }
