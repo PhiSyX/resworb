@@ -196,7 +196,7 @@ impl HTMLTreeConstruction {
             // Accuser réception du drapeau d'auto-fermeture du jeton, s'il
             // est activé.
             //
-            // TODO:
+            // TODO(html):
             // Si l'analyseur HTML spéculatif actif est nul, alors :
             //
             //   1. Si l'élément possède un attribut charset, et que
@@ -214,9 +214,10 @@ impl HTMLTreeConstruction {
             // confiance est actuellement provisoire, alors nous devons
             // changer l'encodage pour l'encodage extrait.
             //
-            // Note: L'analyseur HTML spéculatif n'applique pas de manière
-            // spéculative les déclarations de codage des caractères afin
-            // de réduire la complexité de l'implémentation.
+            // NOTE(html): L'analyseur HTML spéculatif n'applique pas de
+            // manière spéculative les déclarations de codage des
+            // caractères afin de réduire la complexité de
+            // l'implémentation.
             | HTMLToken::Tag {
                 ref name,
                 is_end: false,
@@ -318,12 +319,12 @@ impl HTMLTreeConstruction {
                     script_element.set_already_started(true);
                 }
 
-                // todo(document.write/ln): Si l'analyseur syntaxique a été
-                // invoqué par l'intermédiaire des méthodes
-                // document.write() ou document.writeln(), il est possible
-                // de marquer l'élément script comme "déjà lancé". (Par
-                // exemple, l'agent utilisateur peut utiliser cette clause
-                // pour empêcher l'exécution de scripts d'origine croisée
+                // TODO(html): Si l'analyseur syntaxique a été invoqué
+                // par l'intermédiaire des méthodes `document.write()` ou
+                // `document.writeln()`, il est possible de marquer
+                // l'élément script comme "déjà lancé". (Par exemple,
+                // l'agent utilisateur peut utiliser cette clause pour
+                // empêcher l'exécution de scripts d'origine croisée
                 // insérés via document.write() dans des conditions de
                 // réseau lent, ou lorsque le chargement de la page a déjà
                 // pris beaucoup de temps).
@@ -690,8 +691,8 @@ impl HTMLTreeConstruction {
             // de la pile des éléments ouverts. (Il se peut que ce ne soit
             // pas le nœud actuel à ce stade).
             //
-            // Note: le pointeur de l'élément de tête ne peut pas être nul
-            // à ce stade.
+            // NOTE(html): le pointeur de l'élément de tête ne peut pas
+            // être nul à ce stade.
             #[allow(deprecated)]
             | HTMLToken::Tag {
                 ref name,

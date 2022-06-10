@@ -21,7 +21,7 @@ where
     pub(crate) fn handle_rcdata_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0026 AMPERSAND (&)
             //
             // Définir l'état de retour à l'état `rcdata`. Passer à l'état
@@ -66,7 +66,7 @@ where
     pub(crate) fn handle_rcdata_less_than_sign_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+002F SOLIDUS (/)
             //
             // Définir le tampon temporaire à une chaîne de caractères
@@ -91,7 +91,7 @@ where
     pub(crate) fn handle_rcdata_end_tag_open_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // ASCII alpha
             //
             // Créer un nouveau jeton `end-tag`, définir son nom comme une
@@ -118,7 +118,7 @@ where
     pub(crate) fn handle_rcdata_end_tag_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)

@@ -21,7 +21,7 @@ where
     pub(crate) fn handle_tag_open_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0021 EXCLAMATION MARK (!)
             //
             // Passer à l'état `markup-declaration-open`.
@@ -87,7 +87,7 @@ where
     pub(crate) fn handle_end_tag_open_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // ASCII alpha
             //
             // Créer un nouveau jeton `end tag`, et lui définir son nom
@@ -135,7 +135,7 @@ where
     pub(crate) fn handle_tag_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -208,7 +208,7 @@ where
     pub(crate) fn handle_before_attribute_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -262,7 +262,7 @@ where
     pub(crate) fn handle_attribute_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -343,7 +343,7 @@ where
     pub(crate) fn handle_after_attribute_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -397,7 +397,7 @@ where
     pub(crate) fn handle_before_attribute_value_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -442,7 +442,7 @@ where
         &mut self,
         quote: CodePoint,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0022 QUOTATION MARK (")
             //
             // Passer à l'état `after-attribute-value-quoted`.
@@ -511,7 +511,7 @@ where
     pub(crate) fn handle_attribute_value_unquoted_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -595,7 +595,7 @@ where
     pub(crate) fn handle_after_attribute_value_quoted_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -642,7 +642,7 @@ where
     pub(crate) fn handle_self_closing_start_tag_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.stream.consume_next_input_character() {
             // U+003E GREATER-THAN SIGN (>)
             //
             // Définir le drapeau `self-closing` au jeton `tag` actuel sur

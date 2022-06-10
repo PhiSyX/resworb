@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use core::{fmt, str, str::Chars};
+use core::{fmt, str};
 use std::{
     fs,
     io::{self, BufReader, Read},
@@ -40,7 +40,7 @@ impl ByteStream {
     }
 
     /// Liste des caractères de la chaîne de caractères.
-    pub fn chars(&self) -> Chars {
+    pub fn chars(&self) -> str::Chars {
         self.buffer.chars()
     }
 }
