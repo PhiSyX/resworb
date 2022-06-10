@@ -509,6 +509,27 @@ where
             //
             // Retourner un <[-token>.
             | Some('[') => Some(CSSToken::LeftSquareBracket),
+
+            // U+005C REVERSE SOLIDUS (\)
+            //
+            // Si le flux d'entrée commence par un échappement valide, nous
+            // devons re-consommer le point de code d'entrée actuel,
+            // consommer un jeton de type ident-like, et le retourner.
+            | Some('\\')
+                if check_3_codepoints_would_start_an_ident_sequence(
+                    self.stream.next_n_input_character(3),
+                ) =>
+            {
+                self.stream.rollback();
+                self.consume_ident_like_token()
+            }
+
+            // U+005C REVERSE SOLIDUS (\)
+            //
+            // Retourner un <delim-token> dont la valeur est fixée au
+            // point de code d'entrée actuel.
+            | Some('\\') => self.stream.current.map(CSSToken::Delim),
+
             // U+005D RIGHT SQUARE BRACKET (])
             //
             // Retourner un <]-token>.
