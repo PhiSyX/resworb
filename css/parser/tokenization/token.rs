@@ -81,9 +81,9 @@ pub enum CSSToken {
     /// Caractère ')'
     RightParenthesis,
     /// Caractère '{'
-    LeftBrace,
+    LeftCurlyBracket,
     /// Caractère '}'
-    RightBrace,
+    RightCurlyBracket,
 
     EOF,
 }

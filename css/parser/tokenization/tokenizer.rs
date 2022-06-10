@@ -534,6 +534,16 @@ where
             //
             // Retourner un <]-token>.
             | Some(']') => Some(CSSToken::RightSquareBracket),
+
+            // U+007B LEFT CURLY BRACKET ({)
+            //
+            // Retourner un <{-token>.
+            | Some('{') => Some(CSSToken::LeftCurlyBracket),
+
+            // U+007D RIGHT CURLY BRACKET (})
+            //
+            // Retourner un <}-token>.
+            | Some('}') => Some(CSSToken::RightCurlyBracket),
             // Anything else
             | _ => self.stream.current.map(CSSToken::Delim),
         }
