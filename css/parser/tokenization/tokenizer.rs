@@ -103,10 +103,8 @@ where
             if let Some('(') = self.stream.next_input_character() {
                 self.stream.advance(1);
 
-                self.stream.advance_as_long_as(
-                    |ch| ch.is_css_whitespace(),
-                    Some(2),
-                );
+                self.stream
+                    .advance_as_long_as(|ch| ch.is_css_whitespace(), 2);
 
                 if let Some(v) =
                     self.stream.meanwhile().peek_until::<Vec<_>>(2)
@@ -628,7 +626,7 @@ where
                 // vérifie que `ch` s' agit bien d'une valeur hexadécimale.
                 let total_hexdigits = self
                     .stream
-                    .advance_as_long_as(|ch| ch.is_ascii_digit(), Some(5))
+                    .advance_as_long_as(|ch| ch.is_ascii_digit(), 5)
                     .iter()
                     .fold(
                         ch.to_digit(HEXARADIX)

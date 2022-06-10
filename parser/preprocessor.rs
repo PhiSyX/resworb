@@ -5,6 +5,7 @@
 use std::borrow::Cow;
 
 use infra::{
+    algorithms::Parameter,
     primitive::codepoint::CodePoint,
     structure::lists::{peekable::PeekableInterface, queue::ListQueue},
 };
@@ -75,12 +76,12 @@ where
         self.nth(n)
     }
 
-    // NOTE(phisyx): utiliser un générique pour le second paramètre?
-    pub fn advance_as_long_as(
+    pub fn advance_as_long_as<'a, Limit: Parameter<'a, usize>>(
         &mut self,
         predicate: impl Fn(&I) -> bool,
-        with_limit: Option<usize>,
+        with_limit: Limit,
     ) -> Vec<I> {
+        let with_limit = unsafe { with_limit.param().value() };
         let mut limit = with_limit.map(|n| n + 1).unwrap_or(0);
         let mut result = vec![];
 
