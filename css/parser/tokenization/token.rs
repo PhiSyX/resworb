@@ -62,9 +62,9 @@ pub enum CSSToken {
     Whitespace,
 
     /// Suite de points de code "<!--"
-    Cdo,
+    CDO,
     /// Suite de points de code "-->"
-    Cdc,
+    CDC,
 
     /// Caractère ':'
     Colon,
@@ -123,6 +123,30 @@ pub enum NumberFlag {
 // -------------- //
 
 impl CSSToken {
+    /// Variante miroir d'un dès jetons `<(-token>, <[-token>, <{-token>`,
+    ///
+    /// Exemple:
+    /// Pour le jeton `<(-token>`, la variante miroir est `<)-token>`.
+    pub(crate) fn mirror(&self) -> Self {
+        assert!(matches!(
+            self,
+            Self::LeftParenthesis
+                | Self::LeftSquareBracket
+                | Self::LeftCurlyBracket
+        ));
+
+        match self {
+            | Self::LeftParenthesis => Self::RightParenthesis,
+            | Self::LeftSquareBracket => Self::RightSquareBracket,
+            | Self::LeftCurlyBracket => Self::RightCurlyBracket,
+            | _ => {
+                unreachable!("Impossible de faire un miroir de {:?}", self)
+            }
+        }
+    }
+}
+
+impl CSSToken {
     pub(crate) fn append_character(&mut self, ch: CodePoint) {
         match self {
             | Self::Ident(s)
@@ -137,7 +161,7 @@ impl CSSToken {
 }
 
 impl DimensionUnit {
-    pub fn new(unit: String) -> Self {
+    pub(crate) fn new(unit: String) -> Self {
         Self(unit)
     }
 }
