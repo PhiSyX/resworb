@@ -8,10 +8,7 @@ use std::ops::Range;
 // Interface //
 // --------- //
 
-pub trait PeekableInterface<T, I>
-where
-    T: Iterator<Item = I>,
-{
+pub trait PeekableInterface<T, I> {
     /// Récupère le prochain élément de l'itération sans avancer dans
     /// l'itération.
     fn peek(&mut self) -> Option<&I>;

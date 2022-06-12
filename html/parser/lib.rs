@@ -28,10 +28,7 @@ use self::tokenization::HTMLTokenizer;
 // Structure //
 // --------- //
 
-pub struct HTMLParser<C>
-where
-    C: Iterator<Item = CodePoint>,
-{
+pub struct HTMLParser<C> {
     tokenizer: HTMLTokenizer<C>,
 }
 
@@ -53,10 +50,7 @@ pub enum HTMLParserState {
 // Implémentation //
 // -------------- //
 
-impl<C> HTMLParser<C>
-where
-    C: Iterator<Item = CodePoint>,
-{
+impl<C> HTMLParser<C> {
     pub fn new(document: DocumentNode, input: C) -> Self {
         let tokenizer = HTMLTokenizer::new(document, input);
         Self { tokenizer }
