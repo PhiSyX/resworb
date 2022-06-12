@@ -2,11 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-#![feature(
-    explicit_generic_args_with_impl_trait,
-    type_name_of_val,
-    option_result_contains
-)]
+#![feature(type_name_of_val, option_result_contains)]
 
 mod codepoint;
 mod error;
