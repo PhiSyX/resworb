@@ -35,6 +35,8 @@ type CSSInputStream<Iter> = InputStream<Iter, CodePoint>;
 /// jetons retournés dans un flux.
 pub struct CSSTokenizer<Chars> {
     pub(crate) stream: CSSInputStream<Chars>,
+    current_token: Option<CSSToken>,
+    is_replayed: bool,
 }
 
 // -------------- //
@@ -63,7 +65,11 @@ impl<C> CSSTokenizer<C> {
                 | n => n,
             });
 
-        Self { stream }
+        Self {
+            stream,
+            current_token: None,
+            is_replayed: false,
+        }
     }
 }
 
@@ -114,7 +120,7 @@ where
                     let cond2 = v[0] == ' ' && cond1;
 
                     if cond0 && cond1 || cond2 {
-                        return Some(CSSToken::Function(result));
+                        return CSSToken::Function(result);
                     }
                 }
 
@@ -124,10 +130,10 @@ where
 
         if let Some('(') = self.stream.next_input_character() {
             self.stream.advance(1);
-            return Some(CSSToken::Function(result));
+            return CSSToken::Function(result);
         }
 
-        Some(CSSToken::Ident(result))
+        CSSToken::Ident(result)
     }
 
     /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-number>
@@ -187,32 +193,32 @@ where
     }
 
     /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-numeric-token>
-    fn consume_numeric_token(&mut self) -> Option<CSSToken> {
+    fn consume_numeric_token(&mut self) -> CSSToken {
         let (number, number_flag) =
             self.consume_number().expect("Nombre attendu");
 
         if check_3_codepoints_would_start_an_ident_sequence(
             self.stream.next_n_input_character(3),
         ) {
-            return Some(CSSToken::Dimension(
+            return CSSToken::Dimension(
                 number,
                 number_flag,
                 DimensionUnit::new(self.consume_ident_sequence()),
-            ));
+            );
         }
 
         if let Some('%') = self.stream.next_input_character() {
             self.stream.advance(1);
-            return Some(CSSToken::Percentage(number));
+            return CSSToken::Percentage(number);
         }
 
-        Some(CSSToken::Number(number, number_flag))
+        CSSToken::Number(number, number_flag)
     }
 
     fn consume_string_token(
         &mut self,
         ending_codepoint: CodePoint,
-    ) -> Option<CSSToken> {
+    ) -> CSSToken {
         let mut string = String::new();
 
         loop {
@@ -238,8 +244,8 @@ where
                 // <bad-string-token> et le retourner.
                 | Some(ch) if ch.is_newline() => {
                     // TODO(phisyx): gérer l'erreur.
-                    self.stream.rollback();
-                    return Some(CSSToken::BadString);
+                    self.stream.reconsume_current_input();
+                    return CSSToken::BadString;
                 }
 
                 // U+005C REVERSE SOLIDUS (\)
@@ -277,13 +283,17 @@ where
             }
         }
 
-        Some(CSSToken::String(string))
+        CSSToken::String(string)
     }
 
     /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-token>
-    fn consume_token(&mut self) -> Option<CSSToken> {
+    pub(crate) fn consume_token(&mut self) -> CSSToken {
         // Consume comments.
         self.consume_comments();
+
+        fn delim(maybe_current_ch: Option<CodePoint>) -> CSSToken {
+            CSSToken::Delim(maybe_current_ch.expect("Caractère courant"))
+        }
 
         // Consume the next input code point.
         match self.stream.consume_next_input_character() {
@@ -296,7 +306,7 @@ where
                     |next_ch| next_ch.is_css_whitespace(),
                     None,
                 );
-                Some(CSSToken::Whitespace)
+                CSSToken::Whitespace
             }
 
             // U+0022 QUOTATION MARK (")
@@ -321,9 +331,7 @@ where
             // Sinon, retourner un <delim-token> avec sa valeur définie sur
             // le point de code d'entrée actuel.
             | Some('#') => {
-                fn then<C>(
-                    tokenizer: &mut CSSTokenizer<C>,
-                ) -> Option<CSSToken>
+                fn then<C>(tokenizer: &mut CSSTokenizer<C>) -> CSSToken
                 where
                     C: Iterator<Item = CodePoint>,
                 {
@@ -338,7 +346,7 @@ where
 
                     hash.push_str(&tokenizer.consume_ident_sequence());
 
-                    CSSToken::Hash(hash, flag).into()
+                    CSSToken::Hash(hash, flag)
                 }
 
                 if let Some(ch) = self.stream.next_input_character() {
@@ -353,18 +361,18 @@ where
                     return then(self);
                 }
 
-                self.stream.current.map(CSSToken::Delim)
+                delim(self.stream.current_input)
             }
 
             // U+0028 LEFT PARENTHESIS (()
             //
             // Consomme un jeton de type <(-token>.
-            | Some('(') => Some(CSSToken::LeftParenthesis),
+            | Some('(') => CSSToken::LeftParenthesis,
 
             // U+0029 RIGHT PARENTHESIS ())
             //
             // Retourne un <)-token>.
-            | Some(')') => Some(CSSToken::RightParenthesis),
+            | Some(')') => CSSToken::RightParenthesis,
 
             // U+002B PLUS SIGN (+)
             //
@@ -384,12 +392,12 @@ where
             //
             // Retourner un <delim-token> dont la valeur est fixée
             // au point de code d'entrée actuel.
-            | Some('+') => self.stream.current.map(CSSToken::Delim),
+            | Some('+') => delim(self.stream.current_input),
 
             // U+002C COMMA (,)
             //
             // Retourner un <comma-token>.
-            | Some(',') => Some(CSSToken::Comma),
+            | Some(',') => CSSToken::Comma,
 
             // U+002D HYPHEN-MINUS (-)
             //
@@ -413,7 +421,7 @@ where
             | Some('-') if self.stream.next_n_input_character(2) == "->" =>
             {
                 self.stream.advance(2);
-                Some(CSSToken::Cdc)
+                CSSToken::CDC
             }
 
             // U+002D HYPHEN-MINUS (-)
@@ -434,7 +442,7 @@ where
             //
             // Retourner un <delim-token> dont la valeur est fixée au
             // point de code d'entrée actuel.
-            | Some('-') => self.stream.current.map(CSSToken::Delim),
+            | Some('-') => delim(self.stream.current_input),
 
             // U+002E FULL STOP (.)
             //
@@ -454,17 +462,17 @@ where
             //
             // Retourner un <delim-token> dont la valeur est fixée au
             // point de code d'entrée actuel.
-            | Some('.') => self.stream.current.map(CSSToken::Delim),
+            | Some('.') => delim(self.stream.current_input),
 
             // U+003A COLON (:)
             //
             // Retourner un <colon-token>.
-            | Some(':') => Some(CSSToken::Colon),
+            | Some(':') => CSSToken::Colon,
 
             // U+003B SEMICOLON (;)
             //
             // Retourner un <semicolon-token>.
-            | Some(';') => Some(CSSToken::Semicolon),
+            | Some(';') => CSSToken::Semicolon,
 
             // U+003C LESS-THAN SIGN (<)
             //
@@ -475,14 +483,14 @@ where
                 if self.stream.next_n_input_character(3) == "!--" =>
             {
                 self.stream.advance(3);
-                Some(CSSToken::Cdo)
+                CSSToken::CDO
             }
 
             // U+003C LESS-THAN SIGN (<)
             //
             // Retourner un <delim-token> dont la valeur est fixée au
             // point de code d'entrée actuel.
-            | Some('<') => self.stream.current.map(CSSToken::Delim),
+            | Some('<') => delim(self.stream.current_input),
 
             // U+0040 COMMERCIAL AT (@)
             //
@@ -495,20 +503,20 @@ where
                     self.stream.next_n_input_character(3),
                 ) =>
             {
-                CSSToken::AtKeyword(self.consume_ident_sequence()).into()
                 self.stream.reconsume_current_input();
+                CSSToken::AtKeyword(self.consume_ident_sequence())
             }
 
             // U+0040 COMMERCIAL AT (@)
             //
             // Retourner un <delim-token> dont la valeur est fixée au
             // point de code d'entrée actuel.
-            | Some('@') => self.stream.current.map(CSSToken::Delim),
+            | Some('@') => delim(self.stream.current_input),
 
             // U+005B LEFT SQUARE BRACKET ([)
             //
             // Retourner un <[-token>.
-            | Some('[') => Some(CSSToken::LeftSquareBracket),
+            | Some('[') => CSSToken::LeftSquareBracket,
 
             // U+005C REVERSE SOLIDUS (\)
             //
@@ -528,22 +536,22 @@ where
             //
             // Retourner un <delim-token> dont la valeur est fixée au
             // point de code d'entrée actuel.
-            | Some('\\') => self.stream.current.map(CSSToken::Delim),
+            | Some('\\') => delim(self.stream.current_input),
 
             // U+005D RIGHT SQUARE BRACKET (])
             //
             // Retourner un <]-token>.
-            | Some(']') => Some(CSSToken::RightSquareBracket),
+            | Some(']') => CSSToken::RightSquareBracket,
 
             // U+007B LEFT CURLY BRACKET ({)
             //
             // Retourner un <{-token>.
-            | Some('{') => Some(CSSToken::LeftCurlyBracket),
+            | Some('{') => CSSToken::LeftCurlyBracket,
 
             // U+007D RIGHT CURLY BRACKET (})
             //
             // Retourner un <}-token>.
-            | Some('}') => Some(CSSToken::RightCurlyBracket),
+            | Some('}') => CSSToken::RightCurlyBracket,
 
             // digit
             //
@@ -566,10 +574,10 @@ where
             // EOF
             //
             // Retourner un <EOF-token>.
-            | None => Some(CSSToken::EOF),
+            | None => CSSToken::EOF,
 
             // Anything else
-            | _ => self.stream.current.map(CSSToken::Delim),
+            | _ => delim(self.stream.current_input),
         }
     }
 
@@ -716,8 +724,7 @@ where
     }
 
     /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-url-token>
-    fn consume_url_token(&mut self) -> Option<CSSToken> {
-        self.stream.advance_as_long_as(
+    fn consume_url_token(&mut self) -> CSSToken {
         self.stream.advance_as_long_as_possible(
             |next_ch| next_ch.is_css_whitespace(),
             None,
@@ -763,7 +770,7 @@ where
                     }
 
                     self.consume_remnants_of_bad_url();
-                    return Some(CSSToken::BadUrl);
+                    return CSSToken::BadUrl;
                 }
 
                 // U+0022 QUOTATION MARK (")
@@ -775,7 +782,7 @@ where
                 // et le retourner.
                 | Some('"' | '\'' | '(') => {
                     self.consume_remnants_of_bad_url();
-                    return Some(CSSToken::BadUrl);
+                    return CSSToken::BadUrl;
                 }
                 // non-printable code point
                 //
@@ -784,7 +791,7 @@ where
                 // et le retourner.
                 | Some(ch) if ch.is_non_printable_codepoint() => {
                     self.consume_remnants_of_bad_url();
-                    return Some(CSSToken::BadUrl);
+                    return CSSToken::BadUrl;
                 }
 
                 // U+005C REVERSE SOLIDUS (\)
@@ -809,7 +816,7 @@ where
                         } else {
                             // TODO(phisyx): gérer les erreurs.
                             self.consume_remnants_of_bad_url();
-                            return Some(CSSToken::BadUrl);
+                            return CSSToken::BadUrl;
                         }
                     }
                 }
@@ -822,7 +829,7 @@ where
             }
         }
 
-        Some(url_token)
+        url_token
     }
 }
 
@@ -1016,10 +1023,7 @@ mod tests {
         let mut tokenizer = test_the_str!(
             "/* comment 1 */\r\n#id { color: red }/* comment 2 */"
         );
-
-        // NOTE(phisyx): tester si le premier jeton n'est pas '/'
-        //               actuellement le script retourne None.
-        assert_eq!(tokenizer.consume_token(), Some(CSSToken::Whitespace));
+        assert_eq!(tokenizer.consume_token(), CSSToken::Whitespace);
     }
 
     #[test]
@@ -1027,29 +1031,29 @@ mod tests {
         let mut tokenizer = test_the_str!("'hello world'");
         assert_eq!(
             tokenizer.consume_token(),
-            Some(CSSToken::String("hello world".into()))
+            CSSToken::String("hello world".into())
         );
 
         let mut tokenizer = test_the_str!(r#""foo bar""#);
         assert_eq!(
             tokenizer.consume_token(),
-            Some(CSSToken::String("foo bar".into()))
+            CSSToken::String("foo bar".into())
         );
 
         let mut tokenizer = test_the_str!(r#""foo'bar""#);
         assert_eq!(
             tokenizer.consume_token(),
-            Some(CSSToken::String("foo'bar".into()))
+            CSSToken::String("foo'bar".into())
         );
 
         let mut tokenizer = test_the_str!(r#""foo"bar""#);
         assert_eq!(
             tokenizer.consume_token(),
-            Some(CSSToken::String("foo".into()))
+            CSSToken::String("foo".into())
         );
 
         let mut tokenizer = test_the_str!("\"bad\nstring\"");
-        assert_eq!(tokenizer.consume_token(), Some(CSSToken::BadString));
+        assert_eq!(tokenizer.consume_token(), CSSToken::BadString);
     }
 
     #[test]
@@ -1058,14 +1062,14 @@ mod tests {
 
         assert_eq!(
             tokenizer.consume_token(),
-            Some(CSSToken::Hash("id".into(), HashFlag::ID))
+            CSSToken::Hash("id".into(), HashFlag::ID)
         );
 
         let mut tokenizer = test_the_str!("#id\\:2 {color: red; }");
 
         assert_eq!(
             tokenizer.consume_token(),
-            Some(CSSToken::Hash("id:2".into(), HashFlag::ID))
+            CSSToken::Hash("id:2".into(), HashFlag::ID)
         );
 
         // TODO(phisyx): tester les couleurs de ce test.
@@ -1082,7 +1086,7 @@ mod tests {
 
         assert_eq!(
             tokenizer.consume_token(),
-            Some(CSSToken::Url("img.png".into()))
+            CSSToken::Url("img.png".into())
         );
 
         let mut tokenizer =
@@ -1094,7 +1098,7 @@ mod tests {
 
         assert_eq!(
             tokenizer.consume_token(),
-            Some(CSSToken::Function("translateX".into()))
+            CSSToken::Function("translateX".into())
         );
 
         let mut tokenizer = test_the_str!("#id { color: red; }");
@@ -1105,7 +1109,7 @@ mod tests {
 
         assert_eq!(
             tokenizer.consume_token(),
-            Some(CSSToken::Ident("red".into()))
+            CSSToken::Ident("red".into())
         );
     }
 }

@@ -7,29 +7,288 @@ mod codepoint;
 /// 4. Tokenization
 mod tokenization;
 
-use infra::primitive::codepoint::CodePoint;
+/// 5. Parsing
+mod at_rule;
+mod component_value;
+mod function;
+mod preserved_tokens;
+mod qualified_rule;
+mod simple_block;
 
-use self::tokenization::CSSTokenizer;
+/// 5.3 Parser Entry Points
+mod entrypoints;
+
+/// 8 Defining Grammars for Rules and Other Values
+mod grammars;
+
+use at_rule::CSSAtRule;
+use component_value::CSSComponentValue;
+use function::CSSFunction;
+use grammars::CSSRuleList;
+use infra::primitive::codepoint::CodePoint;
+use parser::{StreamInputInterface, StreamIteratorInterface};
+use preserved_tokens::CSSPreservedToken;
+use qualified_rule::CSSQualifiedRule;
+use simple_block::CSSSimpleBlock;
+
+use crate::tokenization::{CSSToken, CSSTokenStream};
 
 // --------- //
 // Structure //
 // --------- //
 
-pub struct CSSParser<C> {
-    tokenizer: CSSTokenizer<C>,
+/// 5. Parsing
+pub struct CSSParser<Token> {
+    tokens: CSSTokenStream,
+    toplevel_flag: bool,
+    current_input_token: Option<Token>,
 }
 
 // -------------- //
 // Implémentation //
 // -------------- //
 
-impl<C> CSSParser<C>
+impl<T> CSSParser<T>
 where
-    C: Iterator<Item = CodePoint>,
+    T: StreamInputInterface,
 {
-    pub fn new(input: C) -> Self {
+    pub fn new<C>(input: C) -> Self
+    where
+        C: Iterator<Item = CodePoint>,
+    {
+        let tokens = CSSTokenStream::new(input);
         Self {
-            tokenizer: CSSTokenizer::new(input),
+            tokens,
+            toplevel_flag: Default::default(),
+            current_input_token: None,
         }
+    }
+}
+
+impl<T> CSSParser<T> {
+    fn consume_at_rule(&mut self) -> Option<CSSAtRule> {
+        // Consommer le jeton d'entrée suivant. Créer une nouvelle at-rule
+        // dont le nom est défini comme la valeur de l'élément d'entrée
+        // actuel, dont le prélude est initialement défini comme une liste
+        // vide et dont la valeur est initialement définie comme rien.
+        self.consume_next_input_token();
+
+        let current_token =
+            self.tokens.current_input().expect("Le jeton actuel");
+        let at_rule = CSSAtRule::default().with_name(current_token);
+
+        Some(at_rule)
+    }
+
+    fn consume_component_value(&mut self) -> CSSComponentValue {
+        self.consume_next_input_token();
+
+        match self.tokens.current_input().cloned() {
+            // <{-token>
+            // <[-token>
+            // <(-token>
+            //
+            // Consommer le bloc simple et le retourner.
+            | Some(
+                CSSToken::LeftCurlyBracket
+                | CSSToken::LeftSquareBracket
+                | CSSToken::LeftParenthesis,
+            ) => self.consume_simple_block().into(),
+
+            // <function-token>
+            //
+            // Consommer une fonction et la retourner.
+            | Some(CSSToken::Function(name)) => {
+                self.consume_function(name).into()
+            }
+
+            // Anything else
+            //
+            // Retourner le jeton d'entrée actuel.
+            | Some(current_token) => {
+                let preserved_token: CSSPreservedToken =
+                    current_token.into();
+                let component_value: CSSComponentValue =
+                    preserved_token.into();
+                component_value
+            }
+
+            | None => panic!("Une erreur est survenue"),
+        }
+    }
+
+    fn consume_function(&mut self, name_of_fn: String) -> CSSFunction {
+        let mut function = CSSFunction::new(name_of_fn);
+        loop {
+            match self.consume_next_input_token() {
+                // <)-token>
+                //
+                // Retourner la fonction.
+                | CSSToken::RightParenthesis => break,
+
+                // <EOF-token>
+                //
+                // Il s'agit d'un erreur d'analyse. Retourner la fonction.
+                // TODO(css): gérer les erreurs.
+                | CSSToken::EOF => break,
+
+                // Anything else
+                //
+                // Re-consommer le jeton d'entrée actuel. Consommer la
+                // valeur de composant et l'ajouter à la
+                // liste de valeurs de composants
+                // de la fonction.
+                | _ => {
+                    self.tokens.reconsume_current_input();
+                    function.append(self.consume_component_value());
+                }
+            }
+        }
+        function
+    }
+
+    fn consume_list_of_rules(&mut self) -> CSSRuleList {
+        self.toplevel_flag = true;
+
+        let mut rules: CSSRuleList = Vec::new();
+
+        loop {
+            match self.consume_next_input_token() {
+                // <whitespace-token>
+                //
+                // Ne rien faire.
+                | CSSToken::Whitespace => {}
+
+                // <EOF-token>
+                //
+                // Retourner la liste des règles.
+                | CSSToken::EOF => break,
+
+                // <CDO-token>
+                // <CDC-token>
+                //
+                // Si le drapeau top-level est défini, ne rien faire.
+                | CSSToken::CDO | CSSToken::CDC if self.toplevel_flag => {}
+
+                // <CDO-token>
+                // <CDC-token>
+                //
+                // Re-consommer le jeton courant. Consommer une
+                // règle qualifiée. Si un élément est retourné, il est
+                // ajouté à la liste des règles.
+                | CSSToken::CDO | CSSToken::CDC if !self.toplevel_flag => {
+                    self.tokens.reconsume_current_input();
+                    let qualified_rule = self.consume_qualified_rule();
+                    rules.push(qualified_rule.into());
+                }
+
+                // <at-keyword-token>
+                //
+                // Re-consommer le jeton courant. Consommer une règle
+                // at-rule, et l'ajouter à la liste des règles.
+                | CSSToken::AtKeyword(_) => {
+                    self.tokens.reconsume_current_input();
+                    if let Some(at_rule) = self.consume_at_rule() {
+                        rules.push(at_rule.into());
+                    }
+                }
+
+                // Anything else
+                //
+                // Re-consommer le jeton courant. Consommer une règle
+                // qualifiée. Si un élément est retourné, il est ajouté
+                // à la liste des règles.
+                | _ => {
+                    self.tokens.reconsume_current_input();
+                    let qualified_rule = self.consume_qualified_rule();
+                    rules.push(qualified_rule.into());
+                }
+            };
+        }
+
+        rules
+    }
+
+    fn consume_qualified_rule(&mut self) -> CSSQualifiedRule {
+        let mut qualified_rule = CSSQualifiedRule::default();
+
+        loop {
+            match self.consume_next_input_token() {
+                // <EOF-token>
+                //
+                // Il s'agit d'une erreur d'analyse. Ne rien retourner.
+                // TODO(css): gérer les erreurs.
+                | CSSToken::EOF => {}
+
+                // <{-token>
+                //
+                // Consommer un bloc simple et l'assigner à la règle
+                // qualifiée. Retourner la règle qualifiée.
+                | CSSToken::LeftCurlyBracket => {
+                    let block = self.consume_simple_block();
+                    qualified_rule.set_block(block);
+                    break;
+                }
+
+                // TODO(css): cas <at-keyword-token>
+                //            CSSComponentValue::SimpleBlock(..)
+
+                // Anything else
+                //
+                // Re-consommer le jeton courant. Consommer une valeur de
+                // composant. Ajouter la valeur retournée au prélude de
+                // l'at-rule.
+                | _ => {
+                    self.tokens.reconsume_current_input();
+                    qualified_rule.append(self.consume_component_value());
+                }
+            }
+        }
+
+        qualified_rule
+    }
+
+    fn consume_simple_block(&mut self) -> CSSSimpleBlock {
+        let ending_token = self
+            .tokens
+            .current_input()
+            .map(|token| token.mirror())
+            .expect("Une erreur est survenue");
+
+        let mut simple_block = CSSSimpleBlock::new(ending_token.clone());
+
+        loop {
+            match self.consume_next_input_token() {
+                // ending token
+                //
+                // Retourner le bloc.
+                | token if token.eq(&ending_token) => {
+                    break;
+                }
+
+                // <EOF-token>
+                //
+                // Il s'agit d'une erreur d'analyse. Retourner le bloc
+                // TODO(css): gérer les erreurs.
+                | CSSToken::EOF => break,
+
+                // Anything else
+                //
+                // Re-consommer le jeton courant. Consommer une valeur de
+                // composant et l'ajouter à la valeur du bloc.
+                | _ => {
+                    self.tokens.reconsume_current_input();
+                    simple_block.append(self.consume_component_value());
+                }
+            }
+        }
+
+        simple_block
+    }
+
+    fn consume_next_input_token(&mut self) -> CSSToken {
+        self.tokens
+            .consume_next_input()
+            .expect("Il y a une c*ui**e dans le pâté?")
     }
 }
