@@ -8,3 +8,8 @@
 pub mod decoder;
 /// Voir <https://html.spec.whatwg.org/multipage/parsing.html#preprocessing-the-input-stream>
 pub mod preprocessor;
+
+mod interface;
+pub mod stream;
+
+pub use interface::*;
