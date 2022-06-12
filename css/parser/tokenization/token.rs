@@ -7,17 +7,17 @@
 // --------- //
 
 use infra::primitive::codepoint::CodePoint;
-
-#[derive(Debug)]
-#[derive(Default)]
-#[derive(PartialEq, Eq)]
-pub struct DimensionUnit(String);
+use parser::StreamInputInterface;
 
 // ----------- //
 // Énumération //
 // ----------- //
 
+/// La sortie de l'étape de tokenisation est un flux de zéro ou plus des
+/// jetons suivants.
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]
+#[derive(Clone)]
 #[derive(PartialEq)]
 pub enum CSSToken {
     /// `<ident-token>`, `<function-token>`, `<at-keyword-token>`,
@@ -89,6 +89,13 @@ pub enum CSSToken {
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
+#[derive(Default)]
+#[derive(PartialEq, Eq)]
+pub struct DimensionUnit(String);
+
+#[derive(Debug)]
+#[derive(Copy, Clone)]
 #[derive(Default)]
 #[derive(PartialEq, Eq)]
 pub enum HashFlag {
@@ -100,6 +107,7 @@ pub enum HashFlag {
 }
 
 #[derive(Debug)]
+#[derive(Copy, Clone)]
 #[derive(Default)]
 #[derive(PartialEq, Eq)]
 pub enum NumberFlag {
@@ -141,3 +149,9 @@ impl DimensionUnit {
 // NOTE(phisyx): obligé de faire ceci à cause du type f64 dans notre
 //               énumération.
 impl Eq for CSSToken {}
+
+impl StreamInputInterface for CSSToken {
+    fn eof() -> Self {
+        Self::EOF
+    }
+}

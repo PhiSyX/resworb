@@ -6,6 +6,7 @@ use infra::{
     primitive::codepoint::CodePoint,
     structure::lists::peekable::PeekableInterface,
 };
+use parser::StreamIteratorInterface;
 
 use crate::{
     codepoint::HTMLCodePoint,
@@ -256,9 +257,7 @@ where
             | Some(ch) => {
                 let mut f = false;
 
-                if let Some(word) =
-                    self.stream.meanwhile().peek_until::<String>(5)
-                {
+                if let Some(word) = self.stream.peek_until::<String>(5) {
                     f = false;
 
                     let word =

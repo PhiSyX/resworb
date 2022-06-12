@@ -69,9 +69,9 @@ where
         self.queue.remove(0)
     }
 
-    // NOTE(phisyx): ceci ajoute un élément au début de la queue.
-    pub fn rollback(&mut self, last_consumed_item: Option<T::Item>) {
-        let mut temp = vec![last_consumed_item];
+    /// Ajoute un élément au début de la queue.
+    pub fn reconsume(&mut self, last_consumed_input: Option<T::Item>) {
+        let mut temp = vec![last_consumed_input];
         self.queue.splice(..0, temp.drain(..));
     }
 }

@@ -6,6 +6,7 @@ use infra::{
     primitive::codepoint::{CodePoint, CodePointInterface},
     structure::lists::peekable::PeekableInterface,
 };
+use parser::StreamIteratorInterface;
 
 use crate::tokenization::{
     tokenizer::{
@@ -59,9 +60,8 @@ where
     pub(crate) fn handle_named_character_reference_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        let ch = self.stream.current.expect("le caractère actuel");
-        let rest_of_chars =
-            self.stream.meanwhile().peek_until_end::<String>();
+        let ch = self.stream.current_input.expect("le caractère actuel");
+        let rest_of_chars = self.stream.peek_until_end::<String>();
         let full_str = format!("{ch}{rest_of_chars}");
 
         let entities = &self.named_character_reference_code;
@@ -85,7 +85,7 @@ where
             | Some((entity_name, entity)) => {
                 // Consomme tous les caractères trouvés
                 entity_name.chars().for_each(|ch| {
-                    self.stream.next();
+                    self.stream.consume_next_input();
                     self.temporary_buffer.push(ch);
                 });
 

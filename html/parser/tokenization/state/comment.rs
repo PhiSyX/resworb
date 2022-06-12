@@ -6,6 +6,7 @@ use infra::{
     primitive::codepoint::CodePoint,
     structure::lists::peekable::PeekableInterface,
 };
+use parser::StreamIteratorInterface;
 
 use crate::tokenization::{
     tokenizer::{
@@ -60,8 +61,7 @@ where
     pub(crate) fn handle_markup_declaration_open_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        if let Some(word) = self.stream.meanwhile().peek_until::<String>(7)
-        {
+        if let Some(word) = self.stream.peek_until::<String>(7) {
             // Correspondance ASCII insensible à la casse pour le mot
             // "DOCTYPE".
             //
@@ -103,8 +103,7 @@ where
         // Consommer ces deux caractères, créer un jeton `comment`
         // dont les données sont une chaîne de caractères vide, passer à
         // l'état `comment-start`.
-        if let Some(word) = self.stream.meanwhile().peek_until::<String>(2)
-        {
+        if let Some(word) = self.stream.peek_until::<String>(2) {
             if word == "--" {
                 self.stream.advance(2);
                 return self

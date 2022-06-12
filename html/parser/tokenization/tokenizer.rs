@@ -10,7 +10,7 @@ use macros::dd;
 use named_character_references::{
     NamedCharacterReferences, NamedCharacterReferencesEntities,
 };
-use parser::preprocessor::InputStream;
+use parser::{stream::InputStream, StreamIteratorInterface};
 
 use super::{state::State, HTMLToken};
 use crate::{
@@ -56,7 +56,7 @@ pub(crate) enum HTMLTokenizerProcessControlFlow {
     Emit,
 }
 
-pub(crate) type HTMLInputStream<Iter> = InputStream<Iter, CodePoint>;
+type HTMLInputStream<Iter> = InputStream<Iter, CodePoint>;
 
 pub(crate) type HTMLTokenizerProcessResult = Result<
     HTMLTokenizerProcessControlFlow,
@@ -112,12 +112,9 @@ pub(crate) struct HTMLTokenizerState {
 // Implémentation //
 // -------------- //
 
-impl<C> HTMLTokenizer<C>
-where
-    C: Iterator<Item = CodePoint>,
-{
-    pub fn new(document: DocumentNode, iter: C) -> Self {
-        let stream = HTMLInputStream::new(iter);
+impl<C> HTMLTokenizer<C> {
+    pub fn new(document: DocumentNode, chars: C) -> Self {
+        let stream = HTMLInputStream::new(chars);
         Self {
             stream,
             tree_construction: HTMLTreeConstruction::new(document),
@@ -205,7 +202,7 @@ where
     /// cet état, mais lorsqu'il tente de consommer le prochain caractère,
     /// de lui fournir le caractère actuel à la place.
     pub(crate) fn reconsume(&mut self, state: &str) -> &mut Self {
-        self.stream.rollback();
+        self.stream.reconsume_current_input();
         self.switch_state_to(state);
         self
     }
@@ -533,8 +530,7 @@ mod tests {
     fn get_tokenizer_html(
         input: &'static str,
     ) -> HTMLTokenizer<impl Iterator<Item = CodePoint>> {
-        let stream = InputStream::new(input.chars());
-        HTMLTokenizer::new(DocumentNode::default(), stream)
+        HTMLTokenizer::new(DocumentNode::default(), input.chars())
     }
 
     #[test]
