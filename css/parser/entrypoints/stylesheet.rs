@@ -7,7 +7,7 @@ use crate::{grammars::CSSStyleSheet, CSSParser};
 impl<T> CSSParser<T> {
     /// Analyse d'une feuille de style.
     pub fn stylesheet(&mut self) -> CSSStyleSheet {
-        self.consume_list_of_rules()
+        self.consume_list_of_rules(true)
     }
 }
 
@@ -25,11 +25,17 @@ mod tests {
         tokenization::{CSSToken, HashFlag},
     };
 
+    macro_rules! test_the_str {
+        ($str:literal) => {{
+            let s = $str;
+            let parser: CSSParser<CSSToken> = CSSParser::new(s.chars());
+            parser
+        }};
+    }
+
     #[test]
     fn test_parse_a_stylesheet() {
-        let input = "#foo { color: red; }";
-        let mut parser: CSSParser<CSSToken> =
-            CSSParser::new(input.chars());
+        let mut parser = test_the_str!("#foo { color: red; }");
 
         assert_eq!(
             parser.stylesheet(),

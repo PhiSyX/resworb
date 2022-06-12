@@ -147,8 +147,8 @@ impl<T> CSSParser<T> {
         function
     }
 
-    fn consume_list_of_rules(&mut self) -> CSSRuleList {
-        self.toplevel_flag = true;
+    fn consume_list_of_rules(&mut self, toplevel_flag: bool) -> CSSRuleList {
+        self.toplevel_flag = toplevel_flag;
 
         let mut rules: CSSRuleList = Vec::new();
 
