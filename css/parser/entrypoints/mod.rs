@@ -3,4 +3,5 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 pub mod list_of_rules;
+pub mod rule;
 pub mod stylesheet;

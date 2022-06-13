@@ -38,4 +38,22 @@ impl CSSAtRule {
         }
         self
     }
+
+    pub(crate) fn with_prelude(
+        mut self,
+        prelude: impl IntoIterator<Item = CSSToken>,
+    ) -> Self {
+        self.prelude = prelude.into_iter().map(Into::into).collect();
+        self
+    }
+}
+
+impl CSSAtRule {
+    pub(crate) fn append(&mut self, component_value: CSSComponentValue) {
+        self.prelude.push(component_value);
+    }
+
+    pub(crate) fn set_block(&mut self, block: CSSSimpleBlock) {
+        self.block = Some(block);
+    }
 }

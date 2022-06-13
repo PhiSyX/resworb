@@ -65,6 +65,34 @@ where
 {
     type Input = Input;
 
+    fn advance_as_long_as_possible<
+        'a,
+        Predicate: Fn(&Self::Input) -> bool,
+        Limit: infra::algorithms::Parameter<'a, usize>,
+    >(
+        &mut self,
+        predicate: Predicate,
+        with_limit: Limit,
+    ) -> Vec<Self::Input> {
+        let with_limit = unsafe { with_limit.param().value() };
+        let mut limit = with_limit.map(|n| n + 1).unwrap_or(0);
+        let mut result = vec![];
+
+        while let Some(token) = self.consume_next_input() {
+            if predicate(&token) && (limit > 0 || with_limit.is_none()) {
+                result.push(token);
+                if with_limit.is_some() {
+                    limit -= 1;
+                }
+            } else {
+                self.reconsume_current_input();
+                break;
+            }
+        }
+
+        result
+    }
+
     fn consume_next_input(&mut self) -> Option<Self::Input> {
         if self.is_replayed {
             self.is_replayed = false;
