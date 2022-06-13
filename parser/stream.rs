@@ -49,8 +49,8 @@ where
 
         Self {
             list,
-            current_input: None,
-            is_replayed: false,
+            current_input: Default::default(),
+            is_replayed: Default::default(),
         }
     }
 }
@@ -59,11 +59,11 @@ where
 // Implémentation // -> Interface
 // -------------- //
 
-impl<Input> StreamIteratorInterface for TokenStream<Input>
+impl<I> StreamIteratorInterface for TokenStream<I>
 where
-    Input: StreamInputInterface,
+    I: StreamInputInterface,
 {
-    type Input = Input;
+    type Input = I;
 
     fn advance_as_long_as_possible<
         'a,
@@ -78,15 +78,13 @@ where
         let mut limit = with_limit.map(|n| n + 1).unwrap_or(0);
         let mut result = vec![];
 
-        while let Some(token) = self.consume_next_input() {
-            if predicate(&token) && (limit > 0 || with_limit.is_none()) {
-                result.push(token);
-                if with_limit.is_some() {
-                    limit -= 1;
-                }
-            } else {
-                self.reconsume_current_input();
-                break;
+        while (self.next_input().is_some()
+            && predicate(self.next_input().as_ref().unwrap()))
+            && (limit > 0 || with_limit.is_none())
+        {
+            result.push(self.consume_next_input().unwrap());
+            if with_limit.is_some() {
+                limit -= 1;
             }
         }
 
@@ -99,7 +97,12 @@ where
             return self.current_input.clone();
         }
 
-        self.current_input = self.next_input();
+        if self.list.is_empty() {
+            self.current_input = Some(Self::Input::eof());
+        } else {
+            self.current_input = Some(self.list.remove(0));
+        }
+
         self.current_input.clone()
     }
 
@@ -111,7 +114,7 @@ where
         if self.list.is_empty() {
             return Some(Self::Input::eof());
         }
-        Some(self.list.remove(0))
+        self.list.iter().peekable().next().cloned()
     }
 
     fn reconsume_current_input(&mut self) {

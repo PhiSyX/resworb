@@ -17,21 +17,13 @@ impl<T> CSSParser<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{
         grammars::CSSRule,
         qualified_rule::CSSQualifiedRule,
         simple_block::CSSSimpleBlock,
+        test_the_str,
         tokenization::{CSSToken, HashFlag},
     };
-
-    macro_rules! test_the_str {
-        ($str:literal) => {{
-            let s = $str;
-            let parser: CSSParser<CSSToken> = CSSParser::new(s.chars());
-            parser
-        }};
-    }
 
     #[test]
     fn test_parse_a_stylesheet() {

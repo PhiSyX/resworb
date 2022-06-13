@@ -10,6 +10,7 @@ mod tokenization;
 /// 5. Parsing
 mod at_rule;
 mod component_value;
+mod declaration;
 mod function;
 mod preserved_tokens;
 mod qualified_rule;
@@ -21,16 +22,17 @@ mod entrypoints;
 /// 8 Defining Grammars for Rules and Other Values
 mod grammars;
 
-use at_rule::CSSAtRule;
-use component_value::CSSComponentValue;
-use function::CSSFunction;
-use grammars::CSSRuleList;
+use std::marker::PhantomData;
+
 use infra::primitive::codepoint::CodePointIterator;
 use parser::{StreamInputInterface, StreamIteratorInterface};
-use preserved_tokens::CSSPreservedToken;
-use qualified_rule::CSSQualifiedRule;
-use simple_block::CSSSimpleBlock;
 
+use self::{
+    at_rule::CSSAtRule, component_value::CSSComponentValue,
+    declaration::CSSDeclaration, function::CSSFunction,
+    grammars::CSSRuleList, preserved_tokens::CSSPreservedToken,
+    qualified_rule::CSSQualifiedRule, simple_block::CSSSimpleBlock,
+};
 use crate::tokenization::{CSSToken, CSSTokenStream};
 
 // --------- //
@@ -41,7 +43,7 @@ use crate::tokenization::{CSSToken, CSSTokenStream};
 pub struct CSSParser<Token> {
     tokens: CSSTokenStream,
     toplevel_flag: bool,
-    current_input_token: Option<Token>,
+    _marker: PhantomData<Token>,
 }
 
 // -------------- //
@@ -60,23 +62,17 @@ where
         Self {
             tokens,
             toplevel_flag: Default::default(),
-            current_input_token: None,
+            _marker: Default::default(),
         }
     }
 }
 
 impl<T> CSSParser<T> {
-    /// Consommer le jeton d'entrée suivant. Créer une nouvelle at-rule
-    /// dont le nom est défini comme la valeur de l'élément d'entrée
-    /// actuel, dont le prélude est initialement défini comme une liste
-    /// vide et dont la valeur est initialement définie comme rien.
     fn consume_at_rule(&mut self) -> CSSAtRule {
-        self.next_input_token();
+        self.consume_next_input_token();
 
-        let current_token =
-            self.tokens.current_input().expect("Le jeton actuel");
-
-        let mut at_rule = CSSAtRule::default().with_name(current_token);
+        let mut at_rule =
+            CSSAtRule::default().with_name(self.current_input_token());
 
         loop {
             match self.consume_next_input_token() {
@@ -119,42 +115,86 @@ impl<T> CSSParser<T> {
     fn consume_component_value(&mut self) -> CSSComponentValue {
         self.consume_next_input_token();
 
-        match self.tokens.current_input().cloned() {
+        match self.current_input_token().clone() {
             // <{-token>
             // <[-token>
             // <(-token>
             //
             // Consommer le bloc simple et le retourner.
-            | Some(
-                CSSToken::LeftCurlyBracket
-                | CSSToken::LeftSquareBracket
-                | CSSToken::LeftParenthesis,
-            ) => self.consume_simple_block().into(),
+            | CSSToken::LeftCurlyBracket
+            | CSSToken::LeftSquareBracket
+            | CSSToken::LeftParenthesis => {
+                self.consume_simple_block().into()
+            }
 
             // <function-token>
             //
             // Consommer une fonction et la retourner.
-            | Some(CSSToken::Function(name)) => {
+            | CSSToken::Function(name) => {
                 self.consume_function(name).into()
             }
 
             // Anything else
             //
             // Retourner le jeton d'entrée actuel.
-            | Some(current_token) => {
+            | current_token => {
                 let preserved_token: CSSPreservedToken =
                     current_token.into();
                 let component_value: CSSComponentValue =
                     preserved_token.into();
                 component_value
             }
-
-            | None => panic!("Une erreur est survenue"),
         }
     }
 
-    fn consume_function(&mut self, name_of_fn: String) -> CSSFunction {
-        let mut function = CSSFunction::new(name_of_fn);
+    fn consume_declaration(&mut self) -> Option<CSSDeclaration> {
+        self.consume_next_input_token();
+
+        let mut declaration = CSSDeclaration::default()
+            .with_name(self.current_input_token());
+
+        self.tokens.advance_as_long_as_possible(
+            |token| *token == CSSToken::Whitespace,
+            None,
+        );
+
+        if self.next_input_token() != CSSToken::Colon {
+            // TODO(css): gérer les erreurs.
+            return None;
+        }
+
+        self.consume_next_input_token();
+
+        self.tokens.advance_as_long_as_possible(
+            |token| *token == CSSToken::Whitespace,
+            None,
+        );
+
+        while self.next_input_token() != CSSToken::EOF {
+            declaration.append(self.consume_component_value());
+        }
+
+        let last_2_tokens: Vec<_> = declaration.last_n_tokens(2).collect();
+        let cond_1 = CSSToken::Delim('!').eq(last_2_tokens[0]);
+        let cond_2 = if let CSSToken::Ident(name) = last_2_tokens[1] {
+            name.eq_ignore_ascii_case("important")
+        } else {
+            false
+        };
+        if cond_1 && cond_2 {
+            declaration.remove_last_n_values(2);
+            declaration.set_important_flag(true);
+        }
+
+        while let Some(CSSToken::Whitespace) = declaration.last_token() {
+            declaration.remove_last_n_values(1);
+        }
+
+        Some(declaration)
+    }
+
+    fn consume_function(&mut self, name_fn: String) -> CSSFunction {
+        let mut function = CSSFunction::new(name_fn);
         loop {
             match self.consume_next_input_token() {
                 // <)-token>
@@ -196,7 +236,7 @@ impl<T> CSSParser<T> {
                 // <whitespace-token>
                 //
                 // Ne rien faire.
-                | CSSToken::Whitespace => {}
+                | CSSToken::Whitespace => continue,
 
                 // <EOF-token>
                 //
@@ -207,7 +247,9 @@ impl<T> CSSParser<T> {
                 // <CDC-token>
                 //
                 // Si le drapeau top-level est défini, ne rien faire.
-                | CSSToken::CDO | CSSToken::CDC if self.toplevel_flag => {}
+                | CSSToken::CDO | CSSToken::CDC if self.toplevel_flag => {
+                    continue
+                }
 
                 // <CDO-token>
                 // <CDC-token>
@@ -293,12 +335,7 @@ impl<T> CSSParser<T> {
     }
 
     fn consume_simple_block(&mut self) -> CSSSimpleBlock {
-        let ending_token = self
-            .tokens
-            .current_input()
-            .map(|token| token.mirror())
-            .expect("Une erreur est survenue");
-
+        let ending_token = self.current_input_token().mirror();
         let mut simple_block = CSSSimpleBlock::new(ending_token.clone());
 
         loop {
@@ -306,7 +343,7 @@ impl<T> CSSParser<T> {
                 // ending token
                 //
                 // Retourner le bloc.
-                | token if token.eq(&ending_token) => {
+                | token if token == ending_token => {
                     break;
                 }
 
@@ -339,6 +376,12 @@ impl<T> CSSParser<T> {
     pub fn next_input_token(&mut self) -> CSSToken {
         self.tokens
             .next_input()
+            .expect("Il y a une c*ui**e dans le pâté?")
+    }
+
+    pub(crate) fn current_input_token(&mut self) -> &CSSToken {
+        self.tokens
+            .current_input()
             .expect("Il y a une c*ui**e dans le pâté?")
     }
 }

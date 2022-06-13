@@ -144,6 +144,16 @@ impl CSSToken {
             }
         }
     }
+
+    pub(crate) fn name(&self) -> String {
+        match self {
+            | Self::Ident(s)
+            | Self::Function(s)
+            | Self::AtKeyword(s)
+            | Self::String(s) => s.to_owned(),
+            | _ => panic!("Impossible de récupérer le nom de {:?}", self),
+        }
+    }
 }
 
 impl CSSToken {
