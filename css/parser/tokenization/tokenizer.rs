@@ -8,7 +8,9 @@ use std::{
 };
 
 use infra::{
-    primitive::codepoint::{CodePoint, CodePointInterface},
+    primitive::codepoint::{
+        CodePoint, CodePointInterface, CodePointIterator,
+    },
     structure::lists::peekable::PeekableInterface,
 };
 use parser::{stream::InputStream, StreamIteratorInterface};
@@ -33,6 +35,7 @@ type CSSInputStream<Iter> = InputStream<Iter, CodePoint>;
 /// entrée, nous devons consommer de manière répétée un jeton en entrée
 /// jusqu'à ce qu'un <EOF-token> soit atteint, en poussant chacun des
 /// jetons retournés dans un flux.
+#[derive(Debug)]
 pub struct CSSTokenizer<Chars> {
     pub(crate) stream: CSSInputStream<Chars>,
     current_token: Option<CSSToken>,
@@ -75,7 +78,7 @@ impl<C> CSSTokenizer<C> {
 
 impl<C> CSSTokenizer<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     /// Voir <https://www.w3.org/TR/css-syntax-3/#consume-comment>
     fn consume_comments(&mut self) {
@@ -333,7 +336,7 @@ where
             | Some('#') => {
                 fn then<C>(tokenizer: &mut CSSTokenizer<C>) -> CSSToken
                 where
-                    C: Iterator<Item = CodePoint>,
+                    C: CodePointIterator,
                 {
                     let mut flag = Default::default();
                     let mut hash = String::new();
@@ -377,7 +380,7 @@ where
             // U+002B PLUS SIGN (+)
             //
             // Si le flux d'entrée commence par un nombre, nous devons
-            // reprendre le point de code d'entrée actuel, consommer un
+            // re-consommer le point de code d'entrée actuel, consommer un
             // jeton numérique et le retourner.
             | Some('+')
                 if check_3_codepoints_would_start_a_number(
@@ -503,7 +506,6 @@ where
                     self.stream.next_n_input_character(3),
                 ) =>
             {
-                self.stream.reconsume_current_input();
                 CSSToken::AtKeyword(self.consume_ident_sequence())
             }
 
@@ -968,7 +970,7 @@ fn convert_string_to_number(s: String) -> Option<f64> {
 
 impl<C> StreamIteratorInterface for CSSTokenizer<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     type Input = CSSToken;
 

@@ -4,7 +4,7 @@
 
 use std::ops;
 
-use infra::primitive::codepoint::CodePoint;
+use infra::primitive::codepoint::CodePointIterator;
 use parser::stream::TokenStream;
 
 use super::{CSSToken, CSSTokenizer};
@@ -27,7 +27,7 @@ pub struct CSSTokenStream(TokenStream<CSSToken>);
 impl CSSTokenStream {
     pub fn new<C>(input: C) -> Self
     where
-        C: Iterator<Item = CodePoint>,
+        C: CodePointIterator,
     {
         let tokenizer = CSSTokenizer::new(input);
         let tokens = TokenStream::new(tokenizer);

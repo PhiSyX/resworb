@@ -7,7 +7,7 @@ use std::borrow::Cow;
 
 use infra::{
     algorithms::Parameter,
-    primitive::codepoint::CodePoint,
+    primitive::codepoint::CodePointIterator,
     structure::lists::{peekable::PeekableInterface, queue::ListQueue},
 };
 
@@ -30,6 +30,7 @@ type InputStreamPreScanFn<I> =
 /// Le flux d'entrée est constitué de caractères qui y sont insérés lors
 /// du décodage du flux d'octets d'entrée ou par les diverses API qui
 /// manipulent directement le flux d'entrée.
+#[derive(Debug)]
 pub struct InputStreamPreprocessor<Stream, Input> {
     queue: ListQueue<Stream, Input>,
     pub current_input: InputStreamCurrentInput<Input>,
@@ -63,7 +64,7 @@ impl<S, I> InputStreamPreprocessor<S, I> {
 
 impl<Chars> InputStreamPreprocessor<Chars, Chars::Item>
 where
-    Chars: Iterator<Item = CodePoint>,
+    Chars: CodePointIterator,
     Chars::Item: StreamInputInterface,
 {
     /// Alias de [StreamIteratorInterface::consume_next_input].
@@ -204,12 +205,13 @@ impl<T, I> ops::DerefMut for InputStreamPreprocessor<T, I> {
 
 #[cfg(test)]
 mod tests {
+    use infra::primitive::codepoint::CodePoint;
+
     use super::*;
 
     fn get_input_stream(
         input: &'static str,
-    ) -> InputStreamPreprocessor<impl Iterator<Item = CodePoint>, CodePoint>
-    {
+    ) -> InputStreamPreprocessor<impl CodePointIterator, CodePoint> {
         InputStreamPreprocessor::new(input.chars())
     }
 

@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use std::str::Chars;
+
 // ---- //
 // Type //
 // ---- //
@@ -60,6 +62,8 @@ pub trait CodePointInterface: Copy {
     fn is_surrogate(self) -> bool;
 }
 
+pub trait CodePointIterator: Iterator<Item = CodePoint> {}
+
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
@@ -111,3 +115,5 @@ impl CodePointInterface for CodePoint {
         matches!(self, '\u{D_8000}'..='\u{D_FFFF}')
     }
 }
+
+impl CodePointIterator for Chars<'_> {}

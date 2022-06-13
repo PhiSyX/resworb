@@ -25,7 +25,7 @@ use at_rule::CSSAtRule;
 use component_value::CSSComponentValue;
 use function::CSSFunction;
 use grammars::CSSRuleList;
-use infra::primitive::codepoint::CodePoint;
+use infra::primitive::codepoint::CodePointIterator;
 use parser::{StreamInputInterface, StreamIteratorInterface};
 use preserved_tokens::CSSPreservedToken;
 use qualified_rule::CSSQualifiedRule;
@@ -54,7 +54,7 @@ where
 {
     pub fn new<C>(input: C) -> Self
     where
-        C: Iterator<Item = CodePoint>,
+        C: CodePointIterator,
     {
         let tokens = CSSTokenStream::new(input);
         Self {

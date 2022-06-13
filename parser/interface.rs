@@ -2,11 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use infra::algorithms::Parameter;
+
 // --------- //
 // Interface //
 // --------- //
-
-use infra::algorithms::Parameter;
 
 pub trait StreamIteratorInterface {
     type Input: StreamInputInterface;
@@ -34,14 +34,15 @@ pub trait StreamIteratorInterface {
     ///     advance_as_long_as_possible(|next_ch| next_ch.is_whitespace());
     ///
     /// Après cette opération, le flux d'entrée vaut `['a', ' ', 'b']`.
+    #[allow(unused_variables)]
     fn advance_as_long_as_possible<
         'a,
         Predicate: Fn(&Self::Input) -> bool,
         Limit: Parameter<'a, usize>,
     >(
         &mut self,
-        _predicate: Predicate,
-        _with_limit: Limit,
+        predicate: Predicate,
+        with_limit: Limit,
     ) -> Vec<Self::Input> {
         unimplemented!(
             "Avance dans le flux autant que possible, tant que le prédicat \
