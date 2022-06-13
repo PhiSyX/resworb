@@ -66,17 +66,11 @@ where
 }
 
 impl<T> CSSParser<T> {
-    /// Consommer le jeton d'entrée suivant. Créer une nouvelle at-rule
-    /// dont le nom est défini comme la valeur de l'élément d'entrée
-    /// actuel, dont le prélude est initialement défini comme une liste
-    /// vide et dont la valeur est initialement définie comme rien.
     fn consume_at_rule(&mut self) -> CSSAtRule {
-        self.next_input_token();
+        self.consume_next_input_token();
 
-        let current_token =
-            self.tokens.current_input().expect("Le jeton actuel");
-
-        let mut at_rule = CSSAtRule::default().with_name(current_token);
+        let mut at_rule =
+            CSSAtRule::default().with_name(self.current_input_token());
 
         loop {
             match self.consume_next_input_token() {
@@ -119,35 +113,37 @@ impl<T> CSSParser<T> {
     fn consume_component_value(&mut self) -> CSSComponentValue {
         self.consume_next_input_token();
 
-        match self.tokens.current_input().cloned() {
+        match self.current_input_token().clone() {
             // <{-token>
             // <[-token>
             // <(-token>
             //
             // Consommer le bloc simple et le retourner.
-            | Some(
-                CSSToken::LeftCurlyBracket
-                | CSSToken::LeftSquareBracket
-                | CSSToken::LeftParenthesis,
-            ) => self.consume_simple_block().into(),
+            | CSSToken::LeftCurlyBracket
+            | CSSToken::LeftSquareBracket
+            | CSSToken::LeftParenthesis => {
+                self.consume_simple_block().into()
+            }
 
             // <function-token>
             //
             // Consommer une fonction et la retourner.
-            | Some(CSSToken::Function(name)) => {
+            | CSSToken::Function(name) => {
                 self.consume_function(name).into()
             }
 
             // Anything else
             //
             // Retourner le jeton d'entrée actuel.
-            | Some(current_token) => {
+            | current_token => {
                 let preserved_token: CSSPreservedToken =
                     current_token.into();
                 let component_value: CSSComponentValue =
                     preserved_token.into();
                 component_value
             }
+        }
+    }
 
             | None => panic!("Une erreur est survenue"),
         }

@@ -33,9 +33,7 @@ pub struct CSSAtRule {
 
 impl CSSAtRule {
     pub(crate) fn with_name(mut self, token: &CSSToken) -> Self {
-        if let CSSToken::AtKeyword(name) = token {
-            self.name = name.to_owned();
-        }
+        self.name = token.name();
         self
     }
 

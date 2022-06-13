@@ -11,27 +11,25 @@ use crate::{
 };
 
 impl<T> CSSParser<T> {
-    /// Analyse une règle
+    /// Analyse d'une règle
     pub fn rule(&mut self) -> Result<CSSRule, CSSRuleError> {
         self.tokens.advance_as_long_as_possible(
             |token| *token == CSSToken::Whitespace,
             None,
         );
 
-        let rule = match self.consume_next_input_token() {
+        let rule = match self.next_input_token() {
             // <EOF-token>
             //
             // Retourner une erreur de syntaxe.
-            | CSSToken::EOF => {
-                return Err(CSSRuleError::SyntaxError);
-            }
+            | CSSToken::EOF => None, /* <--------------------------------------- v |> Erreur de syntaxe */
 
             // <at-keyword-token>
             //
             // Consommer une règle at-rule à partir de l'entrée, et
             // assigner  la valeur de retour à la règle.
             | CSSToken::AtKeyword(_) => {
-                CSSRule::AtRule(self.consume_at_rule())
+                CSSRule::AtRule(self.consume_at_rule()).into()
             }
 
             // Anything else
@@ -40,12 +38,7 @@ impl<T> CSSParser<T> {
             // assigner la valeur de retour à la règle. Si rien n'est
             // retourné, nous devons retourner une erreur de syntaxe.
             | _ => {
-                if let Some(qualified_rule) = self.consume_qualified_rule()
-                {
-                    CSSRule::QualifiedRule(qualified_rule)
-                } else {
-                    return Err(CSSRuleError::SyntaxError);
-                }
+                self.consume_qualified_rule().map(CSSRule::QualifiedRule) /* --- v |> Erreur de syntaxe si None */
             }
         };
 
@@ -54,11 +47,11 @@ impl<T> CSSParser<T> {
             None,
         );
 
-        if self.next_input_token() == CSSToken::EOF {
-            Ok(rule)
-        } else {
-            Err(CSSRuleError::SyntaxError)
-        }
+        self.tokens
+            .next_input()
+            .filter(|token| *token == CSSToken::EOF)
+            .and(rule)
+            .ok_or(CSSRuleError::SyntaxError) /* ------------------------------- ^ */
     }
 }
 
@@ -69,15 +62,7 @@ impl<T> CSSParser<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{at_rule::CSSAtRule, tokenization::CSSToken};
-
-    macro_rules! test_the_str {
-        ($str:literal) => {{
-            let s = $str;
-            let parser: CSSParser<CSSToken> = CSSParser::new(s.chars());
-            parser
-        }};
-    }
+    use crate::{at_rule::CSSAtRule, test_the_str};
 
     #[test]
     fn test_parse_rule() {
@@ -87,7 +72,10 @@ mod tests {
             Ok(CSSRule::AtRule(
                 CSSAtRule::default()
                     .with_name(&CSSToken::AtKeyword("charset".into()))
-                    .with_prelude([CSSToken::String("utf-8".into())])
+                    .with_prelude([
+                        CSSToken::Whitespace, // <-- ???
+                        CSSToken::String("utf-8".into())
+                    ])
             ))
         );
     }
