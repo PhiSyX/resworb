@@ -30,6 +30,12 @@ pub enum CSSRule {
     AtRule(CSSAtRule),
 }
 
+#[derive(Debug)]
+#[derive(PartialEq, Eq)]
+pub enum CSSRuleError {
+    SyntaxError,
+}
+
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //

@@ -5,7 +5,7 @@
 use std::{borrow::Cow, collections::VecDeque};
 
 use dom::node::DocumentNode;
-use infra::primitive::codepoint::CodePoint;
+use infra::primitive::codepoint::{CodePoint, CodePointIterator};
 use macros::dd;
 use named_character_references::{
     NamedCharacterReferences, NamedCharacterReferencesEntities,
@@ -132,7 +132,7 @@ impl<C> HTMLTokenizer<C> {
 
 impl<C> HTMLTokenizer<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     /// Le jeton actuel.
     pub fn current_token(&mut self) -> Option<HTMLToken> {
@@ -323,7 +323,7 @@ impl HTMLTokenizerState {
 // -------------- //
 
 impl<C> HTMLTokenizerProcessInterface for HTMLTokenizer<C> where
-    C: Iterator<Item = CodePoint>
+    C: CodePointIterator
 {
 }
 
@@ -331,7 +331,7 @@ impl HTMLTokenizerProcessInterface for HTMLTokenizerState {}
 
 impl<C> Iterator for HTMLTokenizer<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     type Item = HTMLToken;
 
@@ -529,7 +529,7 @@ mod tests {
 
     fn get_tokenizer_html(
         input: &'static str,
-    ) -> HTMLTokenizer<impl Iterator<Item = CodePoint>> {
+    ) -> HTMLTokenizer<impl CodePointIterator> {
         HTMLTokenizer::new(DocumentNode::default(), input.chars())
     }
 

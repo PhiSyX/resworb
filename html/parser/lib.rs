@@ -13,7 +13,7 @@ mod tree_construction;
 use std::{borrow::BorrowMut, ops::ControlFlow};
 
 use dom::node::DocumentNode;
-use infra::{self, primitive::codepoint::CodePoint};
+use infra::primitive::codepoint::CodePointIterator;
 use state::{FramesetOkFlag, InsertionMode};
 use tokenization::HTMLToken;
 use tree_construction::HTMLTreeConstruction;
@@ -55,7 +55,7 @@ impl<C> HTMLParser<C> {
 
 impl<C> HTMLParser<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     pub fn run(&mut self) {
         loop {

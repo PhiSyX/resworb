@@ -3,7 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use infra::{
-    primitive::codepoint::CodePoint,
+    primitive::codepoint::CodePointIterator,
     structure::lists::peekable::PeekableInterface,
 };
 use parser::StreamIteratorInterface;
@@ -17,7 +17,7 @@ use crate::tokenization::{
 
 impl<C> HTMLTokenizer<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     pub(crate) fn handle_bogus_comment_state(
         &mut self,

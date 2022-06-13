@@ -440,13 +440,13 @@ define_errors! {
 #[cfg(test)]
 mod tests {
     use dom::node::DocumentNode;
-    use infra::primitive::codepoint::CodePoint;
+    use infra::primitive::codepoint::CodePointIterator;
 
     use crate::tokenization::{HTMLToken, HTMLTokenizer};
 
     fn get_tokenizer_html(
         input: &'static str,
-    ) -> HTMLTokenizer<impl Iterator<Item = CodePoint>> {
+    ) -> HTMLTokenizer<impl CodePointIterator> {
         HTMLTokenizer::new(DocumentNode::default(), input.chars())
     }
 

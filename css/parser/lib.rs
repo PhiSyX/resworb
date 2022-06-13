@@ -25,7 +25,7 @@ use at_rule::CSSAtRule;
 use component_value::CSSComponentValue;
 use function::CSSFunction;
 use grammars::CSSRuleList;
-use infra::primitive::codepoint::CodePoint;
+use infra::primitive::codepoint::CodePointIterator;
 use parser::{StreamInputInterface, StreamIteratorInterface};
 use preserved_tokens::CSSPreservedToken;
 use qualified_rule::CSSQualifiedRule;
@@ -54,7 +54,7 @@ where
 {
     pub fn new<C>(input: C) -> Self
     where
-        C: Iterator<Item = CodePoint>,
+        C: CodePointIterator,
     {
         let tokens = CSSTokenStream::new(input);
         Self {
@@ -66,18 +66,54 @@ where
 }
 
 impl<T> CSSParser<T> {
-    fn consume_at_rule(&mut self) -> Option<CSSAtRule> {
-        // Consommer le jeton d'entrée suivant. Créer une nouvelle at-rule
-        // dont le nom est défini comme la valeur de l'élément d'entrée
-        // actuel, dont le prélude est initialement défini comme une liste
-        // vide et dont la valeur est initialement définie comme rien.
-        self.consume_next_input_token();
+    /// Consommer le jeton d'entrée suivant. Créer une nouvelle at-rule
+    /// dont le nom est défini comme la valeur de l'élément d'entrée
+    /// actuel, dont le prélude est initialement défini comme une liste
+    /// vide et dont la valeur est initialement définie comme rien.
+    fn consume_at_rule(&mut self) -> CSSAtRule {
+        self.next_input_token();
 
         let current_token =
             self.tokens.current_input().expect("Le jeton actuel");
-        let at_rule = CSSAtRule::default().with_name(current_token);
 
-        Some(at_rule)
+        let mut at_rule = CSSAtRule::default().with_name(current_token);
+
+        loop {
+            match self.consume_next_input_token() {
+                // <semicolon-token>
+                //
+                // Retourner la règle.
+                | CSSToken::Semicolon => break,
+
+                // <EOF-token>
+                //
+                // Il s'agit d'une erreur de syntaxe. Retourner la règle
+                // TODO(css): gérer les erreurs.
+                | CSSToken::EOF => break,
+
+                // <{-token>
+                //
+                // Consommer le bloc simple à partir de l'entrée et
+                // assigner la valeur de retour à la règle. Retourner la
+                // règle.
+                | CSSToken::LeftCurlyBracket => {
+                    at_rule.set_block(self.consume_simple_block());
+                    break;
+                }
+
+                // Anything else
+                //
+                // Re-consommer le jeton d'entrée actuel. Consommer une
+                // valeur de composant. Ajouter la valeur de composant au
+                // prélude de la règle.
+                | _ => {
+                    self.tokens.reconsume_current_input();
+                    at_rule.append(self.consume_component_value());
+                }
+            }
+        }
+
+        at_rule
     }
 
     fn consume_component_value(&mut self) -> CSSComponentValue {
@@ -147,7 +183,10 @@ impl<T> CSSParser<T> {
         function
     }
 
-    fn consume_list_of_rules(&mut self, toplevel_flag: bool) -> CSSRuleList {
+    fn consume_list_of_rules(
+        &mut self,
+        toplevel_flag: bool,
+    ) -> CSSRuleList {
         self.toplevel_flag = toplevel_flag;
 
         let mut rules: CSSRuleList = Vec::new();
@@ -178,8 +217,11 @@ impl<T> CSSParser<T> {
                 // ajouté à la liste des règles.
                 | CSSToken::CDO | CSSToken::CDC if !self.toplevel_flag => {
                     self.tokens.reconsume_current_input();
-                    let qualified_rule = self.consume_qualified_rule();
-                    rules.push(qualified_rule.into());
+                    if let Some(qualified_rule) =
+                        self.consume_qualified_rule()
+                    {
+                        rules.push(qualified_rule.into());
+                    }
                 }
 
                 // <at-keyword-token>
@@ -188,9 +230,8 @@ impl<T> CSSParser<T> {
                 // at-rule, et l'ajouter à la liste des règles.
                 | CSSToken::AtKeyword(_) => {
                     self.tokens.reconsume_current_input();
-                    if let Some(at_rule) = self.consume_at_rule() {
-                        rules.push(at_rule.into());
-                    }
+                    let at_rule = self.consume_at_rule();
+                    rules.push(at_rule.into());
                 }
 
                 // Anything else
@@ -200,8 +241,11 @@ impl<T> CSSParser<T> {
                 // à la liste des règles.
                 | _ => {
                     self.tokens.reconsume_current_input();
-                    let qualified_rule = self.consume_qualified_rule();
-                    rules.push(qualified_rule.into());
+                    if let Some(qualified_rule) =
+                        self.consume_qualified_rule()
+                    {
+                        rules.push(qualified_rule.into());
+                    }
                 }
             };
         }
@@ -209,7 +253,7 @@ impl<T> CSSParser<T> {
         rules
     }
 
-    fn consume_qualified_rule(&mut self) -> CSSQualifiedRule {
+    fn consume_qualified_rule(&mut self) -> Option<CSSQualifiedRule> {
         let mut qualified_rule = CSSQualifiedRule::default();
 
         loop {
@@ -245,7 +289,7 @@ impl<T> CSSParser<T> {
             }
         }
 
-        qualified_rule
+        qualified_rule.into()
     }
 
     fn consume_simple_block(&mut self) -> CSSSimpleBlock {
@@ -286,9 +330,15 @@ impl<T> CSSParser<T> {
         simple_block
     }
 
-    fn consume_next_input_token(&mut self) -> CSSToken {
+    pub fn consume_next_input_token(&mut self) -> CSSToken {
         self.tokens
             .consume_next_input()
+            .expect("Il y a une c*ui**e dans le pâté?")
+    }
+
+    pub fn next_input_token(&mut self) -> CSSToken {
+        self.tokens
+            .next_input()
             .expect("Il y a une c*ui**e dans le pâté?")
     }
 }
