@@ -69,10 +69,10 @@ where
 
 impl<T> CSSParser<T> {
     fn consume_at_rule(&mut self) -> CSSAtRule {
-        self.consume_next_input_token();
+        let current_token = self.consume_next_input_token();
+        assert!(matches!(current_token, CSSToken::AtKeyword(_)));
 
-        let mut at_rule =
-            CSSAtRule::default().with_name(self.current_input_token());
+        let mut at_rule = CSSAtRule::default().with_name(&current_token);
 
         loop {
             match self.consume_next_input_token() {
@@ -113,9 +113,7 @@ impl<T> CSSParser<T> {
     }
 
     fn consume_component_value(&mut self) -> CSSComponentValue {
-        self.consume_next_input_token();
-
-        match self.current_input_token().clone() {
+        match self.consume_next_input_token() {
             // <{-token>
             // <[-token>
             // <(-token>
@@ -158,6 +156,8 @@ impl<T> CSSParser<T> {
             None,
         );
 
+        // Si le prochain élément d'entrée n'est pas un <colon-token>,
+        // il s'agit d'une erreur d'analyse. Ne rien retourner.
         if self.next_input_token() != CSSToken::Colon {
             // TODO(css): gérer les erreurs.
             return None;
@@ -335,8 +335,10 @@ impl<T> CSSParser<T> {
     }
 
     fn consume_simple_block(&mut self) -> CSSSimpleBlock {
-        let ending_token = self.current_input_token().mirror();
-        let mut simple_block = CSSSimpleBlock::new(ending_token.clone());
+        let current_token = self.current_input_token();
+        let ending_token = current_token.mirror();
+        let mut simple_block =
+            CSSSimpleBlock::new(current_token.to_owned());
 
         loop {
             match self.consume_next_input_token() {

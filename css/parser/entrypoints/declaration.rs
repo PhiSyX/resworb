@@ -34,8 +34,7 @@ impl<T> CSSParser<T> {
 mod tests {
     use super::*;
     use crate::{
-        at_rule::CSSAtRule, component_value::CSSComponentValue,
-        preserved_tokens::CSSPreservedToken, test_the_str,
+        component_value::CSSComponentValue, test_the_str,
         tokenization::CSSToken,
     };
 
@@ -54,11 +53,12 @@ mod tests {
                         CSSToken::Semicolon.into()
                     )
                 ]))
-        ); /*{
-               name: "color",
-               value: ,
-               important_flag: false
-           })
-           */
+        );
+    }
+
+    #[test]
+    fn test_parse_declaration_is_not() {
+        let mut parser = test_the_str!(r#".class {}"#);
+        assert_eq!(parser.declaration(), Err(CSSRuleError::SyntaxError));
     }
 }

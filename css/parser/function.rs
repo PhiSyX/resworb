@@ -45,7 +45,7 @@ impl From<CSSToken> for CSSFunction {
     fn from(token: CSSToken) -> Self {
         match token {
             | CSSToken::Function(fn_name) => Self::new(fn_name),
-            | _ => panic!("Expected a function token"),
+            | _ => panic!("Jeton `CSSToken::Function` attendu."),
         }
     }
 }

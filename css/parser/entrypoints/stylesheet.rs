@@ -38,7 +38,7 @@ mod tests {
                         CSSToken::Whitespace
                     ])
                     .with_block(
-                        CSSSimpleBlock::new(CSSToken::RightCurlyBracket)
+                        CSSSimpleBlock::new(CSSToken::LeftCurlyBracket)
                             .set_values([
                                 CSSToken::Whitespace,
                                 CSSToken::Ident("color".into()),

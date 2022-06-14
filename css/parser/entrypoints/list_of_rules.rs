@@ -45,7 +45,7 @@ mod tests {
                         ])
                         .with_block(
                             CSSSimpleBlock::new(
-                                CSSToken::RightCurlyBracket
+                                CSSToken::LeftCurlyBracket
                             )
                             .set_values([
                                 CSSToken::Whitespace,
@@ -66,7 +66,7 @@ mod tests {
                         ])
                         .with_block(
                             CSSSimpleBlock::new(
-                                CSSToken::RightCurlyBracket
+                                CSSToken::LeftCurlyBracket
                             )
                             .set_values([
                                 CSSToken::Whitespace,
