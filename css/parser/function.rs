@@ -2,7 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::{component_value::CSSComponentValue, tokenization::CSSToken};
+use crate::{
+    component_value::{CSSComponentValue, CSSComponentValuesList},
+    tokenization::CSSToken,
+};
 
 // --------- //
 // Structure //
@@ -16,7 +19,7 @@ use crate::{component_value::CSSComponentValue, tokenization::CSSToken};
 #[derive(PartialEq, Eq)]
 pub struct CSSFunction {
     name: String,
-    value: Vec<CSSComponentValue>,
+    value: CSSComponentValuesList,
 }
 
 // -------------- //

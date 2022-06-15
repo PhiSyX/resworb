@@ -9,6 +9,12 @@ use crate::{
     tokenization::CSSToken,
 };
 
+// ---- //
+// Type //
+// ---- //
+
+pub type CSSComponentValuesList = Vec<CSSComponentValue>;
+
 // --------- //
 // Structure //
 // --------- //
