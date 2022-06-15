@@ -6,6 +6,12 @@ use std::ops::Deref;
 
 use crate::{component_value::CSSComponentValue, tokenization::CSSToken};
 
+// ---- //
+// Type //
+// ---- //
+
+pub type CSSDeclarationList = Vec<CSSDeclaration>;
+
 // --------- //
 // Structure //
 // --------- //

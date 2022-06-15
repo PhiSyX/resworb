@@ -3,8 +3,10 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    function::CSSFunction, preserved_tokens::CSSPreservedToken,
-    simple_block::CSSSimpleBlock, tokenization::CSSToken,
+    function::CSSFunction,
+    preserved_tokens::{CSSPreservedToken, CSSPreservedTokenError},
+    simple_block::CSSSimpleBlock,
+    tokenization::CSSToken,
 };
 
 // --------- //
@@ -15,11 +17,37 @@ use crate::{
 /// conservés](CSSPreservedToken), une [fonction](CSSFunction) ou un
 /// [bloc simple](CSSSimpleBlock).
 #[derive(Debug)]
+#[derive(Clone)]
 #[derive(PartialEq, Eq)]
-pub(crate) enum CSSComponentValue {
+pub enum CSSComponentValue {
     Preserved(CSSPreservedToken),
     Function(CSSFunction),
     SimpleBlock(CSSSimpleBlock),
+}
+
+#[derive(Debug)]
+#[derive(Clone)]
+#[derive(PartialEq, Eq)]
+pub enum CSSComponentValueError {
+    ConsumedToken,
+    SyntaxError,
+}
+
+// -------------- //
+// Implémentation // -> Interface
+// -------------- //
+
+impl CSSComponentValue {
+    pub(crate) fn simple_block(&self) -> Option<&CSSSimpleBlock> {
+        match self {
+            | Self::SimpleBlock(simple_block) => Some(simple_block),
+            | _ => None,
+        }
+    }
+
+    pub(crate) fn simple_block_unchecked(&self) -> &CSSSimpleBlock {
+        self.simple_block().expect("Simple bloc")
+    }
 }
 
 // -------------- //
@@ -44,17 +72,17 @@ impl From<CSSSimpleBlock> for CSSComponentValue {
     }
 }
 
-impl From<CSSToken> for CSSComponentValue {
-    fn from(token: CSSToken) -> Self {
+impl TryFrom<CSSToken> for CSSComponentValue {
+    type Error = CSSComponentValueError;
+
+    fn try_from(token: CSSToken) -> Result<Self, Self::Error> {
         match token {
             | CSSToken::EOF
             | CSSToken::Ident(_)
             | CSSToken::AtKeyword(_)
             | CSSToken::Hash(_, _)
             | CSSToken::String(_)
-            | CSSToken::BadString
             | CSSToken::Url(_)
-            | CSSToken::BadUrl
             | CSSToken::Delim(_)
             | CSSToken::Number(_, _)
             | CSSToken::Percentage(_)
@@ -64,17 +92,32 @@ impl From<CSSToken> for CSSComponentValue {
             | CSSToken::CDC
             | CSSToken::Colon
             | CSSToken::Semicolon
-            | CSSToken::Comma => Self::Preserved(token.into()),
+            | CSSToken::Comma => token
+                .try_into()
+                .map(Self::Preserved)
+                .map_err(|err| match err {
+                    | CSSPreservedTokenError::ConsumedToken => {
+                        Self::Error::ConsumedToken
+                    }
+                    | CSSPreservedTokenError::SyntaxError => {
+                        Self::Error::SyntaxError
+                    }
+                }),
 
-            | CSSToken::Function(_) => Self::Function(token.into()),
+            | CSSToken::Function(_) => Ok(Self::Function(token.into())),
 
-            | CSSToken::LeftSquareBracket
-            | CSSToken::RightSquareBracket
-            | CSSToken::LeftParenthesis
-            | CSSToken::RightParenthesis
             | CSSToken::LeftCurlyBracket
-            | CSSToken::RightCurlyBracket => {
-                Self::SimpleBlock(token.into())
+            | CSSToken::LeftSquareBracket
+            | CSSToken::LeftParenthesis => {
+                Ok(Self::SimpleBlock(token.into()))
+            }
+
+            | CSSToken::BadString
+            | CSSToken::BadUrl
+            | CSSToken::RightCurlyBracket
+            | CSSToken::RightSquareBracket
+            | CSSToken::RightParenthesis => {
+                Err(Self::Error::ConsumedToken)
             }
         }
     }

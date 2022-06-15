@@ -11,6 +11,7 @@ use crate::{component_value::CSSComponentValue, tokenization::CSSToken};
 /// Une fonction possède un nom et une valeur constituée d'une liste
 /// de valeurs de composants.
 #[derive(Debug)]
+#[derive(Clone)]
 #[derive(Default)]
 #[derive(PartialEq, Eq)]
 pub struct CSSFunction {
@@ -28,6 +29,12 @@ impl CSSFunction {
             name: name.to_string(),
             ..Default::default()
         }
+    }
+}
+
+impl CSSFunction {
+    pub(crate) fn name(&self) -> &str {
+        &self.name
     }
 }
 

@@ -41,7 +41,10 @@ impl CSSAtRule {
         mut self,
         prelude: impl IntoIterator<Item = CSSToken>,
     ) -> Self {
-        self.prelude = prelude.into_iter().map(Into::into).collect();
+        self.prelude = prelude
+            .into_iter()
+            .filter_map(|token| token.try_into().ok())
+            .collect();
         self
     }
 }

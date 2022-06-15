@@ -13,11 +13,14 @@ use infra::{
     },
     structure::lists::peekable::PeekableInterface,
 };
-use parser::{stream::InputStream, StreamIteratorInterface};
+use parser::{
+    stream::{InputStream, TokenStream},
+    StreamIteratorInterface,
+};
 
 use super::{
     token::{DimensionUnit, NumberFlag},
-    CSSToken,
+    CSSToken, CSSTokenVariant,
 };
 use crate::{codepoint::CSSCodePoint, tokenization::token::HashFlag};
 
@@ -38,7 +41,7 @@ type CSSInputStream<Iter> = InputStream<Iter, CodePoint>;
 #[derive(Debug)]
 pub struct CSSTokenizer<Chars> {
     pub(crate) stream: CSSInputStream<Chars>,
-    current_token: Option<CSSToken>,
+    current_token: Option<CSSTokenVariant>,
     is_replayed: bool,
 }
 
@@ -73,6 +76,15 @@ impl<C> CSSTokenizer<C> {
             current_token: None,
             is_replayed: false,
         }
+    }
+}
+
+impl<C> CSSTokenizer<C>
+where
+    C: CodePointIterator,
+{
+    pub(crate) fn stream(self) -> TokenStream<CSSTokenVariant> {
+        TokenStream::new(self)
     }
 }
 
@@ -972,7 +984,7 @@ impl<C> StreamIteratorInterface for CSSTokenizer<C>
 where
     C: CodePointIterator,
 {
-    type Input = CSSToken;
+    type Input = CSSTokenVariant;
 
     fn consume_next_input(&mut self) -> Option<Self::Input> {
         if self.is_replayed {
@@ -989,7 +1001,7 @@ where
     }
 
     fn next_input(&mut self) -> Option<Self::Input> {
-        Some(self.consume_token())
+        Some(self.consume_token().into())
     }
 
     fn reconsume_current_input(&mut self) {

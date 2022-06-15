@@ -6,9 +6,9 @@ use std::ops;
 
 use crate::tokenization::CSSToken;
 
-// ---- //
-// Type //
-// ---- //
+// --------- //
+// Structure //
+// --------- //
 
 /// Tout token produit par le
 /// [tokenizer](crate::tokenization::CSSTokenizer) à l'exception des
@@ -33,8 +33,17 @@ use crate::tokenization::CSSToken;
 /// telles que Media Queries, de définir une gestion des erreurs plus fine
 /// que le simple abandon d'une déclaration ou d'un bloc entier.
 #[derive(Debug)]
+#[derive(Clone)]
 #[derive(PartialEq, Eq)]
-pub(crate) struct CSSPreservedToken(pub(crate) CSSToken);
+pub struct CSSPreservedToken(pub(crate) CSSToken);
+
+#[derive(Debug)]
+#[derive(Clone)]
+#[derive(PartialEq, Eq)]
+pub enum CSSPreservedTokenError {
+    ConsumedToken,
+    SyntaxError,
+}
 
 // -------------- //
 // Implémentation // -> Interface
@@ -48,16 +57,27 @@ impl ops::Deref for CSSPreservedToken {
     }
 }
 
-impl From<CSSToken> for CSSPreservedToken {
-    fn from(token: CSSToken) -> Self {
-        match token {
+impl TryFrom<CSSToken> for CSSPreservedToken {
+    type Error = CSSPreservedTokenError;
+
+    fn try_from(token: CSSToken) -> Result<Self, Self::Error> {
+        Ok(match token {
             | CSSToken::Function(_)
             | CSSToken::LeftCurlyBracket
             | CSSToken::LeftParenthesis
             | CSSToken::LeftSquareBracket => {
-                panic!("CSSPreservedToken::try_from: {:?}", token)
+                return Err(Self::Error::ConsumedToken)
             }
+
+            | CSSToken::BadString
+            | CSSToken::BadUrl
+            | CSSToken::RightCurlyBracket
+            | CSSToken::RightParenthesis
+            | CSSToken::RightSquareBracket => {
+                return Err(Self::Error::SyntaxError)
+            }
+
             | _ => Self(token),
-        }
+        })
     }
 }

@@ -6,6 +6,4 @@ mod stream;
 mod token;
 mod tokenizer;
 
-pub use self::{
-    stream::CSSTokenStream, token::*, tokenizer::CSSTokenizer,
-};
+pub use self::{stream::*, token::*, tokenizer::CSSTokenizer};

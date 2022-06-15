@@ -21,78 +21,111 @@ mod entrypoints;
 
 /// 8 Defining Grammars for Rules and Other Values
 mod grammars;
+mod style_blocks_content;
 
-use std::marker::PhantomData;
-
+use grammars::CSSRule;
 use infra::primitive::codepoint::CodePointIterator;
 use parser::{StreamInputInterface, StreamIteratorInterface};
+use style_blocks_content::{CSSStyleBlock, CSSStyleBlocksContents};
+use tokenization::{CSSTokenStream, CSSTokenVariant, CSSTokenizer};
 
 use self::{
     at_rule::CSSAtRule, component_value::CSSComponentValue,
     declaration::CSSDeclaration, function::CSSFunction,
-    grammars::CSSRuleList, preserved_tokens::CSSPreservedToken,
-    qualified_rule::CSSQualifiedRule, simple_block::CSSSimpleBlock,
+    grammars::CSSRuleList, qualified_rule::CSSQualifiedRule,
+    simple_block::CSSSimpleBlock,
 };
-use crate::tokenization::{CSSToken, CSSTokenStream};
+use crate::tokenization::CSSToken;
 
 // --------- //
 // Structure //
 // --------- //
 
 /// 5. Parsing
-pub struct CSSParser<Token> {
+pub struct CSSParser {
     tokens: CSSTokenStream,
     toplevel_flag: bool,
-    _marker: PhantomData<Token>,
 }
 
 // -------------- //
 // Implémentation //
 // -------------- //
 
-impl<T> CSSParser<T>
-where
-    T: StreamInputInterface,
-{
+impl CSSParser {
     pub fn new<C>(input: C) -> Self
     where
         C: CodePointIterator,
     {
-        let tokens = CSSTokenStream::new(input);
+        let tokenizer = CSSTokenizer::new(input);
+        let tokens = CSSTokenStream::new(tokenizer.stream());
         Self {
             tokens,
             toplevel_flag: Default::default(),
-            _marker: Default::default(),
+        }
+    }
+
+    pub fn from_iter<Iter>(input: Iter) -> Self
+    where
+        Iter: Iterator<Item = CSSTokenVariant>,
+    {
+        let tokens = CSSTokenStream::from_iter(input);
+        Self {
+            tokens,
+            toplevel_flag: Default::default(),
         }
     }
 }
 
-impl<T> CSSParser<T> {
-    fn consume_at_rule(&mut self) -> CSSAtRule {
-        let current_token = self.consume_next_input_token();
-        assert!(matches!(current_token, CSSToken::AtKeyword(_)));
+impl CSSParser {
+    pub fn consume_next_input_token(&mut self) -> CSSTokenVariant {
+        self.tokens
+            .consume_next_input()
+            .expect("Il y a une c*ui**e dans le pâté?")
+    }
 
-        let mut at_rule = CSSAtRule::default().with_name(&current_token);
+    pub fn next_input_token(&mut self) -> CSSTokenVariant {
+        self.tokens
+            .next_input()
+            .expect("Il y a une c*ui**e dans le pâté?")
+    }
+
+    pub(crate) fn current_input_token(&mut self) -> &CSSTokenVariant {
+        self.tokens
+            .current_input()
+            .expect("Il y a une c*ui**e dans le pâté?")
+    }
+}
+
+impl CSSParser {
+    fn consume_at_rule(&mut self) -> CSSAtRule {
+        let current_variant = self.consume_next_input_token();
+        assert!(current_variant.is_at_keyword());
+
+        let current_token = current_variant.token_unchecked();
+
+        let mut at_rule = CSSAtRule::default().with_name(current_token);
 
         loop {
             match self.consume_next_input_token() {
                 // <semicolon-token>
                 //
                 // Retourner la règle.
-                | CSSToken::Semicolon => break,
+                | variant if variant.is_semicolon() => break,
 
                 // <EOF-token>
                 //
-                // Il s'agit d'une erreur de syntaxe. Retourner la règle
-                // TODO(css): gérer les erreurs.
-                | CSSToken::EOF => break,
+                // Il s'agit d'une erreur de syntaxe. Retourner la règle.
+                | variant if variant.is_eof() => {
+                    // TODO(css): gérer les erreurs.
+                    break;
+                }
 
                 // <{-token>
                 //
                 // Consommer le bloc simple à partir de l'entrée et
                 // assigner la valeur de retour à la règle. Retourner la
                 // règle.
-                | CSSToken::LeftCurlyBracket => {
+                | variant if variant.is_left_curly_bracket() => {
                     at_rule.set_block(self.consume_simple_block());
                     break;
                 }
@@ -104,7 +137,11 @@ impl<T> CSSParser<T> {
                 // prélude de la règle.
                 | _ => {
                     self.tokens.reconsume_current_input();
-                    at_rule.append(self.consume_component_value());
+                    if let Some(component_value) =
+                        self.consume_component_value()
+                    {
+                        at_rule.append(component_value);
+                    }
                 }
             }
         }
@@ -112,53 +149,53 @@ impl<T> CSSParser<T> {
         at_rule
     }
 
-    fn consume_component_value(&mut self) -> CSSComponentValue {
+    fn consume_component_value(&mut self) -> Option<CSSComponentValue> {
         match self.consume_next_input_token() {
             // <{-token>
             // <[-token>
             // <(-token>
             //
             // Consommer le bloc simple et le retourner.
-            | CSSToken::LeftCurlyBracket
-            | CSSToken::LeftSquareBracket
-            | CSSToken::LeftParenthesis => {
-                self.consume_simple_block().into()
+            | variant
+                if variant.is_left_curly_bracket()
+                    || variant.is_left_square_bracket()
+                    || variant.is_left_parenthesis() =>
+            {
+                Some(self.consume_simple_block().into())
             }
 
             // <function-token>
             //
             // Consommer une fonction et la retourner.
-            | CSSToken::Function(name) => {
-                self.consume_function(name).into()
+            | variant if variant.is_function() => {
+                let name = variant.function_name();
+                Some(self.consume_function(name).into())
             }
 
             // Anything else
             //
             // Retourner le jeton d'entrée actuel.
-            | current_token => {
-                let preserved_token: CSSPreservedToken =
-                    current_token.into();
-                let component_value: CSSComponentValue =
-                    preserved_token.into();
-                component_value
-            }
+            | current_token => current_token.component_value(),
         }
     }
 
     fn consume_declaration(&mut self) -> Option<CSSDeclaration> {
         self.consume_next_input_token();
 
-        let mut declaration = CSSDeclaration::default()
-            .with_name(self.current_input_token());
+        let current_variant = self.current_input_token();
+        let current_token = current_variant.token_unchecked();
+
+        let mut declaration =
+            CSSDeclaration::default().with_name(current_token);
 
         self.tokens.advance_as_long_as_possible(
-            |token| *token == CSSToken::Whitespace,
+            |token| token.is_whitespace(),
             None,
         );
 
         // Si le prochain élément d'entrée n'est pas un <colon-token>,
         // il s'agit d'une erreur d'analyse. Ne rien retourner.
-        if self.next_input_token() != CSSToken::Colon {
+        if !self.next_input_token().is_colon() {
             // TODO(css): gérer les erreurs.
             return None;
         }
@@ -166,12 +203,14 @@ impl<T> CSSParser<T> {
         self.consume_next_input_token();
 
         self.tokens.advance_as_long_as_possible(
-            |token| *token == CSSToken::Whitespace,
+            |token| token.is_whitespace(),
             None,
         );
 
-        while self.next_input_token() != CSSToken::EOF {
-            declaration.append(self.consume_component_value());
+        while !self.next_input_token().is_eof() {
+            if let Some(component_value) = self.consume_component_value() {
+                declaration.append(component_value);
+            }
         }
 
         let last_2_tokens: Vec<_> = declaration.last_n_tokens(2).collect();
@@ -200,13 +239,13 @@ impl<T> CSSParser<T> {
                 // <)-token>
                 //
                 // Retourner la fonction.
-                | CSSToken::RightParenthesis => break,
+                | variant if variant.is_right_parenthesis() => break,
 
                 // <EOF-token>
                 //
                 // Il s'agit d'un erreur d'analyse. Retourner la fonction.
                 // TODO(css): gérer les erreurs.
-                | CSSToken::EOF => break,
+                | variant if variant.is_eof() => break,
 
                 // Anything else
                 //
@@ -216,7 +255,11 @@ impl<T> CSSParser<T> {
                 // de la fonction.
                 | _ => {
                     self.tokens.reconsume_current_input();
-                    function.append(self.consume_component_value());
+                    if let Some(component_value) =
+                        self.consume_component_value()
+                    {
+                        function.append(component_value);
+                    }
                 }
             }
         }
@@ -236,18 +279,21 @@ impl<T> CSSParser<T> {
                 // <whitespace-token>
                 //
                 // Ne rien faire.
-                | CSSToken::Whitespace => continue,
+                | variant if variant.is_whitespace() => continue,
 
                 // <EOF-token>
                 //
                 // Retourner la liste des règles.
-                | CSSToken::EOF => break,
+                | variant if variant.is_eof() => break,
 
                 // <CDO-token>
                 // <CDC-token>
                 //
                 // Si le drapeau top-level est défini, ne rien faire.
-                | CSSToken::CDO | CSSToken::CDC if self.toplevel_flag => {
+                | variant
+                    if (variant.is_cdo() || variant.is_cdt())
+                        && self.toplevel_flag =>
+                {
                     continue
                 }
 
@@ -257,7 +303,10 @@ impl<T> CSSParser<T> {
                 // Re-consommer le jeton courant. Consommer une
                 // règle qualifiée. Si un élément est retourné, il est
                 // ajouté à la liste des règles.
-                | CSSToken::CDO | CSSToken::CDC if !self.toplevel_flag => {
+                | variant
+                    if (variant.is_cdo() || variant.is_cdt())
+                        && !self.toplevel_flag =>
+                {
                     self.tokens.reconsume_current_input();
                     if let Some(qualified_rule) =
                         self.consume_qualified_rule()
@@ -270,7 +319,7 @@ impl<T> CSSParser<T> {
                 //
                 // Re-consommer le jeton courant. Consommer une règle
                 // at-rule, et l'ajouter à la liste des règles.
-                | CSSToken::AtKeyword(_) => {
+                | variant if variant.is_at_keyword() => {
                     self.tokens.reconsume_current_input();
                     let at_rule = self.consume_at_rule();
                     rules.push(at_rule.into());
@@ -304,20 +353,34 @@ impl<T> CSSParser<T> {
                 //
                 // Il s'agit d'une erreur d'analyse. Ne rien retourner.
                 // TODO(css): gérer les erreurs.
-                | CSSToken::EOF => {}
+                | variant if variant.is_eof() => {}
 
                 // <{-token>
                 //
                 // Consommer un bloc simple et l'assigner à la règle
                 // qualifiée. Retourner la règle qualifiée.
-                | CSSToken::LeftCurlyBracket => {
+                | variant if variant.is_left_curly_bracket() => {
                     let block = self.consume_simple_block();
                     qualified_rule.set_block(block);
                     break;
                 }
 
-                // TODO(css): cas <at-keyword-token>
-                //            CSSComponentValue::SimpleBlock(..)
+                // simple block with an associated token of <{-token>
+                //
+                // Assigner le bloc au bloc de la règle qualifiée.
+                // Retourner la règle qualifiée.
+                | variant
+                    if variant.is_simple_block_with(
+                        CSSToken::LeftCurlyBracket,
+                    ) =>
+                {
+                    qualified_rule.set_block(
+                        variant
+                            .component_value_unchecked()
+                            .simple_block_unchecked()
+                            .to_owned(),
+                    );
+                }
 
                 // Anything else
                 //
@@ -326,7 +389,11 @@ impl<T> CSSParser<T> {
                 // l'at-rule.
                 | _ => {
                     self.tokens.reconsume_current_input();
-                    qualified_rule.append(self.consume_component_value());
+                    if let Some(component_value) =
+                        self.consume_component_value()
+                    {
+                        qualified_rule.append(component_value);
+                    }
                 }
             }
         }
@@ -335,8 +402,10 @@ impl<T> CSSParser<T> {
     }
 
     fn consume_simple_block(&mut self) -> CSSSimpleBlock {
-        let current_token = self.current_input_token();
+        let current_variant = self.current_input_token();
+        let current_token = current_variant.token_unchecked();
         let ending_token = current_token.mirror();
+
         let mut simple_block =
             CSSSimpleBlock::new(current_token.to_owned());
 
@@ -345,7 +414,7 @@ impl<T> CSSParser<T> {
                 // ending token
                 //
                 // Retourner le bloc.
-                | token if token == ending_token => {
+                | variant if variant.is_mirror(&ending_token) => {
                     break;
                 }
 
@@ -353,7 +422,7 @@ impl<T> CSSParser<T> {
                 //
                 // Il s'agit d'une erreur d'analyse. Retourner le bloc
                 // TODO(css): gérer les erreurs.
-                | CSSToken::EOF => break,
+                | variant if variant.is_eof() => break,
 
                 // Anything else
                 //
@@ -361,7 +430,11 @@ impl<T> CSSParser<T> {
                 // composant et l'ajouter à la valeur du bloc.
                 | _ => {
                     self.tokens.reconsume_current_input();
-                    simple_block.append(self.consume_component_value());
+                    if let Some(component_value) =
+                        self.consume_component_value()
+                    {
+                        simple_block.append(component_value);
+                    }
                 }
             }
         }
@@ -369,21 +442,112 @@ impl<T> CSSParser<T> {
         simple_block
     }
 
-    pub fn consume_next_input_token(&mut self) -> CSSToken {
-        self.tokens
-            .consume_next_input()
-            .expect("Il y a une c*ui**e dans le pâté?")
-    }
+    fn consume_style_blocks_contents(&mut self) -> CSSStyleBlocksContents {
+        let mut decls = CSSStyleBlocksContents::default();
+        let mut rules = CSSStyleBlocksContents::default();
 
-    pub fn next_input_token(&mut self) -> CSSToken {
-        self.tokens
-            .next_input()
-            .expect("Il y a une c*ui**e dans le pâté?")
-    }
+        loop {
+            match self.consume_next_input_token() {
+                // <whitespace-token>
+                // <semicolon-token>
+                //
+                // Ne rien faire.
+                | variant
+                    if variant.is_whitespace()
+                        || variant.is_semicolon() =>
+                {
+                    continue
+                }
 
-    pub(crate) fn current_input_token(&mut self) -> &CSSToken {
-        self.tokens
-            .current_input()
-            .expect("Il y a une c*ui**e dans le pâté?")
+                // <EOF-token>
+                //
+                // Étendre les déclarations avec des règles, puis retourner
+                // les déclarations.
+                | variant if variant.is_eof() => {
+                    decls.extend(rules);
+                    break;
+                }
+
+                // <at-keyword-token>
+                //
+                // Re-consommer le jeton courant. Consommer une règle
+                // at-rule, et l'ajouter à la liste des règles.
+                | variant if variant.is_at_keyword() => {
+                    self.tokens.reconsume_current_input();
+                    let at_rule = self.consume_at_rule();
+                    let rule: CSSRule = at_rule.into();
+                    rules.push(rule.into());
+                }
+
+                // <ident-token>
+                //
+                // Initialiser une liste temporaire initialement remplie
+                // avec le jeton d'entrée actuel.
+                // Tant que le prochain jeton n'est pas un
+                // <semicolon-token>, ou un <EOF-token>,
+                // consommer une valeur de composant et l'ajouter à la
+                // liste temporaire. Consommer une déclaration à partir de
+                // la liste temporaire. Si quelque chose est retourné,
+                // l'ajouter à decls.
+                | variant if variant.is_ident() => {
+                    let current_variant = self.current_input_token();
+                    let current_token =
+                        current_variant.token_unchecked().clone();
+
+                    let mut temporary_list: Vec<CSSTokenVariant> =
+                        vec![current_token.into()];
+
+                    while !(self.next_input_token().is_semicolon()
+                        || self.next_input_token().is_eof())
+                    {
+                        if let Some(component_value) =
+                            self.consume_component_value()
+                        {
+                            temporary_list.push(component_value.into());
+                        }
+                    }
+
+                    let mut stream =
+                        CSSParser::from_iter(temporary_list.into_iter());
+                    if let Some(decl) = stream.consume_declaration() {
+                        decls.push(decl.into());
+                    }
+                }
+
+                // <delim-token> with a value of "&" (U+0026 AMPERSAND)
+                //
+                // Re-consommer le jeton courant. Consommer une règle
+                // qualifiée. Si un élément est retourné, l'ajouter aux
+                // règles.
+                | variant if variant.is_delimiter_with('&') => {
+                    self.tokens.reconsume_current_input();
+                    if let Some(qualified_rule) =
+                        self.consume_qualified_rule()
+                    {
+                        let rule: CSSRule = qualified_rule.into();
+                        let style_block: CSSStyleBlock = rule.into();
+                        rules.push(style_block);
+                    }
+                }
+
+                // Anything else
+                //
+                // Il s'agit d'une erreur d'analyse. Re-consommer le jeton
+                // actuel. Tant que le prochain jeton n'est pas un
+                // <semicolon-token>, ou un <EOF-token>, consommer une
+                // valeur de composant et jeter la valeur retournée.
+                // TODO(css): gérer les erreurs.
+                | _ => {
+                    self.tokens.reconsume_current_input();
+                    while !(self.next_input_token().is_semicolon()
+                        || self.next_input_token().is_eof())
+                    {
+                        self.consume_component_value();
+                    }
+                }
+            }
+        }
+
+        decls
     }
 }

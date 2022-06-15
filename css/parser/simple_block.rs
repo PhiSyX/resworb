@@ -17,16 +17,12 @@ use crate::{component_value::CSSComponentValue, tokenization::CSSToken};
 /// {}-block, []-block, et ()-block font spécifiquement
 /// référence à un bloc simple avec le jeton associé correspondant.
 #[derive(Debug)]
+#[derive(Clone)]
 #[derive(PartialEq, Eq)]
 pub struct CSSSimpleBlock {
-    token: CSSToken,
+    pub token: CSSToken,
     value: Vec<CSSComponentValue>,
 }
-
-pub const CURLY_BRACKET_BLOCK: CSSSimpleBlock = CSSSimpleBlock {
-    token: CSSToken::LeftCurlyBracket,
-    value: vec![],
-};
 
 // -------------- //
 // Implémentation //
@@ -42,16 +38,26 @@ impl CSSSimpleBlock {
 
     pub(crate) fn set_values(
         mut self,
-        value: impl IntoIterator<Item = impl Into<CSSComponentValue>>,
+        value: impl IntoIterator<Item = impl TryInto<CSSComponentValue>>,
     ) -> Self {
-        self.value = value.into_iter().map(Into::into).collect();
+        self.value = value
+            .into_iter()
+            .filter_map(|cv| cv.try_into().ok())
+            .collect();
         self
     }
 }
 
 impl CSSSimpleBlock {
-    pub(crate) fn append(&mut self, value: CSSComponentValue) {
-        self.value.push(value);
+    pub(crate) fn append(
+        &mut self,
+        value: impl TryInto<CSSComponentValue>,
+    ) {
+        if let Ok(cv) = value.try_into() {
+            self.value.push(cv);
+        } else {
+            eprintln!("Tentative d'ajout d'une valeur invalide");
+        }
     }
 }
 
@@ -64,10 +70,7 @@ impl From<CSSToken> for CSSSimpleBlock {
         match token {
             | token @ (CSSToken::LeftSquareBracket
             | CSSToken::LeftParenthesis
-            | CSSToken::LeftCurlyBracket
-            | CSSToken::RightSquareBracket
-            | CSSToken::RightParenthesis
-            | CSSToken::RightCurlyBracket) => CSSSimpleBlock::new(token),
+            | CSSToken::LeftCurlyBracket) => CSSSimpleBlock::new(token),
             | _ => panic!("Impossible de convertir le jeton {token:?} en CSSSimpleBlock."),
         }
     }

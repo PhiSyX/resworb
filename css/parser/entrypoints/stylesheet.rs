@@ -4,7 +4,7 @@
 
 use crate::{grammars::CSSStyleSheet, CSSParser};
 
-impl<T> CSSParser<T> {
+impl CSSParser {
     /// Analyse d'une feuille de style.
     pub fn stylesheet(&mut self) -> CSSStyleSheet {
         self.consume_list_of_rules(true)

@@ -53,6 +53,24 @@ where
             is_replayed: Default::default(),
         }
     }
+
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_iter<O>(iter: O) -> Self
+    where
+        O: Iterator<Item = I>,
+    {
+        let mut list = Vec::new();
+
+        for item in iter {
+            list.push(item);
+        }
+
+        Self {
+            list,
+            current_input: Default::default(),
+            is_replayed: Default::default(),
+        }
+    }
 }
 
 // -------------- //
