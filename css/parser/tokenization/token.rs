@@ -151,7 +151,10 @@ impl CSSToken {
             | Self::Function(s)
             | Self::AtKeyword(s)
             | Self::String(s) => s.to_owned(),
-            | _ => panic!("Impossible de récupérer le nom de {:?}", self),
+            | _ => panic!(
+                "Impossible de récupérer le nom du jeton {:?}.",
+                self
+            ),
         }
     }
 }

@@ -5,15 +5,16 @@
 pub mod declaration;
 pub mod list_of_rules;
 pub mod rule;
+pub mod style_blocks_contents;
 pub mod stylesheet;
 
 #[cfg(test)]
 #[macro_export]
 macro_rules! test_the_str {
     ($str:literal) => {{
-        use $crate::{tokenization::CSSToken, CSSParser};
+        use $crate::CSSParser;
         let s = $str;
-        let parser: CSSParser<CSSToken> = CSSParser::new(s.chars());
+        let parser: CSSParser = CSSParser::new(s.chars());
         parser
     }};
 }

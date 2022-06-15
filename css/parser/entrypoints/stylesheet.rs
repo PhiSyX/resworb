@@ -4,7 +4,7 @@
 
 use crate::{grammars::CSSStyleSheet, CSSParser};
 
-impl<T> CSSParser<T> {
+impl CSSParser {
     /// Analyse d'une feuille de style.
     pub fn stylesheet(&mut self) -> CSSStyleSheet {
         self.consume_list_of_rules(true)
@@ -38,7 +38,7 @@ mod tests {
                         CSSToken::Whitespace
                     ])
                     .with_block(
-                        CSSSimpleBlock::new(CSSToken::RightCurlyBracket)
+                        CSSSimpleBlock::new(CSSToken::LeftCurlyBracket)
                             .set_values([
                                 CSSToken::Whitespace,
                                 CSSToken::Ident("color".into()),

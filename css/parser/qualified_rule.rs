@@ -3,8 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    component_value::CSSComponentValue,
-    simple_block::{CSSSimpleBlock, CURLY_BRACKET_BLOCK},
+    component_value::CSSComponentValue, simple_block::CSSSimpleBlock,
     tokenization::CSSToken,
 };
 
@@ -30,7 +29,10 @@ impl CSSQualifiedRule {
         mut self,
         prelude: impl IntoIterator<Item = CSSToken>,
     ) -> Self {
-        self.prelude = prelude.into_iter().map(Into::into).collect();
+        self.prelude = prelude
+            .into_iter()
+            .filter_map(|token| token.try_into().ok())
+            .collect();
         self
     }
 
@@ -54,7 +56,7 @@ impl Default for CSSQualifiedRule {
     fn default() -> Self {
         Self {
             prelude: Default::default(),
-            block: CURLY_BRACKET_BLOCK,
+            block: CSSSimpleBlock::new(CSSToken::LeftCurlyBracket),
         }
     }
 }

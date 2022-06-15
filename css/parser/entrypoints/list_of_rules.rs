@@ -4,7 +4,7 @@
 
 use crate::{grammars::CSSRuleList, CSSParser};
 
-impl<T> CSSParser<T> {
+impl CSSParser {
     /// Analyse une liste de règles
     pub fn list_of_rules(&mut self) -> CSSRuleList {
         self.consume_list_of_rules(false)
@@ -34,52 +34,43 @@ mod tests {
             "
         );
 
+        let mut block = CSSSimpleBlock::new(CSSToken::LeftCurlyBracket)
+            .set_values([
+                CSSToken::Whitespace,
+                CSSToken::Ident("color".into()),
+                CSSToken::Colon,
+                CSSToken::Whitespace,
+                CSSToken::Ident("red".into()),
+                CSSToken::Semicolon,
+                CSSToken::Whitespace,
+                CSSToken::Whitespace,
+                CSSToken::Hash("foo-2".into(), HashFlag::ID),
+                CSSToken::Whitespace,
+            ]);
+
+        block.append(
+            CSSSimpleBlock::new(CSSToken::LeftCurlyBracket).set_values([
+                CSSToken::Whitespace,
+                CSSToken::Ident("color".into()),
+                CSSToken::Colon,
+                CSSToken::Whitespace,
+                CSSToken::Ident("blue".into()),
+                CSSToken::Semicolon,
+                CSSToken::Whitespace,
+                CSSToken::Whitespace,
+            ]),
+        );
+
         assert_eq!(
             parser.list_of_rules(),
-            [
-                CSSRule::QualifiedRule(
-                    CSSQualifiedRule::default()
-                        .with_prelude([
-                            CSSToken::Hash("foo-1".into(), HashFlag::ID),
-                            CSSToken::Whitespace
-                        ])
-                        .with_block(
-                            CSSSimpleBlock::new(
-                                CSSToken::RightCurlyBracket
-                            )
-                            .set_values([
-                                CSSToken::Whitespace,
-                                CSSToken::Ident("color".into()),
-                                CSSToken::Colon,
-                                CSSToken::Whitespace,
-                                CSSToken::Ident("red".into()),
-                                CSSToken::Semicolon,
-                                CSSToken::Whitespace,
-                            ])
-                        )
-                ),
-                CSSRule::QualifiedRule(
-                    CSSQualifiedRule::default()
-                        .with_prelude([
-                            CSSToken::Hash("foo-2".into(), HashFlag::ID),
-                            CSSToken::Whitespace
-                        ])
-                        .with_block(
-                            CSSSimpleBlock::new(
-                                CSSToken::RightCurlyBracket
-                            )
-                            .set_values([
-                                CSSToken::Whitespace,
-                                CSSToken::Ident("color".into()),
-                                CSSToken::Colon,
-                                CSSToken::Whitespace,
-                                CSSToken::Ident("blue".into()),
-                                CSSToken::Semicolon,
-                                CSSToken::Whitespace,
-                            ])
-                        )
-                )
-            ]
+            [CSSRule::QualifiedRule(
+                CSSQualifiedRule::default()
+                    .with_prelude([
+                        CSSToken::Hash("foo-1".into(), HashFlag::ID),
+                        CSSToken::Whitespace,
+                    ])
+                    .with_block(block)
+            ),],
         );
     }
 }

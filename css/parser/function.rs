@@ -11,6 +11,7 @@ use crate::{component_value::CSSComponentValue, tokenization::CSSToken};
 /// Une fonction possède un nom et une valeur constituée d'une liste
 /// de valeurs de composants.
 #[derive(Debug)]
+#[derive(Clone)]
 #[derive(Default)]
 #[derive(PartialEq, Eq)]
 pub struct CSSFunction {
@@ -32,6 +33,12 @@ impl CSSFunction {
 }
 
 impl CSSFunction {
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl CSSFunction {
     pub(crate) fn append(&mut self, value: CSSComponentValue) {
         self.value.push(value);
     }
@@ -45,7 +52,7 @@ impl From<CSSToken> for CSSFunction {
     fn from(token: CSSToken) -> Self {
         match token {
             | CSSToken::Function(fn_name) => Self::new(fn_name),
-            | _ => panic!("Expected a function token"),
+            | _ => panic!("Jeton `CSSToken::Function` attendu."),
         }
     }
 }

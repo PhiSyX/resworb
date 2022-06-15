@@ -5,20 +5,19 @@
 use parser::StreamIteratorInterface;
 
 use crate::{
-    declaration::CSSDeclaration, grammars::CSSRuleError,
-    tokenization::CSSToken, CSSParser,
+    declaration::CSSDeclaration, grammars::CSSRuleError, CSSParser,
 };
 
-impl<T> CSSParser<T> {
+impl CSSParser {
     /// Analyse d'une déclaration
     pub fn declaration(&mut self) -> Result<CSSDeclaration, CSSRuleError> {
         self.tokens.advance_as_long_as_possible(
-            |token| *token == CSSToken::Whitespace,
+            |token| token.is_whitespace(),
             None,
         );
 
         let declaration = match self.next_input_token() {
-            | CSSToken::Ident(_) => self.consume_declaration(),
+            | variant if variant.is_ident() => self.consume_declaration(),
             | _ => None,
         };
 
@@ -34,8 +33,7 @@ impl<T> CSSParser<T> {
 mod tests {
     use super::*;
     use crate::{
-        at_rule::CSSAtRule, component_value::CSSComponentValue,
-        preserved_tokens::CSSPreservedToken, test_the_str,
+        component_value::CSSComponentValue, test_the_str,
         tokenization::CSSToken,
     };
 
@@ -48,17 +46,18 @@ mod tests {
                 .with_name(&CSSToken::Ident("color".into()))
                 .with_values([
                     CSSComponentValue::Preserved(
-                        CSSToken::Ident("red".into()).into()
+                        CSSToken::Ident("red".into()).try_into().unwrap()
                     ),
                     CSSComponentValue::Preserved(
-                        CSSToken::Semicolon.into()
+                        CSSToken::Semicolon.try_into().unwrap()
                     )
                 ]))
-        ); /*{
-               name: "color",
-               value: ,
-               important_flag: false
-           })
-           */
+        );
+    }
+
+    #[test]
+    fn test_parse_declaration_is_not() {
+        let mut parser = test_the_str!(r#".class {}"#);
+        assert_eq!(parser.declaration(), Err(CSSRuleError::SyntaxError));
     }
 }

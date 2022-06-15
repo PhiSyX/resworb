@@ -6,15 +6,14 @@ use parser::StreamIteratorInterface;
 
 use crate::{
     grammars::{CSSRule, CSSRuleError},
-    tokenization::CSSToken,
     CSSParser,
 };
 
-impl<T> CSSParser<T> {
+impl CSSParser {
     /// Analyse d'une règle
     pub fn rule(&mut self) -> Result<CSSRule, CSSRuleError> {
         self.tokens.advance_as_long_as_possible(
-            |token| *token == CSSToken::Whitespace,
+            |token| token.is_whitespace(),
             None,
         );
 
@@ -22,13 +21,13 @@ impl<T> CSSParser<T> {
             // <EOF-token>
             //
             // Retourner une erreur de syntaxe.
-            | CSSToken::EOF => None, /* <--------------------------------------- v |> Erreur de syntaxe */
+            | variant if variant.is_eof() => None, /* <--------------------------------------- v |> Erreur de syntaxe */
 
             // <at-keyword-token>
             //
             // Consommer une règle at-rule à partir de l'entrée, et
             // assigner  la valeur de retour à la règle.
-            | CSSToken::AtKeyword(_) => {
+            | variant if variant.is_at_keyword() => {
                 CSSRule::AtRule(self.consume_at_rule()).into()
             }
 
@@ -43,13 +42,13 @@ impl<T> CSSParser<T> {
         };
 
         self.tokens.advance_as_long_as_possible(
-            |token| *token == CSSToken::Whitespace,
+            |token| token.is_whitespace(),
             None,
         );
 
         self.tokens
             .next_input()
-            .filter(|token| *token == CSSToken::EOF)
+            .filter(|token| token.is_eof())
             .and(rule)
             .ok_or(CSSRuleError::SyntaxError) /* ------------------------------- ^ */
     }
@@ -62,7 +61,9 @@ impl<T> CSSParser<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{at_rule::CSSAtRule, test_the_str};
+    use crate::{
+        at_rule::CSSAtRule, test_the_str, tokenization::CSSToken,
+    };
 
     #[test]
     fn test_parse_rule() {
