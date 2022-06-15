@@ -13,9 +13,8 @@ use crate::tokenization::CSSToken;
 /// Tout token produit par le
 /// [tokenizer](crate::tokenization::CSSTokenizer) à l'exception des
 /// <[fonction-token](crate::tokenization::CSSToken::Function)>s,
-/// <[{-token](crate::tokenization::CSSToken::LeftCurlyBracket)>s,
-/// <[(-token](crate::tokenization::CSSToken::LeftParenthesis)>s, et
-/// <[\[-token](crate::tokenization::CSSToken::LeftSquareBracket)>s.
+/// <[{-token](LeftCurlyBracket)>s, <[(-token](LeftParenthesis)>s, et
+/// <[\[-token](LeftSquareBracket)>s.
 ///
 /// NOTE(css): les jetons non conservés listés ci-dessus sont toujours
 /// consommés dans des objets de plus haut niveau, soit des fonctions ou
@@ -23,9 +22,8 @@ use crate::tokenization::CSSToken;
 /// l'analyseur.
 ///
 /// NOTE(css): les jetons
-/// <[}-token](crate::tokenization::CSSToken::RightCurlyBracket)>s,
-/// <[(-token](crate::tokenization::CSSToken::RightParenthesis)>s,
-/// <[\[-token](crate::tokenization::CSSToken::RightSquareBracket)>s,
+/// <[}-token](RightCurlyBracket)>s, <[(-token](RightParenthesis)>s,
+/// <[\[-token](RightSquareBracket)>s,
 /// <[bad-string-token](crate::tokenization::CSSToken::BadString)>, et
 /// <[bad-url-token](crate::tokenization::CSSToken::BadUrl)> sont toujours
 /// des erreurs d'analyse, mais ils sont préservés dans le flux de tokens

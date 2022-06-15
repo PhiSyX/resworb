@@ -23,17 +23,19 @@ mod entrypoints;
 mod grammars;
 mod style_blocks_content;
 
-use grammars::CSSRule;
 use infra::primitive::codepoint::CodePointIterator;
-use parser::{StreamInputInterface, StreamIteratorInterface};
-use style_blocks_content::{CSSStyleBlock, CSSStyleBlocksContents};
-use tokenization::{CSSTokenStream, CSSTokenVariant, CSSTokenizer};
+use parser::StreamIteratorInterface;
 
 use self::{
-    at_rule::CSSAtRule, component_value::CSSComponentValue,
-    declaration::CSSDeclaration, function::CSSFunction,
-    grammars::CSSRuleList, qualified_rule::CSSQualifiedRule,
+    at_rule::CSSAtRule,
+    component_value::CSSComponentValue,
+    declaration::{CSSDeclaration, CSSDeclarationList},
+    function::CSSFunction,
+    grammars::{CSSRule, CSSRuleList},
+    qualified_rule::CSSQualifiedRule,
     simple_block::CSSSimpleBlock,
+    style_blocks_content::{CSSStyleBlock, CSSStyleBlocksContents},
+    tokenization::{CSSTokenStream, CSSTokenVariant, CSSTokenizer},
 };
 use crate::tokenization::CSSToken;
 
@@ -64,6 +66,7 @@ impl CSSParser {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_iter<Iter>(input: Iter) -> Self
     where
         Iter: Iterator<Item = CSSTokenVariant>,
@@ -214,13 +217,19 @@ impl CSSParser {
         }
 
         let last_2_tokens: Vec<_> = declaration.last_n_tokens(2).collect();
-        let cond_1 = CSSToken::Delim('!').eq(last_2_tokens[0]);
-        let cond_2 = if let CSSToken::Ident(name) = last_2_tokens[1] {
-            name.eq_ignore_ascii_case("important")
-        } else {
-            false
-        };
-        if cond_1 && cond_2 {
+        let cond_1 = last_2_tokens
+            .get(0)
+            .filter(|token| CSSToken::Delim('!').eq(**token));
+
+        let cond_2 = last_2_tokens.get(1).filter(|token| {
+            if let CSSToken::Ident(name) = token {
+                name.eq_ignore_ascii_case("important")
+            } else {
+                false
+            }
+        });
+
+        if cond_1.is_some() && cond_2.is_some() {
             declaration.remove_last_n_values(2);
             declaration.set_important_flag(true);
         }
@@ -264,6 +273,97 @@ impl CSSParser {
             }
         }
         function
+    }
+
+    fn consume_list_of_declarations(&mut self) -> CSSDeclarationList {
+        let mut list_of_declarations = CSSDeclarationList::default();
+        loop {
+            match self.consume_next_input_token() {
+                // <whitespace-token>
+                // <semicolon-token>
+                //
+                // Ne rien faire.
+                | variant
+                    if variant.is_whitespace()
+                        || variant.is_semicolon() =>
+                {
+                    continue;
+                }
+
+                // <EOF-token>
+                //
+                // Retourner la liste de déclarations.
+                | variant if variant.is_eof() => break,
+
+                // <at-keyword-token>
+                //
+                // Re-consommer le jeton d'entrée actuel. Consommer une
+                // règle at-rule. Ajouter la règle à la liste de
+                // déclarations.
+                | variant if variant.is_at_keyword() => {
+                    self.tokens.reconsume_current_input();
+                    let at_rule = self.consume_at_rule();
+                    let rule: CSSRule = at_rule.into();
+                    let declaration = rule.into();
+                    list_of_declarations.push(declaration);
+                }
+
+                // <ident-token>
+                //
+                // Initialiser une liste temporaire initialement remplie
+                // avec le jeton d'entrée actuel.
+                // Tant que le prochain jeton n'est pas un
+                // <semicolon-token>, ou un <EOF-token>,
+                // consommer une valeur de composant et l'ajouter à la
+                // liste temporaire. Consommer une déclaration à partir de
+                // la liste temporaire. Si quelque chose est retourné,
+                // l'ajouter à la liste de déclarations.
+                | variant if variant.is_ident() => {
+                    let current_variant = self.current_input_token();
+                    let current_token =
+                        current_variant.token_unchecked().clone();
+
+                    let mut temporary_list: Vec<CSSTokenVariant> =
+                        vec![current_token.into()];
+
+                    while !(self.next_input_token().is_semicolon()
+                        || self.next_input_token().is_eof())
+                    {
+                        if let Some(component_value) =
+                            self.consume_component_value()
+                        {
+                            temporary_list.push(component_value.into());
+                        }
+                    }
+
+                    let mut stream =
+                        CSSParser::from_iter(temporary_list.into_iter());
+                    if let Some(declaration) = stream.consume_declaration()
+                    {
+                        list_of_declarations.push(declaration.into());
+                    }
+                }
+
+                // Anything else
+                //
+                // Il s'agit d'une erreur d'analyse. Re-consommer le jeton
+                // d'entrée actuel. Tant que le prochain token d'entrée est
+                // autre chose qu'un <semicolon-token> ou <EOF-token>, nous
+                // devons consommer une valeur de composant et jeter la
+                // valeur retournée.
+                // TODO(css): gérer les erreurs.
+                | _ => {
+                    self.tokens.reconsume_current_input();
+                    while !(self.next_input_token().is_semicolon()
+                        || self.next_input_token().is_eof())
+                    {
+                        self.consume_component_value();
+                    }
+                }
+            }
+        }
+
+        list_of_declarations
     }
 
     fn consume_list_of_rules(
