@@ -5,8 +5,9 @@
 use std::ops::Deref;
 
 use crate::{
-    component_value::CSSComponentValue,
-    style_blocks_content::CSSStyleBlock, tokenization::CSSToken,
+    component_value::{CSSComponentValue, CSSComponentValuesList},
+    style_blocks_content::CSSStyleBlock,
+    tokenization::CSSToken,
 };
 
 // ---- //
@@ -29,7 +30,7 @@ pub type CSSDeclarationList = Vec<CSSStyleBlock>;
 #[derive(PartialEq, Eq)]
 pub struct CSSDeclaration {
     name: String,
-    value: Vec<CSSComponentValue>,
+    value: CSSComponentValuesList,
     important_flag: bool,
 }
 

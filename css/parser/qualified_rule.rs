@@ -3,7 +3,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    component_value::CSSComponentValue, simple_block::CSSSimpleBlock,
+    component_value::{CSSComponentValue, CSSComponentValuesList},
+    simple_block::CSSSimpleBlock,
     tokenization::CSSToken,
 };
 
@@ -16,7 +17,7 @@ use crate::{
 #[derive(Debug)]
 #[derive(PartialEq, Eq)]
 pub struct CSSQualifiedRule {
-    prelude: Vec<CSSComponentValue>,
+    prelude: CSSComponentValuesList,
     block: CSSSimpleBlock,
 }
 

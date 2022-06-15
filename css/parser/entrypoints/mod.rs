@@ -4,6 +4,7 @@
 
 pub mod component_value;
 pub mod declaration;
+pub mod list_of_component_values;
 pub mod list_of_declarations;
 pub mod list_of_rules;
 pub mod rule;
