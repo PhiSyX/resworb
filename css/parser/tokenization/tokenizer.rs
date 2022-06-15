@@ -218,7 +218,7 @@ where
             return CSSToken::Dimension(
                 number,
                 number_flag,
-                DimensionUnit::new(self.consume_ident_sequence()),
+                DimensionUnit(self.consume_ident_sequence()),
             );
         }
 

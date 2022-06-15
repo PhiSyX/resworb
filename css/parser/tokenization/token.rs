@@ -92,7 +92,7 @@ pub enum CSSToken {
 #[derive(Clone)]
 #[derive(Default)]
 #[derive(PartialEq, Eq)]
-pub struct DimensionUnit(String);
+pub struct DimensionUnit(pub String);
 
 #[derive(Debug)]
 #[derive(Copy, Clone)]
@@ -170,12 +170,6 @@ impl CSSToken {
             | Self::String(s) => s.push(ch),
             | _ => (),
         }
-    }
-}
-
-impl DimensionUnit {
-    pub(crate) fn new(unit: String) -> Self {
-        Self(unit)
     }
 }
 
