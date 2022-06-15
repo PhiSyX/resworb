@@ -16,9 +16,6 @@ mod preserved_tokens;
 mod qualified_rule;
 mod simple_block;
 
-/// 5.3 Parser Entry Points
-mod entrypoints;
-
 /// 8 Defining Grammars for Rules and Other Values
 mod grammars;
 mod style_blocks_content;

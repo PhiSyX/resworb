@@ -2,11 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use parser::StreamIteratorInterface;
+
 use crate::{
     function::CSSFunction,
     preserved_tokens::{CSSPreservedToken, CSSPreservedTokenError},
     simple_block::CSSSimpleBlock,
     tokenization::CSSToken,
+    CSSParser,
 };
 
 // ---- //
@@ -39,8 +42,62 @@ pub enum CSSComponentValueError {
     SyntaxError,
 }
 
+// ----------- //
+// Entry Point //
+// ----------- //
+
+impl CSSParser {
+    /// Analyse d'une valeur de composant.
+    pub fn component_value(
+        &mut self,
+    ) -> Result<CSSComponentValue, CSSComponentValueError> {
+        self.tokens.advance_as_long_as_possible(
+            |token| token.is_whitespace(),
+            None,
+        );
+
+        if self.next_input_token().is_eof() {
+            return Err(CSSComponentValueError::SyntaxError);
+        }
+
+        let value = self.consume_component_value();
+
+        self.tokens.advance_as_long_as_possible(
+            |token| token.is_whitespace(),
+            None,
+        );
+
+        if self.next_input_token().is_eof() {
+            value.ok_or(CSSComponentValueError::SyntaxError)
+        } else {
+            Err(CSSComponentValueError::SyntaxError)
+        }
+    }
+
+    /// Analyse d'une liste de valeurs de composants
+    pub fn list_of_component_values(&mut self) -> CSSComponentValuesList {
+        let mut component_values: CSSComponentValuesList =
+            CSSComponentValuesList::default();
+
+        loop {
+            match self.consume_component_value() {
+                | None
+                | Some(CSSComponentValue::Preserved(
+                    CSSPreservedToken(CSSToken::EOF),
+                )) => break,
+
+                | Some(component_value) => {
+                    component_values.push(component_value)
+                }
+            }
+        }
+
+        component_values
+    }
+}
+
 // -------------- //
-// Implémentation // -> Interface
+// Implémentation //
 // -------------- //
 
 impl CSSComponentValue {
@@ -126,5 +183,103 @@ impl TryFrom<CSSToken> for CSSComponentValue {
                 Err(Self::Error::ConsumedToken)
             }
         }
+    }
+}
+
+// ---- //
+// Test //
+// ---- //
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        test_the_str,
+        tokenization::{DimensionUnit, NumberFlag},
+    };
+
+    #[test]
+    fn test_parse_a_component_value() {
+        let mut parser = test_the_str!("clamp(20px, 5vw, 50px)");
+        assert_eq!(
+            parser.component_value(),
+            Ok(CSSComponentValue::Function(
+                CSSFunction::new("clamp").with_values([
+                    CSSToken::Dimension(
+                        20.0,
+                        NumberFlag::Integer,
+                        DimensionUnit("px".into())
+                    ),
+                    CSSToken::Comma,
+                    CSSToken::Whitespace,
+                    CSSToken::Dimension(
+                        5.0,
+                        NumberFlag::Integer,
+                        DimensionUnit("vw".into())
+                    ),
+                    CSSToken::Comma,
+                    CSSToken::Whitespace,
+                    CSSToken::Dimension(
+                        50.0,
+                        NumberFlag::Integer,
+                        DimensionUnit("px".into())
+                    ),
+                ])
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_a_list_of_component_values() {
+        let mut parser = test_the_str!(
+            "
+            url(img.png);
+            @font-face {
+                font-family: var(--font-family, 'Roboto');
+                src: url(fonts/Roboto-Regular.ttf);
+            }
+            "
+        );
+
+        let mut block = CSSSimpleBlock::new(CSSToken::LeftCurlyBracket)
+            .set_values([
+                CSSToken::Whitespace,
+                CSSToken::Ident("font-family".into()),
+                CSSToken::Colon,
+                CSSToken::Whitespace,
+            ]);
+
+        let var_fn = CSSFunction::new("var").with_values([
+            CSSToken::Ident("--font-family".into()),
+            CSSToken::Comma,
+            CSSToken::Whitespace,
+            CSSToken::String("Roboto".into()),
+        ]);
+
+        block.append(var_fn);
+        block.append(CSSToken::Semicolon);
+        block.append(CSSToken::Whitespace);
+        block.append(CSSToken::Ident("src".into()));
+        block.append(CSSToken::Colon);
+        block.append(CSSToken::Whitespace);
+        block.append(CSSToken::Url("fonts/Roboto-Regular.ttf".into()));
+        block.append(CSSToken::Semicolon);
+        block.append(CSSToken::Whitespace);
+        block.append(CSSToken::Whitespace);
+
+        assert_eq!(
+            parser.list_of_component_values(),
+            [
+                CSSToken::Whitespace.try_into().unwrap(),
+                CSSToken::Url("img.png".into()).try_into().unwrap(),
+                CSSToken::Semicolon.try_into().unwrap(),
+                CSSToken::Whitespace.try_into().unwrap(),
+                CSSToken::AtKeyword("font-face".into())
+                    .try_into()
+                    .unwrap(),
+                CSSToken::Whitespace.try_into().unwrap(),
+                block.try_into().unwrap(),
+            ]
+        );
     }
 }

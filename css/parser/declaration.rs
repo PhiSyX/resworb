@@ -4,10 +4,14 @@
 
 use std::ops::Deref;
 
+use parser::StreamIteratorInterface;
+
 use crate::{
     component_value::{CSSComponentValue, CSSComponentValuesList},
+    grammars::CSSRuleError,
     style_blocks_content::CSSStyleBlock,
     tokenization::CSSToken,
+    CSSParser,
 };
 
 // ---- //
@@ -51,6 +55,32 @@ pub struct CSSDeclaration {
 pub enum CSSDeclarationCategory {
     Property,
     Descriptor,
+}
+
+// ----------- //
+// Entry Point //
+// ----------- //
+
+impl CSSParser {
+    /// Analyse d'une déclaration
+    pub fn declaration(&mut self) -> Result<CSSDeclaration, CSSRuleError> {
+        self.tokens.advance_as_long_as_possible(
+            |token| token.is_whitespace(),
+            None,
+        );
+
+        let declaration = match self.next_input_token() {
+            | variant if variant.is_ident() => self.consume_declaration(),
+            | _ => None,
+        };
+
+        declaration.ok_or(CSSRuleError::SyntaxError)
+    }
+
+    /// Analyse une liste de déclarations
+    pub fn list_of_declarations(&mut self) -> CSSDeclarationList {
+        self.consume_list_of_declarations()
+    }
 }
 
 // -------------- //
@@ -118,5 +148,67 @@ impl CSSDeclaration {
 
     pub(crate) fn set_important_flag(&mut self, important_flag: bool) {
         self.important_flag = important_flag;
+    }
+}
+
+// ---- //
+// Test //
+// ---- //
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_the_str;
+
+    #[test]
+    fn test_parse_declaration() {
+        let mut parser = test_the_str!(r#"color: red;"#);
+        assert_eq!(
+            parser.declaration(),
+            Ok(CSSDeclaration::default()
+                .with_name(&CSSToken::Ident("color".into()))
+                .with_values([
+                    CSSComponentValue::Preserved(
+                        CSSToken::Ident("red".into()).try_into().unwrap()
+                    ),
+                    CSSComponentValue::Preserved(
+                        CSSToken::Semicolon.try_into().unwrap()
+                    )
+                ]))
+        );
+    }
+
+    #[test]
+    fn test_parse_declaration_is_not() {
+        let mut parser = test_the_str!(r#".class {}"#);
+        assert_eq!(parser.declaration(), Err(CSSRuleError::SyntaxError));
+    }
+
+    #[test]
+    fn test_parse_a_list_of_declarations() {
+        let mut parser = test_the_str!(
+            "
+            color: red;
+            background-color: blue;
+            "
+        );
+
+        assert_eq!(
+            parser.list_of_declarations(),
+            [
+                CSSStyleBlock::Declaration(
+                    CSSDeclaration::default()
+                        .with_name(&CSSToken::Ident("color".into()))
+                        .with_values([CSSToken::Ident("red".into())])
+                ),
+                CSSStyleBlock::Declaration(
+                    CSSDeclaration::default()
+                        .with_name(&CSSToken::Ident(
+                            "background-color".into()
+                        ))
+                        .with_values([CSSToken::Ident("blue".into())])
+                ),
+            ]
+        );
     }
 }
