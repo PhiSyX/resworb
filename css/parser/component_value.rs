@@ -94,6 +94,33 @@ impl CSSParser {
 
         component_values
     }
+
+    /// Analyse d'une liste de valeurs de composants séparés par des
+    /// virgules.
+    pub fn comma_separated_list_of_component_values(
+        &mut self,
+    ) -> CSSComponentValuesList {
+        let mut list_of_cvls = CSSComponentValuesList::default();
+
+        loop {
+            match self.consume_component_value() {
+                | None
+                | Some(CSSComponentValue::Preserved(
+                    CSSPreservedToken(CSSToken::EOF),
+                )) => break,
+
+                | Some(CSSComponentValue::Preserved(
+                    CSSPreservedToken(CSSToken::Comma),
+                )) => continue,
+
+                | Some(component_value) => {
+                    list_of_cvls.push(component_value)
+                }
+            }
+        }
+
+        list_of_cvls
+    }
 }
 
 // -------------- //
@@ -279,6 +306,21 @@ mod tests {
                     .unwrap(),
                 CSSToken::Whitespace.try_into().unwrap(),
                 block.try_into().unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parse_a_comma_separated_list_of_component_values() {
+        let mut parser = test_the_str!("url(img.png), url(img2.png);");
+
+        assert_eq!(
+            parser.comma_separated_list_of_component_values(),
+            [
+                CSSToken::Url("img.png".into()).try_into().unwrap(),
+                CSSToken::Whitespace.try_into().unwrap(),
+                CSSToken::Url("img2.png".into()).try_into().unwrap(),
+                CSSToken::Semicolon.try_into().unwrap(),
             ]
         );
     }
