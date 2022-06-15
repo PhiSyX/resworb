@@ -933,7 +933,7 @@ fn check_3_codepoints_would_start_a_number(
 
         // U+002E FULL STOP (.)
         //
-        // Si le deuxième point de code est un chifre, nous devons
+        // Si le deuxième point de code est un chiffre, nous devons
         // retourner true. Sinon false.
         | Some('.') => {
             let second_codepoint = chars.next();

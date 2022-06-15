@@ -4,13 +4,16 @@
 
 use std::ops::Deref;
 
-use crate::{component_value::CSSComponentValue, tokenization::CSSToken};
+use crate::{
+    component_value::CSSComponentValue,
+    style_blocks_content::CSSStyleBlock, tokenization::CSSToken,
+};
 
 // ---- //
 // Type //
 // ---- //
 
-pub type CSSDeclarationList = Vec<CSSDeclaration>;
+pub type CSSDeclarationList = Vec<CSSStyleBlock>;
 
 // --------- //
 // Structure //
@@ -61,9 +64,12 @@ impl CSSDeclaration {
 
     pub(crate) fn with_values(
         mut self,
-        prelude: impl IntoIterator<Item = CSSComponentValue>,
+        prelude: impl IntoIterator<Item = impl TryInto<CSSComponentValue>>,
     ) -> Self {
-        self.value = prelude.into_iter().collect();
+        self.value = prelude
+            .into_iter()
+            .filter_map(|v| v.try_into().ok())
+            .collect();
         self
     }
 }
@@ -71,10 +77,12 @@ impl CSSDeclaration {
 impl CSSDeclaration {
     pub(crate) fn last_n_values(&self, n: usize) -> &[CSSComponentValue] {
         let size = self.value.len();
-        let start = size.saturating_sub(n);
-        let values = &self.value[start..];
-        assert!(values.len() == n);
-        values
+        let start = size.checked_sub(n);
+        if let Some(start) = start {
+            &self.value[start..]
+        } else {
+            &[]
+        }
     }
 
     pub(crate) fn last_n_tokens(

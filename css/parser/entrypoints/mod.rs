@@ -3,6 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 pub mod declaration;
+pub mod list_of_declarations;
 pub mod list_of_rules;
 pub mod rule;
 pub mod style_blocks_contents;

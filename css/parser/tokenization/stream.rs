@@ -7,7 +7,7 @@ use parser::{stream::TokenStream, StreamInputInterface};
 
 use super::CSSToken;
 use crate::{
-    component_value::CSSComponentValue, function::CSSFunction,
+    component_value::CSSComponentValue,
     preserved_tokens::CSSPreservedToken, simple_block::CSSSimpleBlock,
 };
 
