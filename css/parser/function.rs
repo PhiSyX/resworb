@@ -30,6 +30,17 @@ impl CSSFunction {
             ..Default::default()
         }
     }
+
+    pub(crate) fn with_values(
+        mut self,
+        values: impl IntoIterator<Item = impl TryInto<CSSComponentValue>>,
+    ) -> Self {
+        self.value = values
+            .into_iter()
+            .filter_map(|v| v.try_into().ok())
+            .collect();
+        self
+    }
 }
 
 impl CSSFunction {
