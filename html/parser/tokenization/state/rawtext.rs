@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use infra::primitive::codepoint::CodePoint;
+use infra::primitive::codepoint::CodePointIterator;
 
 use crate::{
     codepoint::HTMLCodePoint,
@@ -16,7 +16,7 @@ use crate::{
 
 impl<C> HTMLTokenizer<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     pub(crate) fn handle_rawtext_state(
         &mut self,

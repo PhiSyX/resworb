@@ -7,17 +7,17 @@
 // --------- //
 
 use infra::primitive::codepoint::CodePoint;
-
-#[derive(Debug)]
-#[derive(Default)]
-#[derive(PartialEq, Eq)]
-pub struct DimensionUnit(String);
+use parser::StreamInputInterface;
 
 // ----------- //
 // Énumération //
 // ----------- //
 
+/// La sortie de l'étape de tokenisation est un flux de zéro ou plus des
+/// jetons suivants.
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]
+#[derive(Clone)]
 #[derive(PartialEq)]
 pub enum CSSToken {
     /// `<ident-token>`, `<function-token>`, `<at-keyword-token>`,
@@ -62,9 +62,9 @@ pub enum CSSToken {
     Whitespace,
 
     /// Suite de points de code "<!--"
-    Cdo,
+    CDO,
     /// Suite de points de code "-->"
-    Cdc,
+    CDC,
 
     /// Caractère ':'
     Colon,
@@ -89,6 +89,13 @@ pub enum CSSToken {
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
+#[derive(Default)]
+#[derive(PartialEq, Eq)]
+pub struct DimensionUnit(pub String);
+
+#[derive(Debug)]
+#[derive(Copy, Clone)]
 #[derive(Default)]
 #[derive(PartialEq, Eq)]
 pub enum HashFlag {
@@ -100,6 +107,7 @@ pub enum HashFlag {
 }
 
 #[derive(Debug)]
+#[derive(Copy, Clone)]
 #[derive(Default)]
 #[derive(PartialEq, Eq)]
 pub enum NumberFlag {
@@ -115,6 +123,43 @@ pub enum NumberFlag {
 // -------------- //
 
 impl CSSToken {
+    /// Variante miroir d'un dès jetons `<(-token>, <[-token>, <{-token>`,
+    ///
+    /// Exemple:
+    /// Pour le jeton `<(-token>`, la variante miroir est `<)-token>`.
+    pub(crate) fn mirror(&self) -> Self {
+        assert!(matches!(
+            self,
+            Self::LeftParenthesis
+                | Self::LeftSquareBracket
+                | Self::LeftCurlyBracket
+        ));
+
+        match self {
+            | Self::LeftParenthesis => Self::RightParenthesis,
+            | Self::LeftSquareBracket => Self::RightSquareBracket,
+            | Self::LeftCurlyBracket => Self::RightCurlyBracket,
+            | _ => {
+                unreachable!("Impossible de faire un miroir de {:?}", self)
+            }
+        }
+    }
+
+    pub(crate) fn name(&self) -> String {
+        match self {
+            | Self::Ident(s)
+            | Self::Function(s)
+            | Self::AtKeyword(s)
+            | Self::String(s) => s.to_owned(),
+            | _ => panic!(
+                "Impossible de récupérer le nom du jeton {:?}.",
+                self
+            ),
+        }
+    }
+}
+
+impl CSSToken {
     pub(crate) fn append_character(&mut self, ch: CodePoint) {
         match self {
             | Self::Ident(s)
@@ -128,12 +173,6 @@ impl CSSToken {
     }
 }
 
-impl DimensionUnit {
-    pub fn new(unit: String) -> Self {
-        Self(unit)
-    }
-}
-
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
@@ -141,3 +180,9 @@ impl DimensionUnit {
 // NOTE(phisyx): obligé de faire ceci à cause du type f64 dans notre
 //               énumération.
 impl Eq for CSSToken {}
+
+impl StreamInputInterface for CSSToken {
+    fn eof() -> Self {
+        Self::EOF
+    }
+}

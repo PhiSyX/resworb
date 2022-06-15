@@ -2,11 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-#![feature(
-    explicit_generic_args_with_impl_trait,
-    type_name_of_val,
-    option_result_contains
-)]
+#![feature(type_name_of_val, option_result_contains)]
 
 mod codepoint;
 mod error;
@@ -17,7 +13,7 @@ mod tree_construction;
 use std::{borrow::BorrowMut, ops::ControlFlow};
 
 use dom::node::DocumentNode;
-use infra::{self, primitive::codepoint::CodePoint};
+use infra::primitive::codepoint::CodePointIterator;
 use state::{FramesetOkFlag, InsertionMode};
 use tokenization::HTMLToken;
 use tree_construction::HTMLTreeConstruction;
@@ -28,10 +24,7 @@ use self::tokenization::HTMLTokenizer;
 // Structure //
 // --------- //
 
-pub struct HTMLParser<C>
-where
-    C: Iterator<Item = CodePoint>,
-{
+pub struct HTMLParser<C> {
     tokenizer: HTMLTokenizer<C>,
 }
 
@@ -53,10 +46,7 @@ pub enum HTMLParserState {
 // Implémentation //
 // -------------- //
 
-impl<C> HTMLParser<C>
-where
-    C: Iterator<Item = CodePoint>,
-{
+impl<C> HTMLParser<C> {
     pub fn new(document: DocumentNode, input: C) -> Self {
         let tokenizer = HTMLTokenizer::new(document, input);
         Self { tokenizer }
@@ -65,7 +55,7 @@ where
 
 impl<C> HTMLParser<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     pub fn run(&mut self) {
         loop {

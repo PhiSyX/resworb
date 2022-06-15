@@ -155,7 +155,7 @@ define_errors! {
     /// HTML se trouvent à l'annexe B de la spécification JavaScript). La
     /// raison la plus courante de cette erreur est la violation des
     /// restrictions relatives au contenu des éléments de script.
-    /// [JAVASCRIPT]
+    /// \[JAVASCRIPT\]
     EofInScriptHtmlCommentLikeText = "eof-in-script-html-comment-like-text",
 
     /// Cette erreur se produit si l'analyseur syntaxique rencontre la fin
@@ -440,17 +440,14 @@ define_errors! {
 #[cfg(test)]
 mod tests {
     use dom::node::DocumentNode;
-    use infra::primitive::codepoint::CodePoint;
+    use infra::primitive::codepoint::CodePointIterator;
 
-    use crate::tokenization::{
-        tokenizer::HTMLInputStream, HTMLToken, HTMLTokenizer,
-    };
+    use crate::tokenization::{HTMLToken, HTMLTokenizer};
 
     fn get_tokenizer_html(
         input: &'static str,
-    ) -> HTMLTokenizer<impl Iterator<Item = CodePoint>> {
-        let stream = HTMLInputStream::new(input.chars());
-        HTMLTokenizer::new(DocumentNode::default(), stream)
+    ) -> HTMLTokenizer<impl CodePointIterator> {
+        HTMLTokenizer::new(DocumentNode::default(), input.chars())
     }
 
     #[test]

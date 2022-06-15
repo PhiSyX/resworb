@@ -2,7 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+mod stream;
 mod token;
 mod tokenizer;
 
-pub use self::{token::CSSToken, tokenizer::CSSTokenizer};
+pub use self::{stream::*, token::*, tokenizer::CSSTokenizer};

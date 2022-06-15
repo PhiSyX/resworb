@@ -7,4 +7,9 @@
 /// Voir <https://html.spec.whatwg.org/multipage/parsing.html#the-input-byte-stream>
 pub mod decoder;
 /// Voir <https://html.spec.whatwg.org/multipage/parsing.html#preprocessing-the-input-stream>
-pub mod preprocessor;
+mod preprocessor;
+
+mod interface;
+pub mod stream;
+
+pub use interface::*;

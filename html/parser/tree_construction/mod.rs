@@ -1353,7 +1353,7 @@ impl HTMLTreeConstruction {
         self.insertion_mode.switch_to(InsertionMode::InBody);
     }
 
-    /// https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm
+    /// Voir <https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm>
     fn run_adoption_agency_algorithm(
         &mut self,
         token: &HTMLToken,
