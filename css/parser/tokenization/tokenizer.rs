@@ -61,15 +61,14 @@ impl<C> CSSTokenizer<C> {
         //
         // Remplacer tout point de code U+0000 NULL ou de substitution en
         // entrée par U+FFFD REPLACEMENT CHARACTER (�).
-        let stream =
-            CSSInputStream::new(chars).with_pre_scan(|ch| match ch {
-                | Some('\r' | '\n' | '\x0C') => Some('\n'),
-                | Some('\0') => Some(CodePoint::REPLACEMENT_CHARACTER),
-                | Some(ch) if ch.is_surrogate() => {
-                    Some(CodePoint::REPLACEMENT_CHARACTER)
-                }
-                | n => n,
-            });
+        let stream = CSSInputStream::new(chars).pre_scan(|ch| match ch {
+            | Some('\r' | '\n' | '\x0C') => Some('\n'),
+            | Some('\0') => Some(CodePoint::REPLACEMENT_CHARACTER),
+            | Some(ch) if ch.is_surrogate() => {
+                Some(CodePoint::REPLACEMENT_CHARACTER)
+            }
+            | n => n,
+        });
 
         Self {
             input: stream,

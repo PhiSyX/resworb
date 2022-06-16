@@ -33,7 +33,7 @@ type InputStreamPreScanFn<I> =
 #[derive(Debug)]
 pub struct InputStreamPreprocessor<Stream, Input> {
     queue: ListQueue<Stream, Input>,
-    pub current_input: InputStreamCurrentInput<Input>,
+    current_input: InputStreamCurrentInput<Input>,
     pre_scan: Option<InputStreamPreScanFn<Input>>,
 }
 
@@ -46,18 +46,15 @@ impl<S, I> InputStreamPreprocessor<S, I> {
     pub fn new(stream: S) -> Self {
         Self {
             queue: ListQueue::new(stream),
-            current_input: None,
+            current_input: Default::default(),
             // NOTE(phisyx): par défaut, nous n'avons pas besoin
             // d'effectuer de filtre particulier.
-            pre_scan: None,
+            pre_scan: Default::default(),
         }
     }
 
-    pub fn with_pre_scan(
-        mut self,
-        scan_fn: InputStreamPreScanFn<I>,
-    ) -> Self {
-        self.pre_scan.replace(scan_fn);
+    pub fn pre_scan(mut self, filter_fn: InputStreamPreScanFn<I>) -> Self {
+        self.pre_scan.replace(filter_fn);
         self
     }
 }
@@ -67,26 +64,48 @@ where
     Chars: CodePointIterator,
     Chars::Item: StreamInput,
 {
-    /// Alias de [StreamIteratorInterface::consume_next_input].
+    /// Alias de [StreamInputIterator::consume_next_input].
     //
-    // NOTE(phisyx): Nomenclature de la spécification HTML.
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
     pub fn consume_next_input_character(&mut self) -> Option<Chars::Item> {
         self.consume_next_input()
     }
 
-    /// Alias de [StreamIteratorInterface::next_input].
+    /// Alias de [StreamInputIterator::consume_next_input].
     //
-    // NOTE(phisyx): Nomenclature de la spécification HTML.
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
+    pub fn consume_next_input_codepoint(&mut self) -> Option<Chars::Item> {
+        self.consume_next_input_character()
+    }
+
+    /// Alias de [StreamInputIterator::next_input].
+    //
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
     pub fn next_input_character(&mut self) -> Option<Chars::Item> {
         self.next_input()
     }
 
-    /// Alias de [StreamIteratorInterface::next_n_input], mais renvoie une
+    /// Alias de [StreamInputIterator::next_input].
+    //
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
+    pub fn next_input_codepoint(&mut self) -> Option<Chars::Item> {
+        self.next_input_character()
+    }
+
+    /// Alias de [StreamInputIterator::next_n_input], mais renvoie une
     /// chaîne de caractères au lieu d'un tableau.
     //
-    // NOTE(phisyx): Nomenclature de la spécification HTML.
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
     pub fn next_n_input_character(&mut self, n: usize) -> Cow<str> {
         self.next_n_input(n).into_iter().collect()
+    }
+
+    /// Alias de [StreamInputIterator::next_n_input], mais renvoie une
+    /// chaîne de caractères au lieu d'un tableau.
+    //
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
+    pub fn next_n_input_codepoint(&mut self, n: usize) -> Cow<str> {
+        self.next_n_input_character(n)
     }
 
     /// Consomme les prochains caractères du flux d'entrée qui sont
@@ -103,6 +122,17 @@ where
         } else {
             false
         }
+    }
+
+    /// Consomme les prochains caractères du flux d'entrée qui sont
+    /// identiques à l'argument `codepoints`.
+    pub fn consume_next_input_codepoint_if_are<
+        const SIZE_OF_CODE_POINTS: usize,
+    >(
+        &mut self,
+        codepoints: [Chars::Item; SIZE_OF_CODE_POINTS],
+    ) -> bool {
+        self.consume_next_input_character_if_are(codepoints)
     }
 }
 

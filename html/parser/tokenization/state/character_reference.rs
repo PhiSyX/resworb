@@ -62,8 +62,12 @@ where
     pub(crate) fn handle_named_character_reference_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        let ch = self.input.current_input.expect("le caractère actuel");
-        let rest_of_chars = self.input.peek_until_end::<String>();
+        let ch = self
+            .input
+            .current_input()
+            .cloned()
+            .expect("le caractère actuel");
+        let rest_of_chars: String = self.input.peek_until_end();
         let full_str = format!("{ch}{rest_of_chars}");
 
         let entities = &self.named_character_reference_code;
