@@ -33,7 +33,7 @@ use crate::tokenization::CSSToken;
 #[derive(Debug)]
 #[derive(Clone)]
 #[derive(PartialEq, Eq)]
-pub struct CSSPreservedToken(pub(crate) CSSToken);
+pub struct CSSPreservedToken(pub(super) CSSToken);
 
 #[derive(Debug)]
 #[derive(Clone)]

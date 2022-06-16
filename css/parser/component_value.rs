@@ -128,14 +128,14 @@ impl CSSParser {
 // -------------- //
 
 impl CSSComponentValue {
-    pub(crate) fn simple_block(&self) -> Option<&CSSSimpleBlock> {
+    pub(super) fn simple_block(&self) -> Option<&CSSSimpleBlock> {
         match self {
             | Self::SimpleBlock(simple_block) => Some(simple_block),
             | _ => None,
         }
     }
 
-    pub(crate) fn simple_block_unchecked(&self) -> &CSSSimpleBlock {
+    pub(super) fn simple_block_unchecked(&self) -> &CSSSimpleBlock {
         self.simple_block().expect("Simple bloc")
     }
 }

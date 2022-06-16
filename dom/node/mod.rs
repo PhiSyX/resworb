@@ -58,7 +58,7 @@ pub struct Node {
     node_type: NodeType,
 }
 
-pub(crate) struct NodeBuilder {
+pub(super) struct NodeBuilder {
     owner_document: RwLock<Option<TreeNodeWeak<Node>>>,
     node_data: Option<NodeData>,
     node_type: NodeType,
@@ -106,7 +106,7 @@ pub enum NodeType {
 // -------------- //
 
 impl Node {
-    pub(crate) fn builder() -> NodeBuilder {
+    pub(super) fn builder() -> NodeBuilder {
         NodeBuilder::new()
     }
 

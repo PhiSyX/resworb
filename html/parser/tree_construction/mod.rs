@@ -29,6 +29,7 @@ use infra::{
     structure::tree::TreeNode,
 };
 use macros::dd;
+use parser::StreamToken;
 
 use crate::{
     state::{
@@ -40,6 +41,13 @@ use crate::{
     HTMLParserFlag, HTMLParserState,
 };
 
+// ---- //
+// Type //
+// ---- //
+
+type HTMLTreeConstructionControlFlow =
+    ControlFlow<HTMLParserFlag, HTMLParserState>;
+
 // --------- //
 // Structure //
 // --------- //
@@ -48,14 +56,14 @@ use crate::{
 #[derive(Default)]
 pub struct HTMLTreeConstruction {
     document: DocumentNode,
-    pub(crate) insertion_mode: InsertionMode,
-    pub(crate) original_insertion_mode: InsertionMode,
+    pub(super) insertion_mode: InsertionMode,
+    pub(super) original_insertion_mode: InsertionMode,
     stack_of_template_insertion_modes: Vec<InsertionMode>,
-    pub(crate) stack_of_open_elements: StackOfOpenElements,
+    stack_of_open_elements: StackOfOpenElements,
     list_of_active_formatting_elements: ListOfActiveFormattingElements,
     foster_parenting: bool,
     scripting_flag: ScriptingFlag,
-    pub(crate) frameset_ok_flag: FramesetOkFlag,
+    pub(super) frameset_ok_flag: FramesetOkFlag,
     parsing_fragment: bool,
     context_element: Option<TreeNode<Node>>,
     character_insertion_node: Option<TreeNode<Node>>,
@@ -64,9 +72,6 @@ pub struct HTMLTreeConstruction {
     form_element_pointer: Option<FormElementPointer>,
     pending_table_character_tokens: Vec<HTMLToken>,
 }
-
-type HTMLTreeConstructionControlFlow =
-    ControlFlow<HTMLParserFlag, HTMLParserState>;
 
 struct AdjustedInsertionLocation {
     parent: Option<TreeNode<Node>>,
@@ -78,7 +83,7 @@ struct AdjustedInsertionLocation {
 // -------------- //
 
 impl HTMLTreeConstruction {
-    pub(crate) fn new(document: DocumentNode) -> Self {
+    pub(super) fn new(document: DocumentNode) -> Self {
         Self {
             document,
             ..Default::default()
@@ -87,7 +92,7 @@ impl HTMLTreeConstruction {
 }
 
 impl HTMLTreeConstruction {
-    pub(crate) fn dispatcher(
+    pub(super) fn dispatcher(
         &mut self,
         token: Option<HTMLToken>,
     ) -> HTMLTreeConstructionControlFlow {
@@ -111,7 +116,7 @@ impl HTMLTreeConstruction {
     /// et que la pile d'éléments ouverts ne contient qu'un seul élément
     /// (cas du fragment) ; sinon, le noeud courant ajusté est le noeud
     /// courant.
-    pub fn adjusted_current_node(&self) -> &TreeNode<Node> {
+    pub(super) fn adjusted_current_node(&self) -> &TreeNode<Node> {
         if self.parsing_fragment && self.stack_of_open_elements.len() == 1
         {
             self.context_element.as_ref().expect("Context Element")

@@ -88,12 +88,12 @@ impl CSSParser {
 // -------------- //
 
 impl CSSDeclaration {
-    pub(crate) fn with_name(mut self, token: &CSSToken) -> Self {
-        self.name = token.name();
+    pub(super) fn with_name(mut self, token_name: impl ToString) -> Self {
+        self.name = token_name.to_string();
         self
     }
 
-    pub(crate) fn with_values(
+    pub(super) fn with_values(
         mut self,
         prelude: impl IntoIterator<Item = impl TryInto<CSSComponentValue>>,
     ) -> Self {
@@ -106,7 +106,7 @@ impl CSSDeclaration {
 }
 
 impl CSSDeclaration {
-    pub(crate) fn last_n_values(&self, n: usize) -> &[CSSComponentValue] {
+    pub(super) fn last_n_values(&self, n: usize) -> &[CSSComponentValue] {
         let size = self.value.len();
         let start = size.checked_sub(n);
         if let Some(start) = start {
@@ -116,7 +116,7 @@ impl CSSDeclaration {
         }
     }
 
-    pub(crate) fn last_n_tokens(
+    pub(super) fn last_n_tokens(
         &self,
         n: usize,
     ) -> impl Iterator<Item = &CSSToken> {
@@ -130,23 +130,23 @@ impl CSSDeclaration {
         })
     }
 
-    pub(crate) fn last_token(&self) -> Option<&CSSToken> {
+    pub(super) fn last_token(&self) -> Option<&CSSToken> {
         self.last_n_tokens(1).next()
     }
 }
 
 impl CSSDeclaration {
-    pub(crate) fn append(&mut self, component_value: CSSComponentValue) {
+    pub(super) fn append(&mut self, component_value: CSSComponentValue) {
         self.value.push(component_value);
     }
 
-    pub(crate) fn remove_last_n_values(&mut self, n: usize) {
+    pub(super) fn remove_last_n_values(&mut self, n: usize) {
         let size = self.value.len();
         let start = size.saturating_sub(n);
         self.value.drain(start..);
     }
 
-    pub(crate) fn set_important_flag(&mut self, important_flag: bool) {
+    pub(super) fn set_important_flag(&mut self, important_flag: bool) {
         self.important_flag = important_flag;
     }
 }
@@ -165,16 +165,16 @@ mod tests {
         let mut parser = test_the_str!(r#"color: red;"#);
         assert_eq!(
             parser.declaration(),
-            Ok(CSSDeclaration::default()
-                .with_name(&CSSToken::Ident("color".into()))
-                .with_values([
+            Ok(CSSDeclaration::default().with_name("color").with_values(
+                [
                     CSSComponentValue::Preserved(
                         CSSToken::Ident("red".into()).try_into().unwrap()
                     ),
                     CSSComponentValue::Preserved(
                         CSSToken::Semicolon.try_into().unwrap()
                     )
-                ]))
+                ]
+            ))
         );
     }
 
@@ -198,14 +198,12 @@ mod tests {
             [
                 CSSStyleBlock::Declaration(
                     CSSDeclaration::default()
-                        .with_name(&CSSToken::Ident("color".into()))
+                        .with_name("color")
                         .with_values([CSSToken::Ident("red".into())])
                 ),
                 CSSStyleBlock::Declaration(
                     CSSDeclaration::default()
-                        .with_name(&CSSToken::Ident(
-                            "background-color".into()
-                        ))
+                        .with_name("background-color")
                         .with_values([CSSToken::Ident("blue".into())])
                 ),
             ]

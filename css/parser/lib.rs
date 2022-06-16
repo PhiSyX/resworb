@@ -89,7 +89,7 @@ impl CSSParser {
             .expect("Il y a une c*ui**e dans le pâté?")
     }
 
-    pub(crate) fn current_input_token(&mut self) -> &CSSTokenVariant {
+    pub fn current_input_token(&mut self) -> &CSSTokenVariant {
         self.tokens
             .current_token()
             .expect("Il y a une c*ui**e dans le pâté?")

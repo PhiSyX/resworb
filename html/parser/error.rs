@@ -44,7 +44,7 @@ macro_rules! define_errors {
 /// Certaines erreurs d'analyse ont des codes spécifiques décrits dans le
 /// tableau ci-dessous, qui doivent être utilisés par les vérificateurs de
 /// conformité dans les rapports.
-pub(crate) enum HTMLParserError {
+pub(super) enum HTMLParserError {
     $( $(#[$attr])* $enum ),*
 }
 

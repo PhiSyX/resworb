@@ -26,7 +26,7 @@ pub struct CSSQualifiedRule {
 // -------------- //
 
 impl CSSQualifiedRule {
-    pub(crate) fn with_prelude(
+    pub(super) fn with_prelude(
         mut self,
         prelude: impl IntoIterator<Item = CSSToken>,
     ) -> Self {
@@ -37,18 +37,18 @@ impl CSSQualifiedRule {
         self
     }
 
-    pub(crate) fn with_block(mut self, block: CSSSimpleBlock) -> Self {
+    pub(super) fn with_block(mut self, block: CSSSimpleBlock) -> Self {
         self.block = block;
         self
     }
 }
 
 impl CSSQualifiedRule {
-    pub(crate) fn append(&mut self, value: CSSComponentValue) {
+    pub(super) fn append(&mut self, value: CSSComponentValue) {
         self.prelude.push(value);
     }
 
-    pub(crate) fn set_block(&mut self, block: CSSSimpleBlock) {
+    pub(super) fn set_block(&mut self, block: CSSSimpleBlock) {
         self.block = block;
     }
 }

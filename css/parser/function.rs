@@ -27,14 +27,14 @@ pub struct CSSFunction {
 // -------------- //
 
 impl CSSFunction {
-    pub(crate) fn new(name: impl ToString) -> Self {
+    pub(super) fn new(name: impl ToString) -> Self {
         Self {
             name: name.to_string(),
             ..Default::default()
         }
     }
 
-    pub(crate) fn with_values(
+    pub(super) fn with_values(
         mut self,
         values: impl IntoIterator<Item = impl TryInto<CSSComponentValue>>,
     ) -> Self {
@@ -47,13 +47,13 @@ impl CSSFunction {
 }
 
 impl CSSFunction {
-    pub(crate) fn name(&self) -> &str {
+    pub(super) fn name(&self) -> &str {
         &self.name
     }
 }
 
 impl CSSFunction {
-    pub(crate) fn append(&mut self, value: CSSComponentValue) {
+    pub(super) fn append(&mut self, value: CSSComponentValue) {
         self.value.push(value);
     }
 }

@@ -103,7 +103,7 @@ pub struct HTMLTokenizer<Chars> {
 
 #[derive(Debug)]
 #[derive(Clone)]
-pub(crate) struct HTMLTokenizerState {
+pub(super) struct HTMLTokenizerState {
     /// L'état courant.
     current: State,
     /// L'état de retour.
@@ -119,7 +119,7 @@ pub(crate) struct HTMLTokenizerState {
 // -------------- //
 
 impl<C> HTMLTokenizer<C> {
-    pub fn new(document: DocumentNode, chars: C) -> Self {
+    pub(crate) fn new(document: DocumentNode, chars: C) -> Self {
         let input_stream = HTMLInputStream::new(chars);
         let output_stream = HTMLOutputStream::empty();
         Self {

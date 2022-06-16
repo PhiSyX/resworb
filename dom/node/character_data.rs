@@ -28,14 +28,14 @@ pub enum CharacterDataInner {
 // -------------- //
 
 impl CharacterData {
-    pub fn new(inner: CharacterDataInner) -> Self {
+    pub(crate) fn new(inner: CharacterDataInner) -> Self {
         Self {
             inner,
             data: Default::default(),
         }
     }
 
-    pub fn set_data(&self, data: &str) {
+    pub(crate) fn set_data(&self, data: &str) {
         let dom_string = DOMString::new(data);
         self.data.write(dom_string);
     }

@@ -32,14 +32,14 @@ pub struct CSSSimpleBlock {
 // -------------- //
 
 impl CSSSimpleBlock {
-    pub(crate) fn new(token: CSSToken) -> Self {
+    pub(super) fn new(token: CSSToken) -> Self {
         Self {
             token,
             value: vec![],
         }
     }
 
-    pub(crate) fn set_values(
+    pub(super) fn set_values(
         mut self,
         value: impl IntoIterator<Item = impl TryInto<CSSComponentValue>>,
     ) -> Self {
@@ -52,7 +52,7 @@ impl CSSSimpleBlock {
 }
 
 impl CSSSimpleBlock {
-    pub(crate) fn append(
+    pub(super) fn append(
         &mut self,
         value: impl TryInto<CSSComponentValue>,
     ) {

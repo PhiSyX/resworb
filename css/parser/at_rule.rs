@@ -32,12 +32,12 @@ pub struct CSSAtRule {
 // -------------- //
 
 impl CSSAtRule {
-    pub(crate) fn with_name(mut self, token_name: impl ToString) -> Self {
+    pub(super) fn with_name(mut self, token_name: impl ToString) -> Self {
         self.name = token_name.to_string();
         self
     }
 
-    pub(crate) fn with_prelude(
+    pub(super) fn with_prelude(
         mut self,
         prelude: impl IntoIterator<Item = impl TryInto<CSSComponentValue>>,
     ) -> Self {
@@ -50,11 +50,11 @@ impl CSSAtRule {
 }
 
 impl CSSAtRule {
-    pub(crate) fn append(&mut self, component_value: CSSComponentValue) {
+    pub(super) fn append(&mut self, component_value: CSSComponentValue) {
         self.prelude.push(component_value);
     }
 
-    pub(crate) fn set_block(&mut self, block: CSSSimpleBlock) {
-        self.block = Some(block);
+    pub(super) fn set_block(&mut self, block: CSSSimpleBlock) {
+        self.block.replace(block);
     }
 }

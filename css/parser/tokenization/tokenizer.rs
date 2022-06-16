@@ -102,7 +102,7 @@ where
 
             's: loop {
                 if self
-                    .stream
+                    .input
                     .consume_next_input_character_if_are(['*', '/'])
                 {
                     break 's;

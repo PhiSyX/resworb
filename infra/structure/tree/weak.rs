@@ -27,7 +27,7 @@ pub struct TreeNodeWeak<T> {
 // -------------- //
 
 impl<T> TreeNodeWeak<T> {
-    pub fn new(node_weak: WeakNode<T>) -> Self {
+    pub(super) fn new(node_weak: WeakNode<T>) -> Self {
         Self { node_weak }
     }
 }

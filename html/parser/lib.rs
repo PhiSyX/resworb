@@ -14,11 +14,12 @@ use std::{borrow::BorrowMut, ops::ControlFlow};
 
 use dom::node::DocumentNode;
 use infra::primitive::codepoint::CodePointIterator;
-use state::{FramesetOkFlag, InsertionMode};
-use tokenization::HTMLToken;
-use tree_construction::HTMLTreeConstruction;
 
-use self::tokenization::HTMLTokenizer;
+use self::{
+    state::{FramesetOkFlag, InsertionMode},
+    tokenization::{HTMLToken, HTMLTokenizer},
+    tree_construction::HTMLTreeConstruction,
+};
 
 // --------- //
 // Structure //
@@ -121,7 +122,9 @@ where
         }
     }
 
-    pub fn tree_construction(&mut self) -> &mut HTMLTreeConstruction {
+    pub(crate) fn tree_construction(
+        &mut self,
+    ) -> &mut HTMLTreeConstruction {
         self.tokenizer.tree_construction.borrow_mut()
     }
 }

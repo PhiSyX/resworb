@@ -160,7 +160,7 @@ impl CSSToken {
 }
 
 impl CSSToken {
-    pub(crate) fn append_character(&mut self, ch: CodePoint) {
+    pub(super) fn append_character(&mut self, ch: CodePoint) {
         match self {
             | Self::Ident(s)
             | Self::Function(s)
