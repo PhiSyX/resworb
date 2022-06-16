@@ -145,10 +145,6 @@ impl HTMLToken {
             }
         }
     }
-
-    pub fn is_eof(&self) -> bool {
-        matches!(self, Self::EOF)
-    }
 }
 
 impl HTMLToken {
