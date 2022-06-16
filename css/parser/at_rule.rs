@@ -5,7 +5,6 @@
 use crate::{
     component_value::{CSSComponentValue, CSSComponentValuesList},
     simple_block::CSSSimpleBlock,
-    tokenization::CSSToken,
 };
 
 // --------- //

@@ -1630,7 +1630,7 @@ mod tests {
         // Comment token
 
         let mut parser = test_the_str!("<!-- Comment -->");
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         parser
             .tree_construction()
             .handle_initial_insertion_mode(token);
@@ -1646,7 +1646,7 @@ mod tests {
         // Doctype
 
         let mut parser = test_the_str!("<!DOCTYPE html>");
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         let tree = parser.tree_construction();
         tree.handle_initial_insertion_mode(token);
         let doc = tree.document.document_ref();
@@ -1658,7 +1658,7 @@ mod tests {
         // Anything else
 
         let mut parser = test_the_str!("a");
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         let tree = parser.tree_construction();
         tree.handle_initial_insertion_mode(token);
         let doc = tree.document.document_ref();
@@ -1671,7 +1671,7 @@ mod tests {
         // Comment
 
         let mut parser = test_the_str!("<!-- comment -->");
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         let tree = parser.tree_construction();
         tree.handle_before_html_insertion_mode(token);
         let doc = tree.document.get_first_child().to_owned().unwrap();
@@ -1681,7 +1681,7 @@ mod tests {
 
         let mut parser = test_the_str!("<html><head>");
         // <html>
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         let tree = parser.tree_construction();
         tree.handle_before_html_insertion_mode(token);
         let doc = tree.document.get_first_child().to_owned().unwrap();
@@ -1690,7 +1690,7 @@ mod tests {
 
         // Anything else (<heap>)
 
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         let tree = parser.tree_construction();
         tree.handle_before_html_insertion_mode(token);
         let doc = tree.document.get_last_child().to_owned().unwrap();

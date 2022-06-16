@@ -59,7 +59,7 @@ where
 {
     pub fn run(&mut self) {
         loop {
-            let token = self.tokenizer.next_token();
+            let token = self.tokenizer.consume_next_token();
 
             // TODO(phisyx): à améliorer ASAP.
             match self.tokenizer.tree_construction.dispatcher(token) {
@@ -72,7 +72,7 @@ where
                 | ControlFlow::Continue(
                     HTMLParserState::ProcessNextTokenExceptLF,
                 ) => {
-                    let next = self.tokenizer.next_token();
+                    let next = self.tokenizer.consume_next_token();
                     match next {
                         | Some(HTMLToken::Character('\n')) => continue,
                         | None => continue,
@@ -88,7 +88,7 @@ where
                 // TODO(phisyx): à améliorer ASAP.
                 | ControlFlow::Continue(HTMLParserState::CustomRcdata) => {
                     if let Some(HTMLToken::Character('\n')) =
-                        self.tokenizer.next_token()
+                        self.tokenizer.consume_next_token()
                     {
                         self.tokenizer.next();
                     }

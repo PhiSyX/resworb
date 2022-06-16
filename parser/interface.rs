@@ -120,7 +120,7 @@ pub trait StreamTokenIterator {
     fn current_token(&self) -> Option<&Self::Token>;
 
     /// Le dernier dernier d'un flux à avoir été consommée (mutable).
-    fn current_token_mut(&self) -> Option<&mut Self::Token> {
+    fn current_token_mut(&mut self) -> Option<&mut Self::Token> {
         unimplemented!(
             "Le dernier jeton d'un flux à avoir été consommée (mutable)."
         );

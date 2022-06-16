@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use std::ops;
+
 use infra::primitive::codepoint::CodePoint;
 
 use crate::{
@@ -14,6 +16,7 @@ use crate::{
 // ---- //
 
 pub type InputStream<T, I> = InputStreamPreprocessor<T, I>;
+pub type OutputStream<T> = TokenStream<T>;
 
 // --------- //
 // Structure //
@@ -29,6 +32,16 @@ pub struct TokenStream<Token> {
 // -------------- //
 // Implémentation //
 // -------------- //
+
+impl<I> TokenStream<I> {
+    pub fn empty() -> Self {
+        Self {
+            list_of_tokens: Default::default(),
+            token_currently_being_operated_on: Default::default(),
+            reconsume_now: Default::default(),
+        }
+    }
+}
 
 impl<I> TokenStream<I>
 where
@@ -67,9 +80,28 @@ where
     }
 }
 
+impl<I> TokenStream<I>
+where
+    I: StreamToken,
+{
+    pub fn append(&mut self, token: I) {
+        self.list_of_tokens.push(token);
+    }
+
+    pub fn prepend(&mut self, token: I) {
+        let mut temp = vec![token];
+        self.list_of_tokens.splice(..0, temp.drain(..));
+    }
+
+    pub fn replace_current_token_with(&mut self, token: I) {
+        self.token_currently_being_operated_on.replace(token);
+    }
+}
+
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
+
 impl<I> StreamIterator for TokenStream<I>
 where
     I: StreamToken,
@@ -130,6 +162,20 @@ where
         self.token_currently_being_operated_on.as_ref()
     }
 
+    fn current_token_mut(&mut self) -> Option<&mut Self::Token> {
+        self.token_currently_being_operated_on.as_mut()
+    }
+
+    fn current_token_mut_callback<F: FnOnce(&mut Self::Token)>(
+        &mut self,
+        callback: F,
+    ) -> &mut Self {
+        if let Some(token) = self.current_token_mut() {
+            callback(token);
+        }
+        self
+    }
+
     fn next_token(&mut self) -> Option<Self::Token> {
         if self.list_of_tokens.is_empty() {
             return Some(Self::Token::eof());
@@ -145,5 +191,16 @@ where
 impl StreamInput for CodePoint {
     fn eof() -> Self {
         '\0'
+    }
+}
+
+impl<I> ops::Deref for TokenStream<I>
+where
+    I: StreamToken,
+{
+    type Target = Vec<I>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.list_of_tokens
     }
 }

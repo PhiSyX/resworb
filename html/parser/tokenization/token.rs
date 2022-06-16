@@ -7,6 +7,7 @@ use html_elements::{
     interface::IsOneOfAttributesInterface, tag_attributes, tag_names,
 };
 use infra::{namespace::Namespace, primitive::codepoint::CodePoint};
+use parser::StreamToken;
 
 // ---- //
 // Type //
@@ -814,6 +815,12 @@ where
 {
     fn from(nv: (S1, S2)) -> Self {
         Self::new(nv.0.as_ref(), nv.1.as_ref())
+    }
+}
+
+impl StreamToken for HTMLToken {
+    fn eof() -> Self {
+        Self::EOF
     }
 }
 

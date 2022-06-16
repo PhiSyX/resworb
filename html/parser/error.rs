@@ -457,14 +457,14 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::Comment("".into()))
         );
 
-        html_tok.next_token();
+        html_tok.consume_next_token();
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::Comment("".into()))
         );
     }
@@ -476,7 +476,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -485,10 +485,10 @@ mod tests {
             ),
         );
 
-        html_tok.next_token();
+        html_tok.consume_next_token();
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -505,7 +505,7 @@ mod tests {
             "crashtests/tag/eof_before_tag_name.html"
         ));
 
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+        assert_eq!(html_tok.consume_next_token(), Some(HTMLToken::EOF));
     }
 
     #[test]
@@ -515,7 +515,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::Comment("".into()))
         );
     }
@@ -527,7 +527,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::new_doctype().with_quirks_mode())
         );
     }
@@ -538,7 +538,7 @@ mod tests {
             "crashtests/tag/eof_in_tag.html"
         ));
 
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+        assert_eq!(html_tok.consume_next_token(), Some(HTMLToken::EOF));
     }
 
     #[test]
@@ -548,17 +548,17 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::Comment(
                 " incorrectly closed comment ".into()
             ))
         );
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::Character('\n'))
         );
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+        assert_eq!(html_tok.consume_next_token(), Some(HTMLToken::EOF));
     }
 
     #[test]
@@ -567,14 +567,23 @@ mod tests {
             "crashtests/comment/incorrectly_opened_comment.html"
         ));
 
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('<')));
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character(' ')));
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('!')));
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character('<'))
+        );
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character(' '))
+        );
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character('!'))
+        );
         // DOCTYPE ...
         html_tok.nth(8);
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::Comment("ELEMENT br EMPTY".into()))
         );
     }
@@ -586,7 +595,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -602,14 +611,26 @@ mod tests {
         ));
 
         // |- #text: <42>
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('<')));
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('4')));
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('2')));
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('>')));
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character('<'))
+        );
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character('4'))
+        );
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character('2'))
+        );
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character('>'))
+        );
 
         // |- #comment: 42
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::Comment("42".into()))
         );
     }
@@ -621,7 +642,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_start_tag()
                     .with_name("div")
@@ -637,7 +658,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::new_doctype().with_quirks_mode())
         );
     }
@@ -649,7 +670,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -657,10 +678,10 @@ mod tests {
             )
         );
 
-        html_tok.next_token();
+        html_tok.consume_next_token();
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -676,13 +697,13 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::new_start_tag().with_name("div"))
         );
 
-        html_tok.next_token();
+        html_tok.consume_next_token();
 
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::EOF));
+        assert_eq!(html_tok.consume_next_token(), Some(HTMLToken::EOF));
     }
 
     #[test]
@@ -693,7 +714,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -701,10 +722,10 @@ mod tests {
             )
         );
 
-        html_tok.next_token();
+        html_tok.consume_next_token();
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -720,7 +741,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -728,11 +749,11 @@ mod tests {
             )
         );
 
-        html_tok.next_token();
+        html_tok.consume_next_token();
 
         let s = "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd";
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -748,7 +769,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -764,7 +785,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_start_tag()
                     .with_name("div")
@@ -781,7 +802,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_doctype()
                     .with_name("html")
@@ -797,14 +818,26 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::Comment(" <!-- nested ".into()))
         );
 
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character(' ')));
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('-')));
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('-')));
-        assert_eq!(html_tok.next_token(), Some(HTMLToken::Character('>')));
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character(' '))
+        );
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character('-'))
+        );
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character('-'))
+        );
+        assert_eq!(
+            html_tok.consume_next_token(),
+            Some(HTMLToken::Character('>'))
+        );
     }
 
     #[test]
@@ -814,7 +847,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_start_tag()
                     .with_name("div")
@@ -822,11 +855,11 @@ mod tests {
             )
         );
 
-        html_tok.next_token();
-        html_tok.next_token();
+        html_tok.consume_next_token();
+        html_tok.consume_next_token();
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_start_tag()
                     .with_name("div")
@@ -842,7 +875,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_start_tag()
                     .with_name("div")
@@ -859,7 +892,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_start_tag()
                     .with_name("div")
@@ -874,11 +907,11 @@ mod tests {
             "crashtests/tag/unexpected_question_mark_instead_of_tag_name.html"
         ));
 
-        html_tok.next_token();
+        html_tok.consume_next_token();
 
         // |- #comment: ?xml-stylesheet type="text/css" href="style.css"?
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(HTMLToken::Comment(
                 r#"?xml-stylesheet type="text/css" href="style.css"?"#
                     .into()
@@ -893,7 +926,7 @@ mod tests {
         ));
 
         assert_eq!(
-            html_tok.next_token(),
+            html_tok.consume_next_token(),
             Some(
                 HTMLToken::new_start_tag()
                     .with_name("div")
