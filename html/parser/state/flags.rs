@@ -7,31 +7,19 @@
 // ----------- //
 
 #[derive(Debug)]
+#[derive(Default)]
 #[derive(PartialEq, Eq)]
 pub(crate) enum ScriptingFlag {
+    #[default]
     Enabled = 1,
     Disabled = 0,
 }
 
 #[derive(Debug)]
+#[derive(Default)]
 #[derive(PartialEq, Eq)]
 pub(crate) enum FramesetOkFlag {
+    #[default]
     Ok = 1,
     NotOk = 0,
-}
-
-// -------------- //
-// Implémentation //
-// -------------- //
-
-impl Default for ScriptingFlag {
-    fn default() -> Self {
-        ScriptingFlag::Enabled
-    }
-}
-
-impl Default for FramesetOkFlag {
-    fn default() -> Self {
-        FramesetOkFlag::Ok
-    }
 }

@@ -12,9 +12,13 @@
 /// CDATA sont supportées.
 #[derive(Debug)]
 #[derive(Copy, Clone)]
+#[derive(Default)]
 #[derive(PartialEq, Eq)]
 pub(crate) enum InsertionMode {
+    /// Initialement, le mode d'insertion est "initial".
+    #[default]
     Initial,
+
     BeforeHTML,
     BeforeHead,
     InHead,
@@ -46,16 +50,5 @@ pub(crate) enum InsertionMode {
 impl InsertionMode {
     pub(crate) fn switch_to(&mut self, mode: Self) {
         *self = mode;
-    }
-}
-
-// -------------- //
-// Implémentation // -> Interface
-// -------------- //
-
-impl Default for InsertionMode {
-    /// Initialement, le mode d'insertion est "initial".
-    fn default() -> Self {
-        Self::Initial
     }
 }
