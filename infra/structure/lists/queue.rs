@@ -12,7 +12,7 @@ use super::peekable::PeekableInterface;
 
 #[derive(Debug)]
 pub struct ListQueue<T, I> {
-    iter: T,
+    original_iterator: T,
     queue: Vec<Option<I>>,
     offset: usize,
 }
@@ -24,7 +24,7 @@ pub struct ListQueue<T, I> {
 impl<T, I> ListQueue<T, I> {
     pub fn new(iter: T) -> Self {
         Self {
-            iter,
+            original_iterator: iter,
             queue: Vec::default(),
             offset: 0,
         }
@@ -56,7 +56,7 @@ where
     }
 
     pub fn enqueue(&mut self) {
-        self.queue.push(self.iter.next());
+        self.queue.push(self.original_iterator.next());
     }
 
     fn decrement(&mut self) {
@@ -127,7 +127,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         let consumed_item = if self.queue.is_empty() {
-            self.iter.next()
+            self.original_iterator.next()
         } else {
             self.dequeue()
         };
