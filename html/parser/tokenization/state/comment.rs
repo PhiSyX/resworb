@@ -6,7 +6,7 @@ use infra::{
     primitive::codepoint::CodePointIterator,
     structure::lists::peekable::PeekableInterface,
 };
-use parser::StreamIteratorInterface;
+use parser::StreamIterator;
 
 use crate::tokenization::{
     tokenizer::{

@@ -5,8 +5,8 @@
 use infra::primitive::codepoint::CodePoint;
 
 use crate::{
-    interface::{StreamInputInterface, StreamIteratorInterface},
-    preprocessor::InputStreamPreprocessor,
+    preprocessor::InputStreamPreprocessor, StreamInput, StreamIterator,
+    StreamToken, StreamTokenIterator,
 };
 
 // ---- //
@@ -20,10 +20,10 @@ pub type InputStream<T, I> = InputStreamPreprocessor<T, I>;
 // --------- //
 
 #[derive(Debug)]
-pub struct TokenStream<Item> {
-    list: Vec<Item>,
-    current_input: Option<Item>,
-    is_replayed: bool,
+pub struct TokenStream<Token> {
+    list_of_tokens: Vec<Token>,
+    token_currently_being_operated_on: Option<Token>,
+    reconsume_now: bool,
 }
 
 // -------------- //
@@ -32,43 +32,37 @@ pub struct TokenStream<Item> {
 
 impl<I> TokenStream<I>
 where
-    I: StreamInputInterface,
+    I: StreamToken,
 {
     pub fn new<O>(mut stream: O) -> Self
     where
-        O: StreamIteratorInterface<Input = I>,
+        O: StreamTokenIterator<Token = I>,
     {
         let mut list = Vec::new();
 
         loop {
-            match stream.consume_next_input() {
+            match stream.consume_next_token() {
                 | Some(token) if !token.is_eof() => list.push(token),
                 | _ => break,
             }
         }
 
         Self {
-            list,
-            current_input: Default::default(),
-            is_replayed: Default::default(),
+            list_of_tokens: list,
+            token_currently_being_operated_on: Default::default(),
+            reconsume_now: Default::default(),
         }
     }
 
     #[allow(clippy::should_implement_trait)]
-    pub fn from_iter<O>(iter: O) -> Self
+    pub fn from_iter<O>(iter_list: O) -> Self
     where
         O: Iterator<Item = I>,
     {
-        let mut list = Vec::new();
-
-        for item in iter {
-            list.push(item);
-        }
-
         Self {
-            list,
-            current_input: Default::default(),
-            is_replayed: Default::default(),
+            list_of_tokens: iter_list.collect(),
+            token_currently_being_operated_on: Default::default(),
+            reconsume_now: Default::default(),
         }
     }
 }
@@ -76,31 +70,30 @@ where
 // -------------- //
 // Implémentation // -> Interface
 // -------------- //
-
-impl<I> StreamIteratorInterface for TokenStream<I>
+impl<I> StreamIterator for TokenStream<I>
 where
-    I: StreamInputInterface,
+    I: StreamToken,
 {
-    type Input = I;
+    type Item = I;
 
     fn advance_as_long_as_possible<
         'a,
-        Predicate: Fn(&Self::Input) -> bool,
+        Predicate: Fn(&Self::Item) -> bool,
         Limit: infra::algorithms::Parameter<'a, usize>,
     >(
         &mut self,
         predicate: Predicate,
         with_limit: Limit,
-    ) -> Vec<Self::Input> {
+    ) -> Vec<Self::Item> {
         let with_limit = unsafe { with_limit.param().value() };
         let mut limit = with_limit.map(|n| n + 1).unwrap_or(0);
         let mut result = vec![];
 
-        while (self.next_input().is_some()
-            && predicate(self.next_input().as_ref().unwrap()))
+        while (self.next_token().is_some()
+            && predicate(self.next_token().as_ref().unwrap()))
             && (limit > 0 || with_limit.is_none())
         {
-            result.push(self.consume_next_input().unwrap());
+            result.push(self.consume_next_token().unwrap());
             if with_limit.is_some() {
                 limit -= 1;
             }
@@ -108,39 +101,48 @@ where
 
         result
     }
+}
 
-    fn consume_next_input(&mut self) -> Option<Self::Input> {
-        if self.is_replayed {
-            self.is_replayed = false;
-            return self.current_input.clone();
+impl<I> StreamTokenIterator for TokenStream<I>
+where
+    I: StreamToken,
+{
+    type Token = I;
+
+    fn consume_next_token(&mut self) -> Option<Self::Token> {
+        if self.reconsume_now {
+            self.reconsume_now = false;
+            return self.token_currently_being_operated_on.clone();
         }
 
-        if self.list.is_empty() {
-            self.current_input = Some(Self::Input::eof());
+        if self.list_of_tokens.is_empty() {
+            self.token_currently_being_operated_on =
+                Some(Self::Token::eof());
         } else {
-            self.current_input = Some(self.list.remove(0));
+            self.token_currently_being_operated_on =
+                Some(self.list_of_tokens.remove(0));
         }
 
-        self.current_input.clone()
+        self.token_currently_being_operated_on.clone()
     }
 
-    fn current_input(&self) -> Option<&Self::Input> {
-        self.current_input.as_ref()
+    fn current_token(&self) -> Option<&Self::Token> {
+        self.token_currently_being_operated_on.as_ref()
     }
 
-    fn next_input(&mut self) -> Option<Self::Input> {
-        if self.list.is_empty() {
-            return Some(Self::Input::eof());
+    fn next_token(&mut self) -> Option<Self::Token> {
+        if self.list_of_tokens.is_empty() {
+            return Some(Self::Token::eof());
         }
-        self.list.iter().peekable().next().cloned()
+        self.list_of_tokens.iter().peekable().next().cloned()
     }
 
-    fn reconsume_current_input(&mut self) {
-        self.is_replayed = true;
+    fn reconsume_current_token(&mut self) {
+        self.reconsume_now = true;
     }
 }
 
-impl StreamInputInterface for CodePoint {
+impl StreamInput for CodePoint {
     fn eof() -> Self {
         '\0'
     }

@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use parser::StreamIteratorInterface;
+use parser::{StreamIterator, StreamTokenIterator};
 
 use crate::{
     at_rule::CSSAtRule, qualified_rule::CSSQualifiedRule, CSSParser,
@@ -102,7 +102,7 @@ impl CSSParser {
         );
 
         self.tokens
-            .next_input()
+            .next_token()
             .filter(|token| token.is_eof())
             .and(rule)
             .ok_or(CSSRuleError::SyntaxError) /* ------------------------------- ^ */
@@ -198,12 +198,10 @@ mod tests {
         assert_eq!(
             parser.rule(),
             Ok(CSSRule::AtRule(
-                CSSAtRule::default()
-                    .with_name(&CSSToken::AtKeyword("charset".into()))
-                    .with_prelude([
-                        CSSToken::Whitespace, // <-- ???
-                        CSSToken::String("utf-8".into())
-                    ])
+                CSSAtRule::default().with_name("charset").with_prelude([
+                    CSSToken::Whitespace, // <-- ???
+                    CSSToken::String("utf-8".into())
+                ])
             ))
         );
     }

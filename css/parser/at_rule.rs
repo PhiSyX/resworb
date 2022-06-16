@@ -33,14 +33,14 @@ pub struct CSSAtRule {
 // -------------- //
 
 impl CSSAtRule {
-    pub(crate) fn with_name(mut self, token: &CSSToken) -> Self {
-        self.name = token.name();
+    pub(crate) fn with_name(mut self, token_name: impl ToString) -> Self {
+        self.name = token_name.to_string();
         self
     }
 
     pub(crate) fn with_prelude(
         mut self,
-        prelude: impl IntoIterator<Item = CSSToken>,
+        prelude: impl IntoIterator<Item = impl TryInto<CSSComponentValue>>,
     ) -> Self {
         self.prelude = prelude
             .into_iter()

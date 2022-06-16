@@ -11,7 +11,7 @@ use infra::{
     structure::lists::{peekable::PeekableInterface, queue::ListQueue},
 };
 
-use crate::{StreamInputInterface, StreamIteratorInterface};
+use crate::{StreamInput, StreamInputIterator, StreamIterator};
 
 // ---- //
 // Type //
@@ -65,7 +65,7 @@ impl<S, I> InputStreamPreprocessor<S, I> {
 impl<Chars> InputStreamPreprocessor<Chars, Chars::Item>
 where
     Chars: CodePointIterator,
-    Chars::Item: StreamInputInterface,
+    Chars::Item: StreamInput,
 {
     /// Alias de [StreamIteratorInterface::consume_next_input].
     //
@@ -110,15 +110,14 @@ where
 // Implémentation // -> Interface
 // -------------- //
 
-impl<T, I> StreamIteratorInterface for InputStreamPreprocessor<T, I>
+impl<T, I> StreamIterator for InputStreamPreprocessor<T, I>
 where
     T: Iterator<Item = I>,
     I: Clone,
-    I: StreamInputInterface,
 {
-    type Input = I;
+    type Item = I;
 
-    fn advance(&mut self, mut n: usize) -> Option<Self::Input> {
+    fn advance(&mut self, mut n: usize) -> Option<Self::Item> {
         if n >= 1 {
             n -= 1;
         }
@@ -127,13 +126,13 @@ where
 
     fn advance_as_long_as_possible<
         'a,
-        Predicate: Fn(&Self::Input) -> bool,
+        Predicate: Fn(&Self::Item) -> bool,
         Limit: Parameter<'a, usize>,
     >(
         &mut self,
         predicate: Predicate,
         with_limit: Limit,
-    ) -> Vec<Self::Input> {
+    ) -> Vec<Self::Item> {
         let with_limit = unsafe { with_limit.param().value() };
         let mut limit = with_limit.map(|n| n + 1).unwrap_or(0);
         let mut result = vec![];
@@ -149,6 +148,15 @@ where
 
         result
     }
+}
+
+impl<T, I> StreamInputIterator for InputStreamPreprocessor<T, I>
+where
+    T: Iterator<Item = I>,
+    I: Clone,
+    I: StreamInput,
+{
+    type Input = I;
 
     fn consume_next_input(&mut self) -> Option<Self::Input> {
         if let Some(pre_scan) = &self.pre_scan {

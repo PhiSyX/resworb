@@ -15,7 +15,7 @@ use infra::{
 };
 use parser::{
     stream::{InputStream, TokenStream},
-    StreamIteratorInterface,
+    StreamInputIterator, StreamIterator, StreamTokenIterator,
 };
 
 use super::{
@@ -980,31 +980,31 @@ fn convert_string_to_number(s: String) -> Option<f64> {
 // Implémentation // -> Interface
 // -------------- //
 
-impl<C> StreamIteratorInterface for CSSTokenizer<C>
+impl<C> StreamTokenIterator for CSSTokenizer<C>
 where
     C: CodePointIterator,
 {
-    type Input = CSSTokenVariant;
+    type Token = CSSTokenVariant;
 
-    fn consume_next_input(&mut self) -> Option<Self::Input> {
+    fn consume_next_token(&mut self) -> Option<Self::Token> {
         if self.is_replayed {
             self.is_replayed = false;
             return self.current_token.clone();
         }
 
-        self.current_token = self.next_input();
+        self.current_token = self.next_token();
         self.current_token.clone()
     }
 
-    fn current_input(&self) -> Option<&Self::Input> {
+    fn current_token(&self) -> Option<&Self::Token> {
         self.current_token.as_ref()
     }
 
-    fn next_input(&mut self) -> Option<Self::Input> {
+    fn next_token(&mut self) -> Option<Self::Token> {
         Some(self.consume_token().into())
     }
 
-    fn reconsume_current_input(&mut self) {
+    fn reconsume_current_token(&mut self) {
         self.is_replayed = true;
     }
 }

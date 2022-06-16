@@ -10,7 +10,7 @@ use macros::dd;
 use named_character_references::{
     NamedCharacterReferences, NamedCharacterReferencesEntities,
 };
-use parser::{stream::InputStream, StreamIteratorInterface};
+use parser::{stream::InputStream, StreamInputIterator};
 
 use super::{state::State, HTMLToken};
 use crate::{

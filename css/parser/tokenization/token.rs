@@ -7,7 +7,7 @@
 // --------- //
 
 use infra::primitive::codepoint::CodePoint;
-use parser::StreamInputInterface;
+use parser::StreamInput;
 
 // ----------- //
 // Énumération //
@@ -181,7 +181,7 @@ impl CSSToken {
 //               énumération.
 impl Eq for CSSToken {}
 
-impl StreamInputInterface for CSSToken {
+impl StreamInput for CSSToken {
     fn eof() -> Self {
         Self::EOF
     }

@@ -4,7 +4,7 @@
 
 use std::ops::Deref;
 
-use parser::StreamIteratorInterface;
+use parser::StreamIterator;
 
 use crate::{
     component_value::{CSSComponentValue, CSSComponentValuesList},

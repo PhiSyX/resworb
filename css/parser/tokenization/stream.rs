@@ -3,7 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use infra::primitive::codepoint::CodePoint;
-use parser::{stream::TokenStream, StreamInputInterface};
+use parser::{stream::TokenStream, StreamToken};
 
 use super::CSSToken;
 use crate::{
@@ -282,7 +282,7 @@ impl CSSTokenVariant {
 // Implémentation // -> Interface
 // -------------- //
 
-impl StreamInputInterface for CSSTokenVariant {
+impl StreamToken for CSSTokenVariant {
     fn eof() -> Self {
         CSSTokenVariant::Token(CSSToken::EOF)
     }

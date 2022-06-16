@@ -8,7 +8,7 @@ use infra::{
     },
     structure::lists::peekable::PeekableInterface,
 };
-use parser::StreamIteratorInterface;
+use parser::StreamInputIterator;
 
 use crate::tokenization::{
     tokenizer::{

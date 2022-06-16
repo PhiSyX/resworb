@@ -21,7 +21,7 @@ mod grammars;
 mod style_blocks_content;
 
 use infra::primitive::codepoint::CodePointIterator;
-use parser::StreamIteratorInterface;
+use parser::{StreamIterator, StreamTokenIterator};
 
 use self::{
     at_rule::CSSAtRule,
@@ -79,19 +79,19 @@ impl CSSParser {
 impl CSSParser {
     pub fn consume_next_input_token(&mut self) -> CSSTokenVariant {
         self.tokens
-            .consume_next_input()
+            .consume_next_token()
             .expect("Il y a une c*ui**e dans le pâté?")
     }
 
     pub fn next_input_token(&mut self) -> CSSTokenVariant {
         self.tokens
-            .next_input()
+            .next_token()
             .expect("Il y a une c*ui**e dans le pâté?")
     }
 
     pub(crate) fn current_input_token(&mut self) -> &CSSTokenVariant {
         self.tokens
-            .current_input()
+            .current_token()
             .expect("Il y a une c*ui**e dans le pâté?")
     }
 }
@@ -103,7 +103,8 @@ impl CSSParser {
 
         let current_token = current_variant.token_unchecked();
 
-        let mut at_rule = CSSAtRule::default().with_name(current_token);
+        let mut at_rule =
+            CSSAtRule::default().with_name(current_token.name());
 
         loop {
             match self.consume_next_input_token() {
@@ -136,7 +137,7 @@ impl CSSParser {
                 // valeur de composant. Ajouter la valeur de composant au
                 // prélude de la règle.
                 | _ => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     if let Some(component_value) =
                         self.consume_component_value()
                     {
@@ -260,7 +261,7 @@ impl CSSParser {
                 // liste de valeurs de composants
                 // de la fonction.
                 | _ => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     if let Some(component_value) =
                         self.consume_component_value()
                     {
@@ -298,7 +299,7 @@ impl CSSParser {
                 // règle at-rule. Ajouter la règle à la liste de
                 // déclarations.
                 | variant if variant.is_at_keyword() => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     let at_rule = self.consume_at_rule();
                     let rule: CSSRule = at_rule.into();
                     let declaration = rule.into();
@@ -350,7 +351,7 @@ impl CSSParser {
                 // valeur retournée.
                 // TODO(css): gérer les erreurs.
                 | _ => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     while !(self.next_input_token().is_semicolon()
                         || self.next_input_token().is_eof())
                     {
@@ -404,7 +405,7 @@ impl CSSParser {
                     if (variant.is_cdo() || variant.is_cdt())
                         && !self.toplevel_flag =>
                 {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     if let Some(qualified_rule) =
                         self.consume_qualified_rule()
                     {
@@ -417,7 +418,7 @@ impl CSSParser {
                 // Re-consommer le jeton courant. Consommer une règle
                 // at-rule, et l'ajouter à la liste des règles.
                 | variant if variant.is_at_keyword() => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     let at_rule = self.consume_at_rule();
                     rules.push(at_rule.into());
                 }
@@ -428,7 +429,7 @@ impl CSSParser {
                 // qualifiée. Si un élément est retourné, il est ajouté
                 // à la liste des règles.
                 | _ => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     if let Some(qualified_rule) =
                         self.consume_qualified_rule()
                     {
@@ -485,7 +486,7 @@ impl CSSParser {
                 // composant. Ajouter la valeur retournée au prélude de
                 // l'at-rule.
                 | _ => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     if let Some(component_value) =
                         self.consume_component_value()
                     {
@@ -526,7 +527,7 @@ impl CSSParser {
                 // Re-consommer le jeton courant. Consommer une valeur de
                 // composant et l'ajouter à la valeur du bloc.
                 | _ => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     if let Some(component_value) =
                         self.consume_component_value()
                     {
@@ -570,7 +571,7 @@ impl CSSParser {
                 // Re-consommer le jeton courant. Consommer une règle
                 // at-rule, et l'ajouter à la liste des règles.
                 | variant if variant.is_at_keyword() => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     let at_rule = self.consume_at_rule();
                     let rule: CSSRule = at_rule.into();
                     rules.push(rule.into());
@@ -617,7 +618,7 @@ impl CSSParser {
                 // qualifiée. Si un élément est retourné, l'ajouter aux
                 // règles.
                 | variant if variant.is_delimiter_with('&') => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     if let Some(qualified_rule) =
                         self.consume_qualified_rule()
                     {
@@ -635,7 +636,7 @@ impl CSSParser {
                 // valeur de composant et jeter la valeur retournée.
                 // TODO(css): gérer les erreurs.
                 | _ => {
-                    self.tokens.reconsume_current_input();
+                    self.tokens.reconsume_current_token();
                     while !(self.next_input_token().is_semicolon()
                         || self.next_input_token().is_eof())
                     {
