@@ -68,7 +68,7 @@ pub(crate) type HTMLTokenizerProcessResult = Result<
 // --------- //
 
 pub struct HTMLTokenizer<Chars> {
-    pub(crate) stream: HTMLInputStream<Chars>,
+    pub(crate) input: HTMLInputStream<Chars>,
     pub(crate) tree_construction: HTMLTreeConstruction,
 
     /// Le jeton courant.
@@ -116,7 +116,7 @@ impl<C> HTMLTokenizer<C> {
     pub fn new(document: DocumentNode, chars: C) -> Self {
         let stream = HTMLInputStream::new(chars);
         Self {
-            stream,
+            input: stream,
             tree_construction: HTMLTreeConstruction::new(document),
             token: None,
             state: HTMLTokenizerState::default(),
@@ -202,7 +202,7 @@ where
     /// cet état, mais lorsqu'il tente de consommer le prochain caractère,
     /// de lui fournir le caractère actuel à la place.
     pub(crate) fn reconsume(&mut self, state: &str) -> &mut Self {
-        self.stream.reconsume_current_input();
+        self.input.reconsume_current_input();
         self.switch_state_to(state);
         self
     }

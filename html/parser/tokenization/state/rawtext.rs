@@ -21,7 +21,7 @@ where
     pub(crate) fn handle_rawtext_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+003C LESS-THAN SIGN (<)
             //
             // Passer à l'état `rawtext-less-than-sign`.
@@ -57,7 +57,7 @@ where
     pub(crate) fn handle_rawtext_less_than_sign_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002F SOLIDUS (/)
             //
             // Définir le tampon temporaire à une chaîne de caractères
@@ -81,7 +81,7 @@ where
     pub(crate) fn handle_rawtext_end_tag_open_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // ASCII alpha
             //
             // Créer un nouveau jeton `end-tag`, définir son nom de
@@ -108,7 +108,7 @@ where
     pub(crate) fn handle_rawtext_end_tag_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)

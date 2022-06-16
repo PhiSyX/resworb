@@ -27,7 +27,7 @@ where
         self.set_temporary_buffer(String::new())
             .append_character_to_temporary_buffer('&');
 
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // ASCII alphanumeric
             //
             // Reprendre dans l'état `named-character-reference`.
@@ -62,8 +62,8 @@ where
     pub(crate) fn handle_named_character_reference_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        let ch = self.stream.current_input.expect("le caractère actuel");
-        let rest_of_chars = self.stream.peek_until_end::<String>();
+        let ch = self.input.current_input.expect("le caractère actuel");
+        let rest_of_chars = self.input.peek_until_end::<String>();
         let full_str = format!("{ch}{rest_of_chars}");
 
         let entities = &self.named_character_reference_code;
@@ -87,7 +87,7 @@ where
             | Some((entity_name, entity)) => {
                 // Consomme tous les caractères trouvés
                 entity_name.chars().for_each(|ch| {
-                    self.stream.consume_next_input();
+                    self.input.consume_next_input();
                     self.temporary_buffer.push(ch);
                 });
 
@@ -137,7 +137,7 @@ where
     pub(crate) fn handle_ambiguous_ampersand_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // ASCII alphanumeric
             //
             // Si la référence de caractère a été consommée dans le cadre
@@ -181,7 +181,7 @@ where
         // Définir le code de référence du caractère à zéro (0).
         self.character_reference_code = 0;
 
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+0078 LATIN SMALL LETTER X
             // U+0058 LATIN CAPITAL LETTER X
             //
@@ -202,7 +202,7 @@ where
     pub(crate) fn handle_hexadecimal_character_reference_start_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // ASCII hex digit
             //
             // Reprendre dans l'état `hexadecimal-character-reference`.
@@ -228,7 +228,7 @@ where
     pub(crate) fn handle_decimal_character_reference_start_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // ASCII digit
             //
             // Reprendre dans l'état `decimal-character-reference`.
@@ -254,7 +254,7 @@ where
     pub(crate) fn handle_hexadecimal_character_reference_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // ASCII digit
             //
             // Multiplier le code de référence du caractère par 16. Ajouter
@@ -321,7 +321,7 @@ where
     pub(crate) fn handle_decimal_character_reference_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // ASCII digit
             //
             // Multiplier le code de référence du caractère par 10. Ajouter

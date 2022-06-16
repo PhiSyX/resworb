@@ -21,7 +21,7 @@ where
     pub(crate) fn handle_script_data_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+003C LESS-THAN SIGN (<)
             //
             // Passer à l'état `script-data-less-than-sign`.
@@ -57,7 +57,7 @@ where
     pub(crate) fn handle_script_data_less_than_sign_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002F SOLIDUS (/)
             //
             // Définir le tampon temporaire comme une chaîne de caractères
@@ -92,7 +92,7 @@ where
     pub(crate) fn handle_script_data_end_tag_open_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // ASCII alpha
             //
             // Créer un nouveau jeton `end-tag`, définir son nom de balise
@@ -117,7 +117,7 @@ where
     pub(crate) fn handle_script_data_end_tag_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -197,7 +197,7 @@ where
     pub(crate) fn handle_script_data_escape_start_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état `script-data-escape-start-dash`. Émettre un
@@ -217,7 +217,7 @@ where
     pub(crate) fn handle_script_data_escape_start_dash_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état `script-data-escaped-dash-dash`.
@@ -237,7 +237,7 @@ where
     pub(crate) fn handle_script_data_escaped_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état `script-data-escaped-dash`. Émettre un jeton
@@ -286,7 +286,7 @@ where
     pub(crate) fn handle_script_data_escaped_dash_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état `script-data-escaped-dash-dash`.
@@ -339,7 +339,7 @@ where
     pub(crate) fn handle_script_data_escaped_dash_dash_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Émettre un jeton `character` U+002D HYPHEN-MINUS.
@@ -399,7 +399,7 @@ where
     pub(crate) fn handle_script_data_escaped_less_than_sign_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002F SOLIDUS (/)
             //
             // Définir le tampon temporaire à une chaîne de caractères
@@ -434,7 +434,7 @@ where
     pub(crate) fn handle_script_data_escaped_end_tag_open_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // ASCII alpha
             //
             // Créer un nouveau jeton `end-tag`, définir son nom de balise
@@ -461,7 +461,7 @@ where
     pub(crate) fn handle_script_data_escaped_end_tag_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -542,7 +542,7 @@ where
     pub(crate) fn handle_script_data_double_escape_start_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)
@@ -602,7 +602,7 @@ where
     pub(crate) fn handle_script_data_double_escaped_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état `script-data-double-escaped-dash`. Émettre
@@ -655,7 +655,7 @@ where
     pub(crate) fn handle_script_data_double_escaped_dash_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état `script-data-double-escaped-dash-dash`.
@@ -712,7 +712,7 @@ where
     pub(crate) fn handle_script_data_double_escaped_dash_dash_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Émettre un jeton `character` U+002D HYPHEN-MINUS.
@@ -776,7 +776,7 @@ where
     pub(crate) fn handle_script_data_double_escaped_less_than_sign_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002F SOLIDUS (/)
             //
             // Définir le tampon temporaire à une chaîne de caractères
@@ -800,7 +800,7 @@ where
     pub(crate) fn handle_script_data_double_escape_end_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)

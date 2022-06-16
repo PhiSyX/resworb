@@ -22,7 +22,7 @@ where
     pub(crate) fn handle_bogus_comment_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `comment` actuel.
@@ -61,13 +61,13 @@ where
     pub(crate) fn handle_markup_declaration_open_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        if let Some(word) = self.stream.peek_until::<String>(7) {
+        if let Some(word) = self.input.peek_until::<String>(7) {
             // Correspondance ASCII insensible à la casse pour le mot
             // "DOCTYPE".
             //
             // Consommer ces caractères et passer à l'état `doctype`.
             if word.to_ascii_lowercase() == "doctype" {
-                self.stream.advance(7);
+                self.input.advance(7);
                 return self.switch_state_to("doctype").and_continue();
             }
             // La chaîne "[CDATA[" (les cinq lettres majuscules "CDATA"
@@ -80,7 +80,7 @@ where
             // un jeton `comment` dont les données sont une chaîne de
             // caractères "[CDATA[". Passer à l'état `bogus-comment`.
             else if word == "[CDATA[" {
-                self.stream.advance(7);
+                self.input.advance(7);
 
                 if !self
                     .tree_construction
@@ -103,9 +103,9 @@ where
         // Consommer ces deux caractères, créer un jeton `comment`
         // dont les données sont une chaîne de caractères vide, passer à
         // l'état `comment-start`.
-        if let Some(word) = self.stream.peek_until::<String>(2) {
+        if let Some(word) = self.input.peek_until::<String>(2) {
             if word == "--" {
-                self.stream.advance(2);
+                self.input.advance(2);
                 return self
                     .set_token(HTMLToken::new_comment(String::new()))
                     .switch_state_to("comment-start")
@@ -127,7 +127,7 @@ where
     pub(crate) fn handle_comment_start_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état `comment-start-dash`.
@@ -154,7 +154,7 @@ where
     pub(crate) fn handle_comment_less_than_sign_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+0021 EXCLAMATION MARK (!)
             //
             // Ajouter le caractère actuel aux données du jeton `comment`.
@@ -185,7 +185,7 @@ where
     pub(crate) fn handle_comment_less_than_sign_bang_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état `comment-less-than-sign-bang-dash`.
@@ -203,7 +203,7 @@ where
     pub(crate) fn handle_comment_less_than_sign_bang_dash_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état `comment-less-than-sign-bang-dash-dash`.
@@ -221,7 +221,7 @@ where
     pub(crate) fn handle_comment_less_than_sign_bang_dash_dash_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+003E GREATER-THAN SIGN (>)
             // EOF
             //
@@ -243,7 +243,7 @@ where
     pub(crate) fn handle_comment_start_dash_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état final du commentaire.
@@ -286,7 +286,7 @@ where
     pub(crate) fn handle_comment_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+003C LESS-THAN SIGN (<)
             //
             // Ajouter le caractère actuel aux données du jeton `comment`.
@@ -341,7 +341,7 @@ where
     pub(crate) fn handle_comment_end_dash_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Passer à l'état `comment-end`.
@@ -375,7 +375,7 @@ where
     pub(crate) fn handle_comment_end_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+003E GREATER-THAN SIGN (>)
             //
             // Passer à l'état `data`. Émettre le jeton `comment` actuel.
@@ -425,7 +425,7 @@ where
     pub(crate) fn handle_comment_end_bang_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.consume_next_input_character() {
+        match self.input.consume_next_input_character() {
             // U+002D HYPHEN-MINUS (-)
             //
             // Ajouter deux caractères U+002D HYPHEN-MINUS (-) et un
