@@ -51,10 +51,8 @@ impl CSSParser {
     pub fn component_value(
         &mut self,
     ) -> Result<CSSComponentValue, CSSComponentValueError> {
-        self.tokens.advance_as_long_as_possible(
-            |token| token.is_whitespace(),
-            None,
-        );
+        self.tokens
+            .advance_as_long_as_possible(|token| token.is_whitespace());
 
         if self.next_input_token().is_eof() {
             return Err(CSSComponentValueError::SyntaxError);
@@ -62,10 +60,8 @@ impl CSSParser {
 
         let value = self.consume_component_value();
 
-        self.tokens.advance_as_long_as_possible(
-            |token| token.is_whitespace(),
-            None,
-        );
+        self.tokens
+            .advance_as_long_as_possible(|token| token.is_whitespace());
 
         if self.next_input_token().is_eof() {
             value.ok_or(CSSComponentValueError::SyntaxError)

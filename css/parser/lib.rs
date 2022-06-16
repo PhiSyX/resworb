@@ -187,12 +187,10 @@ impl CSSParser {
         let current_token = current_variant.token_unchecked();
 
         let mut declaration =
-            CSSDeclaration::default().with_name(current_token);
+            CSSDeclaration::default().with_name(current_token.name());
 
-        self.tokens.advance_as_long_as_possible(
-            |token| token.is_whitespace(),
-            None,
-        );
+        self.tokens
+            .advance_as_long_as_possible(|token| token.is_whitespace());
 
         // Si le prochain élément d'entrée n'est pas un <colon-token>,
         // il s'agit d'une erreur d'analyse. Ne rien retourner.
@@ -203,10 +201,8 @@ impl CSSParser {
 
         self.consume_next_input_token();
 
-        self.tokens.advance_as_long_as_possible(
-            |token| token.is_whitespace(),
-            None,
-        );
+        self.tokens
+            .advance_as_long_as_possible(|token| token.is_whitespace());
 
         while !self.next_input_token().is_eof() {
             if let Some(component_value) = self.consume_component_value() {

@@ -124,7 +124,7 @@ where
         self.nth(n)
     }
 
-    fn advance_as_long_as_possible<
+    fn advance_as_long_as_possible_with_limit<
         'a,
         Predicate: Fn(&Self::Item) -> bool,
         Limit: Parameter<'a, usize>,
@@ -137,7 +137,8 @@ where
         let mut limit = with_limit.map(|n| n + 1).unwrap_or(0);
         let mut result = vec![];
 
-        while (self.peek().is_some() && predicate(self.peek().unwrap()))
+        while self.peek().is_some()
+            && predicate(self.peek().unwrap())
             && (limit > 0 || with_limit.is_none())
         {
             result.push(self.advance(1).unwrap());

@@ -4,7 +4,7 @@
 
 use std::ops;
 
-use infra::primitive::codepoint::CodePoint;
+use infra::{algorithms::Parameter, primitive::codepoint::CodePoint};
 
 use crate::{
     preprocessor::InputStreamPreprocessor, StreamInput, StreamIterator,
@@ -108,10 +108,10 @@ where
 {
     type Item = I;
 
-    fn advance_as_long_as_possible<
+    fn advance_as_long_as_possible_with_limit<
         'a,
         Predicate: Fn(&Self::Item) -> bool,
-        Limit: infra::algorithms::Parameter<'a, usize>,
+        Limit: Parameter<'a, usize>,
     >(
         &mut self,
         predicate: Predicate,
@@ -121,8 +121,8 @@ where
         let mut limit = with_limit.map(|n| n + 1).unwrap_or(0);
         let mut result = vec![];
 
-        while (self.next_token().is_some()
-            && predicate(self.next_token().as_ref().unwrap()))
+        while self.next_token().is_some()
+            && predicate(self.next_token().as_ref().unwrap())
             && (limit > 0 || with_limit.is_none())
         {
             result.push(self.consume_next_token().unwrap());

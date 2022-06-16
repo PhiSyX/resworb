@@ -67,10 +67,8 @@ impl CSSParser {
 
     /// Analyse d'une règle
     pub fn rule(&mut self) -> Result<CSSRule, CSSRuleError> {
-        self.tokens.advance_as_long_as_possible(
-            |token| token.is_whitespace(),
-            None,
-        );
+        self.tokens
+            .advance_as_long_as_possible(|token| token.is_whitespace());
 
         let rule = match self.next_input_token() {
             // <EOF-token>
@@ -96,10 +94,8 @@ impl CSSParser {
             }
         };
 
-        self.tokens.advance_as_long_as_possible(
-            |token| token.is_whitespace(),
-            None,
-        );
+        self.tokens
+            .advance_as_long_as_possible(|token| token.is_whitespace());
 
         self.tokens
             .next_token()

@@ -64,10 +64,8 @@ pub enum CSSDeclarationCategory {
 impl CSSParser {
     /// Analyse d'une déclaration
     pub fn declaration(&mut self) -> Result<CSSDeclaration, CSSRuleError> {
-        self.tokens.advance_as_long_as_possible(
-            |token| token.is_whitespace(),
-            None,
-        );
+        self.tokens
+            .advance_as_long_as_possible(|token| token.is_whitespace());
 
         let declaration = match self.next_input_token() {
             | variant if variant.is_ident() => self.consume_declaration(),

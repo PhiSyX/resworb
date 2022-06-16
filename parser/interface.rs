@@ -35,7 +35,17 @@ pub trait StreamIterator {
     ///
     /// Après cette opération, le flux d'entrée vaut `['a', ' ', 'b']`.
     #[allow(unused_variables)]
-    fn advance_as_long_as_possible<
+    fn advance_as_long_as_possible<Predicate: Fn(&Self::Item) -> bool>(
+        &mut self,
+        predicate: Predicate,
+    ) -> Vec<Self::Item> {
+        self.advance_as_long_as_possible_with_limit(predicate, None)
+    }
+
+    /// Alias de [StreamIterator::advance_as_long_as_possible] avec une
+    /// limite.
+    #[allow(unused_variables)]
+    fn advance_as_long_as_possible_with_limit<
         'a,
         Predicate: Fn(&Self::Item) -> bool,
         Limit: Parameter<'a, usize>,
