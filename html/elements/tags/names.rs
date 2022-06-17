@@ -1069,4 +1069,6 @@ enumerate_html_tag_names! {
     unknown
     r#use
     view
+
+    customElement
 }

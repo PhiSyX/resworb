@@ -9,20 +9,8 @@ use infra::primitive::string::DOMString;
 // --------- //
 
 #[derive(Debug)]
+#[derive(PartialEq, Eq)]
 pub struct Attr {
     name: DOMString,
     value: DOMString,
 }
-
-// -------------- //
-// Implémentation // -> Interface
-// -------------- //
-
-impl PartialEq for Attr {
-    fn eq(&self, other: &Self) -> bool {
-        *self.name.read() == *other.name.read()
-            && *self.value.read() == *other.value.read()
-    }
-}
-
-impl Eq for Attr {}

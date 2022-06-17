@@ -28,7 +28,6 @@ use infra::{
     namespace::Namespace, primitive::codepoint::CodePoint,
     structure::tree::TreeNode,
 };
-use macros::dd;
 use parser::StreamToken;
 
 use crate::{
@@ -55,7 +54,7 @@ type HTMLTreeConstructionControlFlow =
 #[derive(Debug)]
 #[derive(Default)]
 pub struct HTMLTreeConstruction {
-    document: DocumentNode,
+    pub document: DocumentNode,
     pub(super) insertion_mode: InsertionMode,
     pub(super) original_insertion_mode: InsertionMode,
     stack_of_template_insertion_modes: Vec<InsertionMode>,
@@ -145,7 +144,7 @@ impl HTMLTreeConstruction {
         m: InsertionMode,
         token: HTMLToken,
     ) -> HTMLTreeConstructionControlFlow {
-        match dd!(&m) {
+        match m {
             | InsertionMode::Initial => {
                 self.handle_initial_insertion_mode(token)
             }
@@ -798,7 +797,8 @@ impl HTMLTreeConstruction {
                     let tc = template
                         .element_ref()
                         .content()
-                        .map(|t| t.to_owned());
+                        .map(|x| x.content.borrow().clone());
+
                     AdjustedInsertionLocation {
                         parent: tc,
                         insert_before_sibling: None,
@@ -1643,7 +1643,6 @@ mod tests {
             .tree_construction()
             .document
             .get_first_child()
-            .to_owned()
             .unwrap();
         assert!(node.is_comment());
         assert!(!node.is_document());
@@ -1655,10 +1654,10 @@ mod tests {
         let tree = parser.tree_construction();
         tree.handle_initial_insertion_mode(token);
         let doc = tree.document.document_ref();
-        let doctype = doc.get_doctype().to_owned().unwrap();
-        assert_eq!(doctype.name.to_string(), "html".to_string());
-        assert_eq!(doctype.public_id.to_string(), "".to_string());
-        assert_eq!(doctype.system_id.to_string(), "".to_string());
+        let doctype = doc.get_doctype().unwrap();
+        assert_eq!(*doctype.name.borrow(), "html".to_string());
+        assert_eq!(*doctype.public_id.borrow(), "".to_string());
+        assert_eq!(*doctype.system_id.borrow(), "".to_string());
 
         // Anything else
 
@@ -1667,7 +1666,7 @@ mod tests {
         let tree = parser.tree_construction();
         tree.handle_initial_insertion_mode(token);
         let doc = tree.document.document_ref();
-        assert_eq!(*doc.quirks_mode.read().unwrap(), QuirksMode::Yes);
+        assert_eq!(*doc.quirks_mode.borrow(), QuirksMode::Yes);
         assert_eq!(tree.insertion_mode, InsertionMode::BeforeHTML);
     }
 

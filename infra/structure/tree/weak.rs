@@ -3,7 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use core::ops;
-use std::sync::{Arc, Weak};
+use std::rc::{Rc, Weak};
 
 use super::{node::Node, TreeNode};
 
@@ -51,13 +51,13 @@ impl<T> ops::Deref for TreeNodeWeak<T> {
 }
 
 impl<T> From<&TreeNode<T>> for TreeNodeWeak<T> {
-    fn from(arc: &TreeNode<T>) -> Self {
-        Self::new(Arc::downgrade(arc))
+    fn from(node: &TreeNode<T>) -> Self {
+        Self::new(Rc::downgrade(node))
     }
 }
 
 impl<T> From<TreeNode<T>> for TreeNodeWeak<T> {
-    fn from(arc: TreeNode<T>) -> Self {
-        Self::new(Arc::downgrade(&arc))
+    fn from(node: TreeNode<T>) -> Self {
+        Self::new(Rc::downgrade(&node))
     }
 }

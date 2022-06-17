@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use std::cell::RefCell;
+
 use infra::primitive::string::DOMString;
 
 // --------- //
@@ -27,13 +29,9 @@ impl DocumentType {
     /// qu'ils ne soient explicitement donnés lors de la création d'un
     /// doctype, son ID public et son ID système sont une chaîne de
     /// caractères vide.
-    pub fn new(name: Option<&String>) -> Self {
+    pub fn new(maybe_name: impl Into<String>) -> Self {
         Self {
-            name: if let Some(x) = name {
-                DOMString::new(x)
-            } else {
-                Default::default()
-            },
+            name: RefCell::new(maybe_name.into()),
             public_id: Default::default(),
             system_id: Default::default(),
         }
@@ -41,36 +39,30 @@ impl DocumentType {
 }
 
 impl DocumentType {
-    pub fn set_name(&mut self, maybe_name: Option<&String>) -> &mut Self {
-        self.name = if let Some(x) = maybe_name {
-            DOMString::new(x)
-        } else {
-            Default::default()
-        };
+    pub fn set_name(
+        &mut self,
+        maybe_name: Option<impl Into<String>>,
+    ) -> &mut Self {
+        self.name =
+            RefCell::new(maybe_name.map(Into::into).unwrap_or_default());
         self
     }
 
     pub fn set_public_id(
         &mut self,
-        maybe_pid: Option<&String>,
+        maybe_pid: Option<impl Into<String>>,
     ) -> &mut Self {
-        self.public_id = if let Some(x) = maybe_pid {
-            DOMString::new(x)
-        } else {
-            Default::default()
-        };
+        self.public_id =
+            RefCell::new(maybe_pid.map(Into::into).unwrap_or_default());
         self
     }
 
     pub fn set_system_id(
         &mut self,
-        maybe_sid: Option<&String>,
+        maybe_sid: Option<impl Into<String>>,
     ) -> &mut Self {
-        self.system_id = if let Some(x) = maybe_sid {
-            DOMString::new(x)
-        } else {
-            Default::default()
-        };
+        self.system_id =
+            RefCell::new(maybe_sid.map(Into::into).unwrap_or_default());
         self
     }
 }

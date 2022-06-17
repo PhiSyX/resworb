@@ -5,7 +5,7 @@
 use core::ops;
 use std::{
     borrow::{Borrow, BorrowMut},
-    sync::{RwLock, RwLockReadGuard},
+    cell::RefCell,
 };
 
 use html_elements::tag_names;
@@ -31,9 +31,10 @@ pub struct DocumentNode {
 /// Chaque document XML et HTML dans une UA HTML est représenté par un
 /// objet Document. [DOM](https://dom.spec.whatwg.org/)
 #[derive(Debug)]
+#[derive(PartialEq, Eq)]
 pub struct Document {
-    doctype: RwLock<Option<DocumentType>>,
-    pub quirks_mode: RwLock<QuirksMode>,
+    doctype: RefCell<Option<DocumentType>>,
+    pub quirks_mode: RefCell<QuirksMode>,
 }
 
 // ----------- //
@@ -63,7 +64,7 @@ impl Document {
     pub fn new() -> Self {
         Self {
             doctype: Default::default(),
-            quirks_mode: RwLock::new(QuirksMode::Yes),
+            quirks_mode: RefCell::new(QuirksMode::Yes),
         }
     }
 
@@ -118,24 +119,24 @@ impl Document {
 }
 
 impl Document {
-    pub fn get_doctype(&self) -> RwLockReadGuard<Option<DocumentType>> {
-        self.doctype.read().unwrap()
+    pub fn get_doctype(&self) -> Option<DocumentType> {
+        self.doctype.borrow().clone()
     }
 
     pub fn isin_quirks_mode(&self) -> bool {
-        matches!(*self.quirks_mode.read().unwrap(), QuirksMode::Yes)
+        matches!(*self.quirks_mode.borrow(), QuirksMode::Yes)
     }
 }
 
 // &mut Self
 impl Document {
     pub fn set_doctype(&self, doctype: DocumentType) -> &Self {
-        *self.doctype.write().unwrap() = doctype.into();
+        *self.doctype.borrow_mut() = doctype.into();
         self
     }
 
     pub fn set_quirks_mode(&self, mode: QuirksMode) -> &Self {
-        *self.quirks_mode.write().unwrap() = mode;
+        *self.quirks_mode.borrow_mut() = mode;
         self
     }
 }
@@ -183,13 +184,3 @@ impl ops::Deref for DocumentNode {
         self.tree.borrow()
     }
 }
-
-impl PartialEq for Document {
-    fn eq(&self, other: &Self) -> bool {
-        *self.doctype.read().unwrap() == *other.doctype.read().unwrap()
-            && *self.quirks_mode.read().unwrap()
-                == *other.quirks_mode.read().unwrap()
-    }
-}
-
-impl Eq for Document {}

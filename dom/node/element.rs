@@ -3,14 +3,11 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use core::{fmt, str};
-use std::{
-    collections::HashMap,
-    sync::{RwLock, RwLockReadGuard},
-};
+use std::{cell::RefCell, collections::HashMap};
 
 use html_elements::{
     interface::{HTMLElementInterface, IsOneOfTagsInterface},
-    tag_names, HTMLScriptElement,
+    tag_names, HTMLScriptElement, HTMLTemplateElement,
 };
 use infra::{namespace::Namespace, primitive::string::DOMString};
 
@@ -21,13 +18,14 @@ use super::{document_fragment::DocumentFragmentNode, DocumentNode};
 // --------- //
 
 #[derive(Debug)]
+#[derive(PartialEq, Eq)]
 pub struct Element {
     inner: HTMLElement,
     // TODO(phisyx): changer le type de cet attribut en NamedNodeMap (cf. https://dom.spec.whatwg.org/#namednodemap)
-    pub attributes: RwLock<HashMap<DOMString, DOMString>>,
-    pub id: RwLock<Option<DOMString>>,
-    pub is: RwLock<Option<DOMString>>,
-    pub namespace_uri: RwLock<Namespace>,
+    pub attributes: RefCell<HashMap<String, String>>,
+    pub id: RefCell<Option<DOMString>>,
+    pub is: RefCell<Option<DOMString>>,
+    pub namespace_uri: RefCell<Namespace>,
 }
 
 // ----------- //
@@ -132,6 +130,20 @@ pub enum HTMLElement {
         /// 4.12.3 The template element
         html_elements::HTMLTemplateElement<DocumentFragmentNode>,
     ),
+
+    Unknown(HTMLUnknownElement),
+}
+
+#[derive(Debug)]
+#[derive(PartialEq, Eq)]
+pub struct HTMLUnknownElement {
+    name: String,
+}
+
+impl HTMLUnknownElement {
+    pub fn tag_name(&self) -> &str {
+        &self.name
+    }
 }
 
 // -------------- //
@@ -148,8 +160,8 @@ impl Element {
             inner: data,
             attributes: Default::default(),
             id: Default::default(),
-            is: RwLock::new(is.map(DOMString::from)),
-            namespace_uri: RwLock::new(namespace_uri),
+            is: RefCell::new(is.map(DOMString::from)),
+            namespace_uri: RefCell::new(namespace_uri),
         }
     }
 }
@@ -167,18 +179,18 @@ impl Element {
 
     pub fn content(
         &self,
-    ) -> Option<RwLockReadGuard<DocumentFragmentNode>> {
+    ) -> Option<&HTMLTemplateElement<DocumentFragmentNode>> {
         assert!(matches!(self.inner, HTMLElement::ScriptingTemplate(_)));
 
         if let HTMLElement::ScriptingTemplate(el) = &self.inner {
-            return el.content.read().ok();
+            return Some(el);
         }
 
         None
     }
 
     pub fn namespace(&self) -> Option<Namespace> {
-        self.namespace_uri.read().ok().map(|ns| *ns)
+        (*self.namespace_uri.borrow()).into()
     }
 
     pub fn isin_html_namespace(&self) -> bool {
@@ -201,17 +213,16 @@ impl Element {
 
     pub fn is_html_text_integration_point(&self) -> bool {
         if self.tag_name() == tag_names::annotationXml {
-            let attrs = self.attributes.read().unwrap();
-            let encoding_str: DOMString = "encoding".into();
-            let maybe_encoding = attrs.get(&encoding_str);
+            let attrs = self.attributes.borrow().clone();
+            let encoding_str = "encoding";
+            let maybe_encoding = attrs.get(&encoding_str.to_owned());
             if let Some(encoding) = maybe_encoding {
-                let encoding_str: DOMString = "text/html".into();
+                let encoding_str = "text/html";
                 if encoding_str.eq_ignore_ascii_case(encoding) {
                     return true;
                 }
 
-                let encoding_str: DOMString =
-                    "application/xhtml+xml".into();
+                let encoding_str = "application/xhtml+xml";
                 if encoding_str.eq_ignore_ascii_case(encoding) {
                     return true;
                 }
@@ -234,20 +245,17 @@ impl Element {
     }
 
     pub fn has_attribute(&self, name: &str) -> bool {
-        let dom_string = DOMString::new(name);
-        self.attributes.read().unwrap().contains_key(&dom_string)
+        (*self.attributes.borrow()).contains_key(&name.to_owned())
     }
 
     pub fn set_attribute(&self, name: &str, value: &str) {
         if name == "id" {
-            *self.id.write().unwrap() = Some(DOMString::from(value));
+            self.id.borrow_mut().replace(value.to_owned().into());
             return;
         }
 
-        self.attributes
-            .write()
-            .unwrap()
-            .insert(DOMString::new(name), DOMString::new(value));
+        (self.attributes.borrow_mut())
+            .insert(name.to_owned(), value.to_owned());
     }
 }
 
@@ -255,25 +263,16 @@ impl Element {
 // Implémentation // -> Interface
 // -------------- //
 
-impl PartialEq for Element {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
-            && *self.attributes.read().unwrap()
-                == *other.attributes.read().unwrap()
-            && *self.id.read().unwrap() == *other.id.read().unwrap()
-    }
-}
-
-impl Eq for Element {}
-
 impl str::FromStr for HTMLElement {
     type Err = &'static str;
 
     fn from_str(local_name: &str) -> Result<Self, Self::Err> {
-        let local_name =
-            local_name.to_ascii_lowercase().parse::<tag_names>()?;
+        let tag_name = local_name
+            .to_ascii_lowercase()
+            .parse::<tag_names>()
+            .unwrap_or(tag_names::customElement);
 
-        Ok(match local_name {
+        Ok(match tag_name {
             | tag_names::html => Self::DocumentHtml(
                 html_elements::HTMLHtmlElement::default(),
             ),
@@ -347,9 +346,9 @@ impl str::FromStr for HTMLElement {
             | tag_names::h6) => Self::SectionHeading(
                 html_elements::HTMLHeadingElement::new(heading),
             ),
-            | _ => {
-                return Err("Element non pris en charge pour le moment.")
-            }
+            | _ => Self::Unknown(HTMLUnknownElement {
+                name: local_name.to_owned(),
+            }),
         })
     }
 }
@@ -380,6 +379,7 @@ impl fmt::Display for HTMLElement {
                 | Self::SectionHeading(el) => el.tag_name(),
                 | Self::ScriptingScript(el) => el.tag_name(),
                 | Self::ScriptingTemplate(el) => el.tag_name(),
+                | Self::Unknown(el) => el.tag_name(),
             }
         )
     }

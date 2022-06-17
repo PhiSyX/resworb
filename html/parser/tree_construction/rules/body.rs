@@ -2,8 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::sync::Arc;
-
 use dom::node::CommentNode;
 use html_elements::{
     interface::IsOneOfTagsInterface, tag_attributes, tag_names,
@@ -1160,13 +1158,7 @@ impl HTMLTreeConstruction {
                 let maybe_node = self.form_element_pointer.take();
                 match &maybe_node {
                     | Some(node) => {
-                        let element_name = node
-                            .element_ref()
-                            .local_name()
-                            .parse()
-                            .expect(
-                                "devrait être un nom de balise valide.",
-                            );
+                        let element_name = node.element_ref().tag_name();
                         if !self
                             .stack_of_open_elements
                             .has_element_in_scope(
@@ -1197,7 +1189,7 @@ impl HTMLTreeConstruction {
 
                 if let Some(node) = maybe_node {
                     self.stack_of_open_elements.remove_first_tag_matching(
-                        |first_node| Arc::ptr_eq(first_node, &node),
+                        |first_node| first_node == &node,
                     );
                 }
             }
