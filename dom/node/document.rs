@@ -8,10 +8,13 @@ use std::{
     cell::RefCell,
 };
 
-use html_elements::tag_names;
-use infra::{namespace::Namespace, structure::tree::TreeNode};
+use html_elements::{tag_names, HTMLElementVariant};
+use infra::{
+    namespace::Namespace, primitive::string::DOMString,
+    structure::tree::TreeNode,
+};
 
-use super::{comment::CommentNode, element::HTMLElement, Element};
+use super::comment::CommentNode;
 use crate::{
     exception::DOMException,
     node::{DocumentType, Node, NodeData, NodeType},
@@ -78,10 +81,6 @@ impl Document {
             return Err(DOMException::InvalidCharacterError);
         }
 
-        // 2) S'il s'agit d'un document HTML, définir localName en
-        // minuscules ASCII.
-        let maybe_element = local_name.as_ref().parse::<HTMLElement>();
-
         // 3) Laisser `is` être null.
         // 4) Si options est un dictionnaire et que options["is"] existe,
         // alors `is` lui est attribué.
@@ -97,24 +96,28 @@ impl Document {
             Some(Namespace::HTML)
         };
 
+        // 2) S'il s'agit d'un document HTML, définir localName en
+        // minuscules ASCII.
+
+        let element = html_elements::Element::new(
+            DOMString::new(local_name.as_ref().to_owned()),
+            is,
+            namespace.unwrap_or(Namespace::HTML),
+        );
+        let html_element = html_elements::HTMLElement::new(element);
+
         // 6) Renvoie le résultat de la création d'un élément avec this,
         // localName, namespace, null, is, et avec l'indicateur d'éléments
         // personnalisés synchrones activé.
 
-        maybe_element
-            .map(|element| {
-                TreeNode::new(
-                    Node::builder()
-                        .set_data(NodeData::Element(Element::new(
-                            element,
-                            is,
-                            namespace.unwrap(),
-                        )))
-                        .set_type(NodeType::ELEMENT_NODE)
-                        .build(),
-                )
-            })
-            .map_err(|_| DOMException::InvalidNodeTypeError)
+        Ok(TreeNode::new(
+            Node::builder()
+                .set_data(NodeData::Element(HTMLElementVariant::from(
+                    html_element,
+                )))
+                .set_type(NodeType::ELEMENT_NODE)
+                .build(),
+        ))
     }
 }
 

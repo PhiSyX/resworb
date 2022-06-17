@@ -2,11 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-// --------- //
-// Structure //
-// --------- //
+use crate::html_element;
 
-#[derive(Debug)]
-#[derive(Default)]
-#[derive(PartialEq, Eq)]
-pub struct HTMLAnchorElement {}
+html_element! {
+    struct HTMLAnchorElement(a) {}
+}

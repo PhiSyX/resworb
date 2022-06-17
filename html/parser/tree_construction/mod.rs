@@ -795,9 +795,9 @@ impl HTMLTreeConstruction {
                     template: &TreeNode<Node>,
                 ) -> AdjustedInsertionLocation {
                     let tc = template
-                        .element_ref()
+                        .iref()
                         .content()
-                        .map(|x| x.content.borrow().clone());
+                        .map(|template| template.to_owned());
 
                     AdjustedInsertionLocation {
                         parent: tc,

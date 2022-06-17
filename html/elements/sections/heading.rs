@@ -2,36 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::{interface::HTMLElementInterface, tag_names};
+use crate::{html_element, interface::HTMLElementInterface};
 
-// --------- //
-// Structure //
-// --------- //
-
-#[derive(Debug)]
-#[derive(PartialEq, Eq)]
-pub struct HTMLHeadingElement {
-    level: u8,
-}
-
-// -------------- //
-// Implémentation //
-// -------------- //
-
-impl HTMLHeadingElement {
-    pub const fn new(tag_name: tag_names) -> Self {
-        let level = match tag_name {
-            | tag_names::h1 => 1,
-            | tag_names::h2 => 2,
-            | tag_names::h3 => 3,
-            | tag_names::h4 => 4,
-            | tag_names::h5 => 5,
-            | tag_names::h6 => 6,
-            | _ => panic!(
-                "Nom de balise invalide, attendue : h1, h2, h3, h4, h5, h6"
-            ),
-        };
-        Self { level }
+html_element! {
+    struct HTMLHeadingElement(?) {
+        level: u8
     }
 }
 
@@ -40,7 +15,7 @@ impl HTMLHeadingElement {
 // -------------- //
 
 impl HTMLElementInterface for HTMLHeadingElement {
-    fn tag_name(&self) -> &'static str {
+    fn tag_name(&self) -> String {
         match self.level {
             | 1 => "h1",
             | 2 => "h2",
@@ -50,5 +25,6 @@ impl HTMLElementInterface for HTMLHeadingElement {
             | 6 => "h6",
             | _ => "h1",
         }
+        .to_owned()
     }
 }
