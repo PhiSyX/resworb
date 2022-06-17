@@ -18,13 +18,13 @@ use super::{TreeNode, TreeNodeWeak};
 pub struct Node<T> {
     data: T,
 
-    pub(crate) parent: RwLock<Option<TreeNodeWeak<T>>>,
+    pub(super) parent: RwLock<Option<TreeNodeWeak<T>>>,
 
-    pub(crate) first_child: RwLock<Option<TreeNode<T>>>,
-    pub(crate) last_child: RwLock<Option<TreeNode<T>>>,
+    pub(super) first_child: RwLock<Option<TreeNode<T>>>,
+    pub(super) last_child: RwLock<Option<TreeNode<T>>>,
 
-    pub(crate) prev_sibling: RwLock<Option<TreeNodeWeak<T>>>,
-    pub(crate) next_sibling: RwLock<Option<TreeNode<T>>>,
+    pub(super) prev_sibling: RwLock<Option<TreeNodeWeak<T>>>,
+    pub(super) next_sibling: RwLock<Option<TreeNode<T>>>,
 }
 
 // ----------- //

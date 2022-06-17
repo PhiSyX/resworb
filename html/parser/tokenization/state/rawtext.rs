@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use infra::primitive::codepoint::CodePoint;
+use infra::primitive::codepoint::CodePointIterator;
 
 use crate::{
     codepoint::HTMLCodePoint,
@@ -16,12 +16,12 @@ use crate::{
 
 impl<C> HTMLTokenizer<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     pub(crate) fn handle_rawtext_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.input.consume_next_input_character() {
             // U+003C LESS-THAN SIGN (<)
             //
             // Passer à l'état `rawtext-less-than-sign`.
@@ -57,7 +57,7 @@ where
     pub(crate) fn handle_rawtext_less_than_sign_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.input.consume_next_input_character() {
             // U+002F SOLIDUS (/)
             //
             // Définir le tampon temporaire à une chaîne de caractères
@@ -81,7 +81,7 @@ where
     pub(crate) fn handle_rawtext_end_tag_open_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.input.consume_next_input_character() {
             // ASCII alpha
             //
             // Créer un nouveau jeton `end-tag`, définir son nom de
@@ -108,7 +108,7 @@ where
     pub(crate) fn handle_rawtext_end_tag_name_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.input.consume_next_input_character() {
             // U+0009 CHARACTER TABULATION (tab)
             // U+000A LINE FEED (LF)
             // U+000C FORM FEED (FF)

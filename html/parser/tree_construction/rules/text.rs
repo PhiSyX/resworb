@@ -22,9 +22,9 @@ impl HTMLTreeConstruction {
             //
             // Insérer le caractère du jeton.
             //
-            // Note: il ne peut jamais s'agir d'un caractère U+0000 NULL ;
-            // le tokenizer les convertit en caractères
-            // U+FFFD REPLACEMENT CHARACTER.
+            // NOTE(html): il ne peut jamais s'agir d'un caractère U+0000
+            // NULL ; le tokenizer les convertit en caractères U+FFFD
+            // REPLACEMENT CHARACTER.
             | HTMLToken::Character(ch) => {
                 self.insert_character(ch);
             }
@@ -56,14 +56,14 @@ impl HTMLTreeConstruction {
                 );
             }
 
-            // TODO: active spéculative html tree
+            // TODO(html): active spéculative html tree
             // An end tag whose tag name is "script"
             | HTMLToken::Tag {
                 ref name,
                 is_end: true,
                 ..
             } if tag_names::script == name => {
-                todo!()
+                todo!("active spéculative html tree")
             }
 
             // Any other end tag

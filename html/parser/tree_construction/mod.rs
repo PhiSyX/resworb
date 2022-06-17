@@ -29,6 +29,7 @@ use infra::{
     structure::tree::TreeNode,
 };
 use macros::dd;
+use parser::StreamToken;
 
 use crate::{
     state::{
@@ -40,6 +41,13 @@ use crate::{
     HTMLParserFlag, HTMLParserState,
 };
 
+// ---- //
+// Type //
+// ---- //
+
+type HTMLTreeConstructionControlFlow =
+    ControlFlow<HTMLParserFlag, HTMLParserState>;
+
 // --------- //
 // Structure //
 // --------- //
@@ -48,14 +56,14 @@ use crate::{
 #[derive(Default)]
 pub struct HTMLTreeConstruction {
     document: DocumentNode,
-    pub(crate) insertion_mode: InsertionMode,
-    pub(crate) original_insertion_mode: InsertionMode,
+    pub(super) insertion_mode: InsertionMode,
+    pub(super) original_insertion_mode: InsertionMode,
     stack_of_template_insertion_modes: Vec<InsertionMode>,
-    pub(crate) stack_of_open_elements: StackOfOpenElements,
+    stack_of_open_elements: StackOfOpenElements,
     list_of_active_formatting_elements: ListOfActiveFormattingElements,
     foster_parenting: bool,
     scripting_flag: ScriptingFlag,
-    pub(crate) frameset_ok_flag: FramesetOkFlag,
+    pub(super) frameset_ok_flag: FramesetOkFlag,
     parsing_fragment: bool,
     context_element: Option<TreeNode<Node>>,
     character_insertion_node: Option<TreeNode<Node>>,
@@ -64,9 +72,6 @@ pub struct HTMLTreeConstruction {
     form_element_pointer: Option<FormElementPointer>,
     pending_table_character_tokens: Vec<HTMLToken>,
 }
-
-type HTMLTreeConstructionControlFlow =
-    ControlFlow<HTMLParserFlag, HTMLParserState>;
 
 struct AdjustedInsertionLocation {
     parent: Option<TreeNode<Node>>,
@@ -78,7 +83,7 @@ struct AdjustedInsertionLocation {
 // -------------- //
 
 impl HTMLTreeConstruction {
-    pub(crate) fn new(document: DocumentNode) -> Self {
+    pub(super) fn new(document: DocumentNode) -> Self {
         Self {
             document,
             ..Default::default()
@@ -87,7 +92,7 @@ impl HTMLTreeConstruction {
 }
 
 impl HTMLTreeConstruction {
-    pub(crate) fn dispatcher(
+    pub(super) fn dispatcher(
         &mut self,
         token: Option<HTMLToken>,
     ) -> HTMLTreeConstructionControlFlow {
@@ -111,7 +116,7 @@ impl HTMLTreeConstruction {
     /// et que la pile d'éléments ouverts ne contient qu'un seul élément
     /// (cas du fragment) ; sinon, le noeud courant ajusté est le noeud
     /// courant.
-    pub fn adjusted_current_node(&self) -> &TreeNode<Node> {
+    pub(super) fn adjusted_current_node(&self) -> &TreeNode<Node> {
         if self.parsing_fragment && self.stack_of_open_elements.len() == 1
         {
             self.context_element.as_ref().expect("Context Element")
@@ -439,7 +444,9 @@ impl HTMLTreeConstruction {
                 }
             }
 
-            | _ => todo!(),
+            // NOTE(phisyx): la spécification n'indique pas de traitement
+            //               pour les autres types de jetons.
+            | _ => unreachable!(),
         };
 
         HTMLTreeConstructionControlFlow::Continue(
@@ -699,8 +706,8 @@ impl HTMLTreeConstruction {
     ///    2.1. Si le `foster parenting` est activée et que la cible est
     /// un élément table, tbody, tfoot, thead ou tr.
     ///
-    ///    Note: Le `foster parenting` se produit lorsque le contenu est
-    /// mal intégré dans les table's.
+    ///    NOTE(html): Le `foster parenting` se produit lorsque le contenu
+    /// est mal intégré dans les table's.
     ///
     ///      2.1.1. Le dernier template est le dernier élément template
     /// dans la pile d'éléments ouverts, s'il y en a.
@@ -734,11 +741,11 @@ impl HTMLTreeConstruction {
     /// l'intérieur de l'élément précédent, après son dernier enfant (le
     /// cas échéant).
     ///
-    ///    Note: Ces étapes sont nécessaires en partie parce qu'il est
-    /// possible que des éléments, en particulier l'élément table dans ce
-    /// cas, aient été déplacés par un script dans le DOM, ou même
-    /// entièrement retirés du DOM, après que l'élément ait été inséré par
-    /// l'analyseur.
+    ///    NOTE(html): Ces étapes sont nécessaires en partie parce qu'il
+    /// est possible que des éléments, en particulier l'élément table
+    /// dans ce cas, aient été déplacés par un script dans le DOM, ou
+    /// même entièrement retirés du DOM, après que l'élément ait été
+    /// inséré par l'analyseur.
     ///
     ///    2.2. Sinon : l'emplacement d'insertion ajusté doit être à
     /// l'intérieur de la cible, après son dernier enfant (s'il y en a).
@@ -1131,7 +1138,7 @@ impl HTMLTreeConstruction {
     /// ont été ouverts dans le body, cell ou caption courant (selon le
     /// plus jeune) et qui n'ont pas été explicitement fermés.
     ///
-    /// Note: La liste des éléments de formatage actifs est toujours
+    /// NOTE(html): La liste des éléments de formatage actifs est toujours
     /// constituée d'éléments dans l'ordre chronologique, l'élément le
     /// moins récemment ajouté étant le premier et l'élément le plus
     /// récemment ajouté le dernier (sauf pendant l'exécution des étapes 7
@@ -1163,7 +1170,8 @@ impl HTMLTreeConstruction {
             return;
         };
 
-        // todo: probablement à améliorer.
+        // NOTE(phisyx): code qui est à propice à des bugs; à améliorer et
+        //               à tester.
         #[allow(unused_labels)]
         'main: loop {
             // Rewind
@@ -1350,7 +1358,7 @@ impl HTMLTreeConstruction {
         self.insertion_mode.switch_to(InsertionMode::InBody);
     }
 
-    /// https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm
+    /// Voir <https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm>
     fn run_adoption_agency_algorithm(
         &mut self,
         token: &HTMLToken,
@@ -1627,7 +1635,7 @@ mod tests {
         // Comment token
 
         let mut parser = test_the_str!("<!-- Comment -->");
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         parser
             .tree_construction()
             .handle_initial_insertion_mode(token);
@@ -1643,7 +1651,7 @@ mod tests {
         // Doctype
 
         let mut parser = test_the_str!("<!DOCTYPE html>");
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         let tree = parser.tree_construction();
         tree.handle_initial_insertion_mode(token);
         let doc = tree.document.document_ref();
@@ -1655,7 +1663,7 @@ mod tests {
         // Anything else
 
         let mut parser = test_the_str!("a");
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         let tree = parser.tree_construction();
         tree.handle_initial_insertion_mode(token);
         let doc = tree.document.document_ref();
@@ -1668,7 +1676,7 @@ mod tests {
         // Comment
 
         let mut parser = test_the_str!("<!-- comment -->");
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         let tree = parser.tree_construction();
         tree.handle_before_html_insertion_mode(token);
         let doc = tree.document.get_first_child().to_owned().unwrap();
@@ -1678,7 +1686,7 @@ mod tests {
 
         let mut parser = test_the_str!("<html><head>");
         // <html>
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         let tree = parser.tree_construction();
         tree.handle_before_html_insertion_mode(token);
         let doc = tree.document.get_first_child().to_owned().unwrap();
@@ -1687,7 +1695,7 @@ mod tests {
 
         // Anything else (<heap>)
 
-        let token = parser.tokenizer.next_token().unwrap();
+        let token = parser.tokenizer.consume_next_token().unwrap();
         let tree = parser.tree_construction();
         tree.handle_before_html_insertion_mode(token);
         let doc = tree.document.get_last_child().to_owned().unwrap();

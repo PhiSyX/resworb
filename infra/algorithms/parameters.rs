@@ -78,15 +78,33 @@ impl<'a, T: ParameterType> Parameter<'a, T> for &'a Option<T> {
     }
 }
 
-impl<T> ParameterType for *mut T {
-    type Target = Self;
+macro_rules! impl_parameter_type {
+    ($($ty:ty),*) => {
+        $(
+            impl ParameterType for $ty {
+                type Target = Self;
+            }
+        )*
+    };
+
+    (^ $($ty:ty),*) => {
+        $(
+            impl<T> ParameterType for $ty {
+                type Target = Self;
+            }
+        )*
+    };
 }
 
-impl<T> ParameterType for *const T {
-    type Target = Self;
-}
+impl_parameter_type!(^ *mut T, *const T);
 
-// todo: ajouter une implémentation pour des types génériques.
+impl_parameter_type!(
+    // Copy
+    usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32,
+    f64, bool, char
+);
+
+// TODO(phisyx): ajouter une implémentation pour des types génériques.
 // impl<T: GenericInterface> ParameterType for T {
 //     type Target = Self;
 // }

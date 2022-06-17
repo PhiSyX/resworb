@@ -54,7 +54,7 @@ impl Comment {
     /// Les étapes du constructeur du nouveau commentaire consistent
     /// à définir les données de ce dernier comme étant des
     /// [CharacterData].
-    pub fn new(data: String) -> Self {
+    fn new(data: String) -> Self {
         Self { data }
     }
 }

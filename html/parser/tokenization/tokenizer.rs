@@ -2,15 +2,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::{borrow::Cow, collections::VecDeque};
+use std::borrow::Cow;
 
 use dom::node::DocumentNode;
-use infra::primitive::codepoint::CodePoint;
+use infra::primitive::codepoint::{CodePoint, CodePointIterator};
 use macros::dd;
 use named_character_references::{
     NamedCharacterReferences, NamedCharacterReferencesEntities,
 };
-use parser::preprocessor::InputStream;
+use parser::{
+    stream::{InputStream, OutputStream},
+    StreamInputIterator, StreamTokenIterator,
+};
 
 use super::{state::State, HTMLToken};
 use crate::{
@@ -56,52 +59,51 @@ pub(crate) enum HTMLTokenizerProcessControlFlow {
     Emit,
 }
 
-pub(crate) type HTMLInputStream<Iter> = InputStream<Iter, CodePoint>;
+// ---- //
+// Type //
+// ---- //
 
 pub(crate) type HTMLTokenizerProcessResult = Result<
     HTMLTokenizerProcessControlFlow,
     (HTMLParserError, HTMLTokenizerProcessControlFlow),
 >;
 
+type HTMLInputStream<Iter> = InputStream<Iter, CodePoint>;
+type HTMLOutputStream = OutputStream<HTMLToken>;
+
 // --------- //
 // Structure //
 // --------- //
 
-#[derive(Debug)]
-pub struct HTMLTokenizer<Chars>
-where
-    Chars: Iterator<Item = CodePoint>,
-{
-    pub(crate) stream: HTMLInputStream<Chars>,
-    pub(crate) tree_construction: HTMLTreeConstruction,
-
-    /// Le jeton courant.
-    token: Option<HTMLToken>,
-
-    pub(crate) state: HTMLTokenizerState,
+pub struct HTMLTokenizer<Chars> {
+    pub(super) input: HTMLInputStream<Chars>,
 
     /// La sortie de l'étape de tokenisation est une série de zéro ou plus
     /// des jetons.
-    output_tokens: VecDeque<HTMLToken>,
+    output: HTMLOutputStream,
 
-    pub(crate) named_character_reference_code:
+    pub(crate) tree_construction: HTMLTreeConstruction,
+
+    pub(super) state: HTMLTokenizerState,
+
+    pub(super) named_character_reference_code:
         NamedCharacterReferencesEntities,
 
     /// Certains états utilisent un tampon temporaire pour suivre leur
     /// progression.
-    pub(crate) temporary_buffer: String,
+    pub(super) temporary_buffer: String,
 
     /// [L'état de référence du caractère](State::CharacterReference)
     /// utilise un [état de retour](HTMLTokenizerState::returns) pour
     /// revenir à un état à partir duquel il a été invoqué.
-    pub(crate) character_reference_code: u32,
+    pub(super) character_reference_code: u32,
 
     last_start_tag_token: Option<HTMLToken>,
 }
 
 #[derive(Debug)]
 #[derive(Clone)]
-pub(crate) struct HTMLTokenizerState {
+pub(super) struct HTMLTokenizerState {
     /// L'état courant.
     current: State,
     /// L'état de retour.
@@ -116,62 +118,52 @@ pub(crate) struct HTMLTokenizerState {
 // Implémentation //
 // -------------- //
 
-impl<C> HTMLTokenizer<C>
-where
-    C: Iterator<Item = CodePoint>,
-{
-    pub fn new(document: DocumentNode, iter: C) -> Self {
-        let stream = HTMLInputStream::new(iter);
+impl<C> HTMLTokenizer<C> {
+    pub(crate) fn new(document: DocumentNode, chars: C) -> Self {
+        let input_stream = HTMLInputStream::new(chars);
+        let output_stream = HTMLOutputStream::empty();
         Self {
-            stream,
+            input: input_stream,
+            output: output_stream,
             tree_construction: HTMLTreeConstruction::new(document),
-            token: None,
-            state: HTMLTokenizerState::default(),
-            output_tokens: VecDeque::default(),
-            temporary_buffer: String::default(),
             named_character_reference_code:
                 NamedCharacterReferences::entities(),
-            character_reference_code: 0,
-            last_start_tag_token: None,
+            state: Default::default(),
+            temporary_buffer: Default::default(),
+            character_reference_code: Default::default(),
+            last_start_tag_token: Default::default(),
         }
     }
 }
 
 impl<C> HTMLTokenizer<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     /// Le jeton actuel.
-    pub fn current_token(&mut self) -> Option<HTMLToken> {
-        if let Some(token) = self.token.to_owned() {
-            self.output_tokens.push_back(token);
+    pub(super) fn current_token(&mut self) -> Option<HTMLToken> {
+        if let Some(token) = self.output.current_token() {
+            self.output.append(token.to_owned());
         }
-        self.pop_token()
+        self.output.consume_next_token()
     }
 
     /// Le jeton suivant.
-    pub fn next_token(&mut self) -> Option<HTMLToken> {
+    pub(crate) fn consume_next_token(&mut self) -> Option<HTMLToken> {
         self.next()
     }
 
-    /// Extrait le premier jeton.
-    fn pop_token(&mut self) -> Option<HTMLToken> {
-        self.output_tokens.pop_front()
-    }
-
     /// Change l'état d'un jeton via une fonction de retour.
-    pub(crate) fn change_current_token<F: FnOnce(&mut HTMLToken)>(
+    pub(super) fn change_current_token<F: FnOnce(&mut HTMLToken)>(
         &mut self,
         callback: F,
     ) -> &mut Self {
-        if let Some(ref mut token) = self.token {
-            callback(token);
-        }
+        self.output.current_token_mut_callback(callback);
         self
     }
 
     /// Émet le jeton actuel.
-    pub(crate) fn and_emit_current_token(&mut self) -> &mut Self {
+    pub(super) fn and_emit_current_token(&mut self) -> &mut Self {
         if let Some(token) = self.current_token() {
             self.emit_token(token);
         }
@@ -179,28 +171,29 @@ where
     }
 
     /// Émet chaque caractère du tampon temporaire.
-    pub(crate) fn emit_each_characters_of_temporary_buffer(
+    pub(super) fn emit_each_characters_of_temporary_buffer(
         &mut self,
     ) -> &mut Self {
         self.temporary_buffer.chars().for_each(|ch| {
-            self.output_tokens.push_back(HTMLToken::Character(ch));
+            self.output.append(HTMLToken::Character(ch));
         });
         self
     }
 
     /// Émet le jeton actuel.
-    pub(crate) fn emit_token(&mut self, token: HTMLToken) -> &mut Self {
+    pub(super) fn emit_token(&mut self, token: HTMLToken) -> &mut Self {
         if matches!(token, HTMLToken::Character('<' | '/')) {
-            self.last_start_tag_token = self.token.clone();
+            self.last_start_tag_token =
+                self.output.current_token().cloned();
         }
 
-        self.output_tokens.push_front(token);
+        self.output.prepend(token);
         self
     }
 
     /// Remplace le jeton actuel par un nouveau jeton.
-    pub(crate) fn set_token(&mut self, new_token: HTMLToken) -> &mut Self {
-        self.token.replace(new_token);
+    pub(super) fn set_token(&mut self, new_token: HTMLToken) -> &mut Self {
+        self.output.replace_current_token_with(new_token);
         self
     }
 
@@ -208,13 +201,13 @@ where
     /// correspondant dans un état spécifié, cela signifie de passer à
     /// cet état, mais lorsqu'il tente de consommer le prochain caractère,
     /// de lui fournir le caractère actuel à la place.
-    pub(crate) fn reconsume(&mut self, state: &str) -> &mut Self {
-        self.stream.rollback();
+    pub(super) fn reconsume(&mut self, state: &str) -> &mut Self {
+        self.input.reconsume_current_input();
         self.switch_state_to(state);
         self
     }
 
-    pub(crate) fn set_return_state_to(
+    pub(super) fn set_return_state_to(
         &mut self,
         state: impl AsRef<str>,
     ) -> &mut Self {
@@ -230,7 +223,7 @@ where
         self
     }
 
-    pub(crate) fn set_temporary_buffer(
+    pub(super) fn set_temporary_buffer(
         &mut self,
         temporary_buffer: String,
     ) -> &mut Self {
@@ -238,7 +231,7 @@ where
         self
     }
 
-    pub(crate) fn append_character_to_temporary_buffer(
+    pub(super) fn append_character_to_temporary_buffer(
         &mut self,
         ch: CodePoint,
     ) -> &mut Self {
@@ -246,7 +239,7 @@ where
         self
     }
 
-    pub(crate) fn flush_temporary_buffer(&mut self) -> &mut Self {
+    pub(super) fn flush_temporary_buffer(&mut self) -> &mut Self {
         if self.state.is_character_of_attribute() {
             self.temporary_buffer.to_owned().chars().for_each(|ch| {
                 self.change_current_token(|token| {
@@ -254,8 +247,8 @@ where
                 });
             });
         } else {
-            self.temporary_buffer.chars().for_each(|c| {
-                self.output_tokens.push_back(HTMLToken::Character(c))
+            self.temporary_buffer.chars().for_each(|ch| {
+                self.output.append(HTMLToken::Character(ch))
             });
         }
         self
@@ -266,7 +259,7 @@ where
     /// début qui a été émise par ce tokenizer, le cas échéant.
     /// Si aucune balise de début n'a été émise par ce tokenizer, alors
     /// aucune balise de fin n'est appropriée.
-    pub(crate) fn is_appropriate_end_tag(&self) -> bool {
+    pub(super) fn is_appropriate_end_tag(&self) -> bool {
         if let (
             Some(HTMLToken::Tag {
                 name: current_tag_name,
@@ -278,8 +271,10 @@ where
                 is_end: true,
                 ..
             }),
-        ) = (self.token.as_ref(), self.last_start_tag_token.as_ref())
-        {
+        ) = (
+            self.output.current_token(),
+            self.last_start_tag_token.as_ref(),
+        ) {
             current_tag_name == last_tag_name
         } else {
             false
@@ -330,7 +325,7 @@ impl HTMLTokenizerState {
 // -------------- //
 
 impl<C> HTMLTokenizerProcessInterface for HTMLTokenizer<C> where
-    C: Iterator<Item = CodePoint>
+    C: CodePointIterator
 {
 }
 
@@ -338,13 +333,13 @@ impl HTMLTokenizerProcessInterface for HTMLTokenizerState {}
 
 impl<C> Iterator for HTMLTokenizer<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     type Item = HTMLToken;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.output_tokens.is_empty() {
-            return self.pop_token();
+        if !self.output.is_empty() {
+            return self.output.consume_next_token();
         }
 
         loop {
@@ -536,9 +531,8 @@ mod tests {
 
     fn get_tokenizer_html(
         input: &'static str,
-    ) -> HTMLTokenizer<impl Iterator<Item = CodePoint>> {
-        let stream = InputStream::new(input.chars());
-        HTMLTokenizer::new(DocumentNode::default(), stream)
+    ) -> HTMLTokenizer<impl CodePointIterator> {
+        HTMLTokenizer::new(DocumentNode::default(), input.chars())
     }
 
     #[test]
@@ -552,7 +546,7 @@ mod tests {
             "?a=b&c=d&a0b=c&copy=1&noti=n&not=in&notin=&notin;&not;&;& &";
 
         assert_eq!(
-            token.next_token(),
+            token.consume_next_token(),
             Some(
                 HTMLToken::new_start_tag()
                     .with_name("a")
@@ -568,7 +562,7 @@ mod tests {
         ));
 
         assert_eq!(
-            token.next_token(),
+            token.consume_next_token(),
             Some(HTMLToken::Comment(" Hello World ".into()))
         );
     }
@@ -579,7 +573,7 @@ mod tests {
             get_tokenizer_html(include_str!("../crashtests/tag/tag.html"));
 
         assert_eq!(
-            token.next_token(),
+            token.consume_next_token(),
             Some(
                 HTMLToken::new_start_tag()
                     .with_name("div")
@@ -591,7 +585,7 @@ mod tests {
         token.nth(12);
 
         assert_eq!(
-            token.next_token(),
+            token.consume_next_token(),
             Some(
                 HTMLToken::new_start_tag()
                     .with_name("input")

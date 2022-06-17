@@ -11,12 +11,9 @@ use super::peekable::PeekableInterface;
 // --------- //
 
 #[derive(Debug)]
-pub struct ListQueue<T, I>
-where
-    T: Iterator<Item = I>,
-{
-    pub iter: T,
-    queue: Vec<Option<T::Item>>,
+pub struct ListQueue<T, I> {
+    original_iterator: T,
+    queue: Vec<Option<I>>,
     offset: usize,
 }
 
@@ -24,13 +21,10 @@ where
 // Implémentation //
 // -------------- //
 
-impl<T, I> ListQueue<T, I>
-where
-    T: Iterator<Item = I>,
-{
+impl<T, I> ListQueue<T, I> {
     pub fn new(iter: T) -> Self {
         Self {
-            iter,
+            original_iterator: iter,
             queue: Vec::default(),
             offset: 0,
         }
@@ -40,6 +34,7 @@ where
 impl<T, I> ListQueue<T, I>
 where
     T: Iterator<Item = I>,
+    I: Clone,
 {
     fn fill_queue_max(&mut self) {
         let stored_elements = self.queue.len();
@@ -61,7 +56,7 @@ where
     }
 
     pub fn enqueue(&mut self) {
-        self.queue.push(self.iter.next());
+        self.queue.push(self.original_iterator.next());
     }
 
     fn decrement(&mut self) {
@@ -72,6 +67,12 @@ where
 
     pub fn dequeue(&mut self) -> Option<T::Item> {
         self.queue.remove(0)
+    }
+
+    /// Ajoute un élément au début de la queue.
+    pub fn reconsume(&mut self, last_consumed_input: Option<T::Item>) {
+        let mut temp = vec![last_consumed_input];
+        self.queue.splice(..0, temp.drain(..));
     }
 }
 
@@ -120,12 +121,13 @@ where
 impl<T, I> Iterator for ListQueue<T, I>
 where
     T: Iterator<Item = I>,
+    I: Clone,
 {
     type Item = T::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
         let consumed_item = if self.queue.is_empty() {
-            self.iter.next()
+            self.original_iterator.next()
         } else {
             self.dequeue()
         };

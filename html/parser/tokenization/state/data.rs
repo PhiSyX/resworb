@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use infra::primitive::codepoint::CodePoint;
+use infra::primitive::codepoint::CodePointIterator;
 
 use crate::tokenization::{
     tokenizer::{
@@ -14,12 +14,12 @@ use crate::tokenization::{
 
 impl<C> HTMLTokenizer<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     pub(crate) fn handle_data_state(
         &mut self,
     ) -> HTMLTokenizerProcessResult {
-        match self.stream.next_input_char() {
+        match self.input.consume_next_input_character() {
             // U+0026 AMPERSAND (&)
             //
             // Définir l'état de retour à l'état `data`. Passer à l'état

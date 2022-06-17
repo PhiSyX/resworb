@@ -2,11 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-#![feature(
-    explicit_generic_args_with_impl_trait,
-    type_name_of_val,
-    option_result_contains
-)]
+#![feature(type_name_of_val, option_result_contains)]
 
 mod codepoint;
 mod error;
@@ -17,21 +13,19 @@ mod tree_construction;
 use std::{borrow::BorrowMut, ops::ControlFlow};
 
 use dom::node::DocumentNode;
-use infra::{self, primitive::codepoint::CodePoint};
-use state::{FramesetOkFlag, InsertionMode};
-use tokenization::HTMLToken;
-use tree_construction::HTMLTreeConstruction;
+use infra::primitive::codepoint::CodePointIterator;
 
-use self::tokenization::HTMLTokenizer;
+use self::{
+    state::{FramesetOkFlag, InsertionMode},
+    tokenization::{HTMLToken, HTMLTokenizer},
+    tree_construction::HTMLTreeConstruction,
+};
 
 // --------- //
 // Structure //
 // --------- //
 
-pub struct HTMLParser<C>
-where
-    C: Iterator<Item = CodePoint>,
-{
+pub struct HTMLParser<C> {
     tokenizer: HTMLTokenizer<C>,
 }
 
@@ -53,10 +47,7 @@ pub enum HTMLParserState {
 // Implémentation //
 // -------------- //
 
-impl<C> HTMLParser<C>
-where
-    C: Iterator<Item = CodePoint>,
-{
+impl<C> HTMLParser<C> {
     pub fn new(document: DocumentNode, input: C) -> Self {
         let tokenizer = HTMLTokenizer::new(document, input);
         Self { tokenizer }
@@ -65,13 +56,13 @@ where
 
 impl<C> HTMLParser<C>
 where
-    C: Iterator<Item = CodePoint>,
+    C: CodePointIterator,
 {
     pub fn run(&mut self) {
         loop {
-            let token = self.tokenizer.next_token();
+            let token = self.tokenizer.consume_next_token();
 
-            // todo: améliorer cette partie-ci.
+            // TODO(phisyx): à améliorer ASAP.
             match self.tokenizer.tree_construction.dispatcher(token) {
                 | ControlFlow::Continue(HTMLParserState::SwitchTo(
                     state,
@@ -82,7 +73,7 @@ where
                 | ControlFlow::Continue(
                     HTMLParserState::ProcessNextTokenExceptLF,
                 ) => {
-                    let next = self.tokenizer.next_token();
+                    let next = self.tokenizer.consume_next_token();
                     match next {
                         | Some(HTMLToken::Character('\n')) => continue,
                         | None => continue,
@@ -95,10 +86,10 @@ where
                     }
                 }
 
-                // todo(fixme): à améliorer asap.
+                // TODO(phisyx): à améliorer ASAP.
                 | ControlFlow::Continue(HTMLParserState::CustomRcdata) => {
                     if let Some(HTMLToken::Character('\n')) =
-                        self.tokenizer.next_token()
+                        self.tokenizer.consume_next_token()
                     {
                         self.tokenizer.next();
                     }
@@ -125,13 +116,15 @@ where
                     continue;
                 }
 
-                | ControlFlow::Break(HTMLParserFlag::Pause) => break, /* todo */
-                | ControlFlow::Break(HTMLParserFlag::Stop) => break, /* todo */
+                | ControlFlow::Break(HTMLParserFlag::Pause) => break, /* Voir TODO ci-haut */
+                | ControlFlow::Break(HTMLParserFlag::Stop) => break, /* Voir TODO ci-haut */
             }
         }
     }
 
-    pub fn tree_construction(&mut self) -> &mut HTMLTreeConstruction {
+    pub(crate) fn tree_construction(
+        &mut self,
+    ) -> &mut HTMLTreeConstruction {
         self.tokenizer.tree_construction.borrow_mut()
     }
 }

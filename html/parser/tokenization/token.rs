@@ -7,6 +7,7 @@ use html_elements::{
     interface::IsOneOfAttributesInterface, tag_attributes, tag_names,
 };
 use infra::{namespace::Namespace, primitive::codepoint::CodePoint};
+use parser::StreamToken;
 
 // ---- //
 // Type //
@@ -144,16 +145,12 @@ impl HTMLToken {
             }
         }
     }
-
-    pub fn is_eof(&self) -> bool {
-        matches!(self, Self::EOF)
-    }
 }
 
 impl HTMLToken {
     /// Défini un nom pour le [DOCTYPE](HTMLToken::DOCTYPE).
     /// Défini un nom pour le [tag](HTMLToken::Tag).
-    pub fn with_name(mut self, new_name: impl ToString) -> Self {
+    pub(crate) fn with_name(mut self, new_name: impl ToString) -> Self {
         assert!(matches!(
             self,
             Self::DOCTYPE { name: None, .. } | Self::Tag { .. }
@@ -192,7 +189,10 @@ impl HTMLToken {
 
     /// Défini un identificateur public pour le
     /// [DOCTYPE](HTMLToken::DOCTYPE).
-    pub fn with_public_identifier(mut self, pid: impl ToString) -> Self {
+    pub(crate) fn with_public_identifier(
+        mut self,
+        pid: impl ToString,
+    ) -> Self {
         assert!(matches!(self, Self::DOCTYPE { .. }));
         if let Self::DOCTYPE {
             ref mut public_identifier,
@@ -206,7 +206,10 @@ impl HTMLToken {
 
     /// Défini un identificateur système pour le
     /// [DOCTYPE](HTMLToken::DOCTYPE).
-    pub fn with_system_identifier(mut self, sid: impl ToString) -> Self {
+    pub(crate) fn with_system_identifier(
+        mut self,
+        sid: impl ToString,
+    ) -> Self {
         assert!(matches!(self, Self::DOCTYPE { .. }));
         if let Self::DOCTYPE {
             ref mut system_identifier,
@@ -220,7 +223,7 @@ impl HTMLToken {
 
     /// Active le drapeau `force-quirks` pour le
     /// [DOCTYPE](HTMLToken::DOCTYPE).
-    pub fn with_quirks_mode(mut self) -> Self {
+    pub(crate) fn with_quirks_mode(mut self) -> Self {
         assert!(matches!(self, Self::DOCTYPE { .. }));
         if let Self::DOCTYPE {
             ref mut force_quirks_flag,
@@ -514,7 +517,7 @@ impl HTMLToken {
     /// son drapeau de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
     /// doit être vide.
-    pub const fn new_start_tag() -> Self {
+    pub(crate) const fn new_start_tag() -> Self {
         Self::Tag {
             name: String::new(),
             self_closing_flag: false,
@@ -528,7 +531,7 @@ impl HTMLToken {
     /// son indicateur de fermeture automatique doit être désactivé
     /// (son autre état est qu'il soit activé), et sa liste d'attributs
     /// doit être vide.
-    pub const fn new_end_tag() -> Self {
+    pub(crate) const fn new_end_tag() -> Self {
         Self::Tag {
             name: String::new(),
             self_closing_flag: false,
@@ -539,7 +542,7 @@ impl HTMLToken {
     }
 
     /// Définie des attributs à un jeton d'une balise.
-    pub fn with_attributes(
+    pub(crate) fn with_attributes(
         mut self,
         attrs: impl IntoIterator<Item = impl Into<HTMLTagAttribute>>,
     ) -> Self {
@@ -556,7 +559,7 @@ impl HTMLToken {
 
     /// Définit le drapeau de fermeture automatique d'un jeton d'une balise
     /// [start-tag](HTMLToken::Tag).
-    pub fn with_self_closing_flag(mut self) -> Self {
+    pub(crate) fn with_self_closing_flag(mut self) -> Self {
         assert!(matches!(self, Self::Tag { .. }));
         if let Self::Tag {
             ref mut self_closing_flag,
@@ -697,7 +700,7 @@ impl HTMLToken {
 
 // &Self
 impl HTMLToken {
-    pub fn has_attributes(
+    pub(crate) fn has_attributes(
         &self,
         attribute_names: impl IntoIterator<Item = tag_attributes> + Copy,
     ) -> bool {
@@ -710,7 +713,7 @@ impl HTMLToken {
         }
     }
 
-    pub const fn is_end_tag(&self) -> bool {
+    pub(crate) const fn is_end_tag(&self) -> bool {
         if let Self::Tag { is_end, .. } = self {
             *is_end
         } else {
@@ -718,7 +721,7 @@ impl HTMLToken {
         }
     }
 
-    pub const fn is_start_tag(&self) -> bool {
+    pub(crate) const fn is_start_tag(&self) -> bool {
         if let Self::Tag { is_end, .. } = self {
             !(*is_end)
         } else {
@@ -726,7 +729,7 @@ impl HTMLToken {
         }
     }
 
-    pub fn local_name(&self) -> &str {
+    pub(crate) fn local_name(&self) -> &str {
         assert!(matches!(self, Self::Tag { .. }));
         if let Self::Tag { name, .. } = self {
             name
@@ -735,7 +738,7 @@ impl HTMLToken {
         }
     }
 
-    pub fn tag_name(&self) -> tag_names {
+    pub(crate) fn tag_name(&self) -> tag_names {
         assert!(matches!(self, Self::Tag { .. }));
         if let Self::Tag { name, .. } = self {
             name.parse().expect("Devrait être un nom de balise valide")
@@ -746,12 +749,12 @@ impl HTMLToken {
 }
 
 impl HTMLToken {
-    pub const fn as_tag(&self) -> &HTMLToken {
+    pub(crate) const fn as_tag(&self) -> &HTMLToken {
         assert!(matches!(self, Self::Tag { .. }));
         self
     }
 
-    pub fn as_tag_mut(&mut self) -> &mut HTMLToken {
+    pub(crate) fn as_tag_mut(&mut self) -> &mut HTMLToken {
         assert!(matches!(self, Self::Tag { .. }));
         self
     }
@@ -759,7 +762,7 @@ impl HTMLToken {
 
 impl HTMLTagAttribute {
     /// Crée un attribut de balise.
-    pub fn new(name: impl ToString, value: impl ToString) -> Self {
+    pub(crate) fn new(name: impl ToString, value: impl ToString) -> Self {
         Self {
             name: name.to_string(),
             value: value.to_string(),
@@ -775,7 +778,7 @@ impl HTMLTagAttribute {
 
 impl HTMLToken {
     /// Crée un nouveau jeton (comment)(HTMLToken::Comment).
-    pub fn new_comment(comment: impl ToString) -> Self {
+    pub(crate) fn new_comment(comment: impl ToString) -> Self {
         Self::Comment(comment.to_string())
     }
 }
@@ -786,15 +789,15 @@ impl HTMLToken {
 
 impl HTMLToken {
     /// Crée un nouveau jeton (character)(HTMLToken::Character).
-    pub const fn new_character(ch: CodePoint) -> Self {
+    pub(crate) const fn new_character(ch: CodePoint) -> Self {
         Self::Character(ch)
     }
 
-    pub const fn is_character(&self) -> bool {
+    pub(crate) const fn is_character(&self) -> bool {
         matches!(self, Self::Character(_))
     }
 
-    pub const fn is_ascii_whitespace(&self) -> bool {
+    pub(crate) const fn is_ascii_whitespace(&self) -> bool {
         if let Self::Character(ch) = self {
             ch.is_ascii_whitespace()
         } else {
@@ -814,6 +817,12 @@ where
 {
     fn from(nv: (S1, S2)) -> Self {
         Self::new(nv.0.as_ref(), nv.1.as_ref())
+    }
+}
+
+impl StreamToken for HTMLToken {
+    fn eof() -> Self {
+        Self::EOF
     }
 }
 

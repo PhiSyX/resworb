@@ -31,14 +31,16 @@ pub struct DocumentFragment {}
 // -------------- //
 
 impl DocumentFragmentNode {
-    pub fn document_fragment(fragment: DocumentFragment) -> NodeData {
+    pub(crate) fn document_fragment(
+        fragment: DocumentFragment,
+    ) -> NodeData {
         NodeData::DocumentFragment {
             fragment: fragment.into(),
             shadow_root: None,
         }
     }
 
-    pub fn shadow_root(
+    pub(crate) fn shadow_root(
         mut node_data: NodeData,
         sr: ShadowRoot,
     ) -> NodeData {

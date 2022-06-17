@@ -1,6 +1,6 @@
 [package]
 name = "resworb-parser"
-version = "0.1.7"
+version = "0.1.18"
 license-file = "../LICENSE"
 edition = "2021"
 
@@ -9,4 +9,4 @@ path = "./lib.rs"
 
 [dependencies]
 infra = { path = "../infra", package = "resworb-infra" }
-syntax = { version = "^0.15", package = "rowan" }
+# syntax = { version = "^0.15", package = "rowan" }

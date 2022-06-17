@@ -7,6 +7,7 @@ default-run = "resworb"
 
 [workspace]
 members = [
+    "css",
     "dom",
     "html",
     "html/elements",

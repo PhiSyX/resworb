@@ -23,7 +23,7 @@ use super::{document_fragment::DocumentFragmentNode, DocumentNode};
 #[derive(Debug)]
 pub struct Element {
     inner: HTMLElement,
-    // todo: changer en NamedNodeMap (cf. https://dom.spec.whatwg.org/#namednodemap)
+    // TODO(phisyx): changer le type de cet attribut en NamedNodeMap (cf. https://dom.spec.whatwg.org/#namednodemap)
     pub attributes: RwLock<HashMap<DOMString, DOMString>>,
     pub id: RwLock<Option<DOMString>>,
     pub is: RwLock<Option<DOMString>>,

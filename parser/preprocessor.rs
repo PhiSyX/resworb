@@ -2,116 +2,137 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use core::ops;
 use std::borrow::Cow;
 
 use infra::{
-    primitive::codepoint::CodePoint,
+    algorithms::Parameter,
+    primitive::codepoint::CodePointIterator,
     structure::lists::{peekable::PeekableInterface, queue::ListQueue},
 };
+
+use crate::{StreamInput, StreamInputIterator, StreamIterator};
 
 // ---- //
 // Type //
 // ---- //
 
-pub type InputStream<T, I> = InputStreamPreprocessor<T, I>;
+// NOTE(phisyx): ces types peuvent être amélioré.
+type InputStreamCurrentInput<I> = Option<I>;
+type InputStreamFilteredInput<I> = Option<I>;
+type InputStreamPreScanFn<I> =
+    fn(InputStreamCurrentInput<I>) -> InputStreamFilteredInput<I>;
 
 // --------- //
 // Structure //
 // --------- //
 
-#[derive(Debug)]
 /// Le flux d'entrée est constitué de caractères qui y sont insérés lors
 /// du décodage du flux d'octets d'entrée ou par les diverses API qui
 /// manipulent directement le flux d'entrée.
-pub struct InputStreamPreprocessor<T, I>
-where
-    T: Iterator<Item = I>,
-    I: Clone,
-{
-    iter: ListQueue<T, I>,
-    is_replayed: bool,
-    pub current: Option<I>,
-    last_consumed_item: Option<I>,
+#[derive(Debug)]
+pub struct InputStreamPreprocessor<Stream, Input> {
+    queue: ListQueue<Stream, Input>,
+    current_input: InputStreamCurrentInput<Input>,
+    pre_scan: Option<InputStreamPreScanFn<Input>>,
 }
 
 // -------------- //
 // Implémentation //
 // -------------- //
 
-impl<T, I> InputStreamPreprocessor<T, I>
-where
-    T: Iterator<Item = I>,
-    I: Clone,
-{
+impl<S, I> InputStreamPreprocessor<S, I> {
     /// Crée un nouveau flux d'entrée.
-    pub fn new(tokenizer: T) -> Self {
-        let queue = ListQueue::new(tokenizer);
+    pub fn new(stream: S) -> Self {
         Self {
-            iter: queue,
-            // queue: vec![],
-            // offset: 0,
-            is_replayed: false,
-            current: None,
-            last_consumed_item: None,
+            queue: ListQueue::new(stream),
+            current_input: Default::default(),
+            // NOTE(phisyx): par défaut, nous n'avons pas besoin
+            // d'effectuer de filtre particulier.
+            pre_scan: Default::default(),
         }
     }
-}
 
-impl<T, I> InputStreamPreprocessor<T, I>
-where
-    T: Iterator<Item = I>,
-    I: Clone,
-{
-    /// Alias de [Iterator::nth] : sauf que l'on fait n - 1 si n est
-    /// supérieur ou égal à 1. Ce qui veut dire que : (n = n - 1)
-    ///   - 1 = 0
-    ///   - 2 = 1
-    ///   - 3 = 2
-    /// etc...
-    pub fn advance(&mut self, mut n: usize) -> Option<I> {
-        if n >= 1 {
-            n -= 1;
-        }
-        self.nth(n)
-    }
-
-    /// Permet de revenir en arrière dans le flux.
-    pub fn rollback(&mut self) {
-        self.is_replayed = true;
-    }
-
-    pub fn meanwhile(&mut self) -> &mut impl PeekableInterface<T, I> {
-        &mut self.iter
-    }
-
-    /// Consomme le prochain élément du flux.
-    pub fn next_input(&mut self) -> Option<I> {
-        self.next().and_then(|item| {
-            let some_item = Some(item);
-            self.current = some_item.to_owned();
-            some_item
-        })
+    pub fn pre_scan(mut self, filter_fn: InputStreamPreScanFn<I>) -> Self {
+        self.pre_scan.replace(filter_fn);
+        self
     }
 }
 
 impl<Chars> InputStreamPreprocessor<Chars, Chars::Item>
 where
-    Chars: Iterator<Item = CodePoint>,
+    Chars: CodePointIterator,
+    Chars::Item: StreamInput,
 {
-    /// Alias de [InputStreamPreprocessor::next_input]
-    ///
-    /// Consomme le prochain caractère du flux.
-    pub fn next_input_char(&mut self) -> Option<Chars::Item> {
+    /// Alias de [StreamInputIterator::consume_next_input].
+    //
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
+    pub fn consume_next_input_character(&mut self) -> Option<Chars::Item> {
+        self.consume_next_input()
+    }
+
+    /// Alias de [StreamInputIterator::consume_next_input].
+    //
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
+    pub fn consume_next_input_codepoint(&mut self) -> Option<Chars::Item> {
+        self.consume_next_input_character()
+    }
+
+    /// Alias de [StreamInputIterator::next_input].
+    //
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
+    pub fn next_input_character(&mut self) -> Option<Chars::Item> {
         self.next_input()
     }
 
-    /// Récupère les prochains caractères du flux jusqu'à une certaine
-    /// position dans l'itération, sans avancer dans l'itération, et le
-    /// transforme en [Cow<str>].
-    pub fn slice_until(&mut self, lookahead_offset: usize) -> Cow<str> {
-        self.iter
-            .peek_until::<Cow<str>>(lookahead_offset)
-            .unwrap_or_default()
+    /// Alias de [StreamInputIterator::next_input].
+    //
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
+    pub fn next_input_codepoint(&mut self) -> Option<Chars::Item> {
+        self.next_input_character()
+    }
+
+    /// Alias de [StreamInputIterator::next_n_input], mais renvoie une
+    /// chaîne de caractères au lieu d'un tableau.
+    //
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
+    pub fn next_n_input_character(&mut self, n: usize) -> Cow<str> {
+        self.next_n_input(n).into_iter().collect()
+    }
+
+    /// Alias de [StreamInputIterator::next_n_input], mais renvoie une
+    /// chaîne de caractères au lieu d'un tableau.
+    //
+    // NOTE(phisyx): nomenclature des spécifications HTML, CSS, etc.
+    pub fn next_n_input_codepoint(&mut self, n: usize) -> Cow<str> {
+        self.next_n_input_character(n)
+    }
+
+    /// Consomme les prochains caractères du flux d'entrée qui sont
+    /// identiques à l'argument `codepoints`.
+    pub fn consume_next_input_character_if_are<
+        const SIZE_OF_CODE_POINTS: usize,
+    >(
+        &mut self,
+        codepoints: [Chars::Item; SIZE_OF_CODE_POINTS],
+    ) -> bool {
+        if self.next_n_input(SIZE_OF_CODE_POINTS) == codepoints {
+            self.advance(SIZE_OF_CODE_POINTS);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Consomme les prochains caractères du flux d'entrée qui sont
+    /// identiques à l'argument `codepoints`.
+    pub fn consume_next_input_codepoint_if_are<
+        const SIZE_OF_CODE_POINTS: usize,
+    >(
+        &mut self,
+        codepoints: [Chars::Item; SIZE_OF_CODE_POINTS],
+    ) -> bool {
+        self.consume_next_input_character_if_are(codepoints)
     }
 }
 
@@ -119,50 +140,136 @@ where
 // Implémentation // -> Interface
 // -------------- //
 
-impl<T, I> Iterator for InputStreamPreprocessor<T, I>
+impl<T, I> StreamIterator for InputStreamPreprocessor<T, I>
 where
     T: Iterator<Item = I>,
     I: Clone,
 {
     type Item = I;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.is_replayed {
-            self.is_replayed = false;
-            return self.last_consumed_item.to_owned();
-        };
+    fn advance(&mut self, mut n: usize) -> Option<Self::Item> {
+        if n >= 1 {
+            n -= 1;
+        }
+        self.nth(n)
+    }
 
-        self.last_consumed_item = self.iter.next();
-        self.last_consumed_item.to_owned()
+    fn advance_as_long_as_possible_with_limit<
+        'a,
+        Predicate: Fn(&Self::Item) -> bool,
+        Limit: Parameter<'a, usize>,
+    >(
+        &mut self,
+        predicate: Predicate,
+        with_limit: Limit,
+    ) -> Vec<Self::Item> {
+        let with_limit = unsafe { with_limit.param().value() };
+        let mut limit = with_limit.map(|n| n + 1).unwrap_or(0);
+        let mut result = vec![];
+
+        while self.peek().is_some()
+            && predicate(self.peek().unwrap())
+            && (limit > 0 || with_limit.is_none())
+        {
+            result.push(self.advance(1).unwrap());
+            if with_limit.is_some() {
+                limit -= 1;
+            }
+        }
+
+        result
     }
 }
 
+impl<T, I> StreamInputIterator for InputStreamPreprocessor<T, I>
+where
+    T: Iterator<Item = I>,
+    I: Clone,
+    I: StreamInput,
+{
+    type Input = I;
+
+    fn consume_next_input(&mut self) -> Option<Self::Input> {
+        if let Some(pre_scan) = &self.pre_scan {
+            (pre_scan)(self.queue.next())
+        } else {
+            self.queue.next()
+        }
+        .and_then(|item| {
+            let some_item = Some(item);
+            self.current_input = some_item.to_owned();
+            some_item
+        })
+    }
+
+    fn current_input(&self) -> Option<&Self::Input> {
+        self.current_input.as_ref()
+    }
+
+    fn next_input(&mut self) -> Option<Self::Input> {
+        let item = self.peek().cloned();
+        if let Some(pre_scan) = &self.pre_scan {
+            (pre_scan)(item)
+        } else {
+            item
+        }
+    }
+
+    fn next_n_input(&mut self, n: usize) -> Vec<Self::Input> {
+        self.queue.peek_until(n).unwrap_or_default()
+    }
+
+    fn reconsume_current_input(&mut self) {
+        let cloned_current_input = self.current_input.clone();
+        self.reconsume(cloned_current_input);
+    }
+}
+
+impl<T, I> ops::Deref for InputStreamPreprocessor<T, I> {
+    type Target = ListQueue<T, I>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.queue
+    }
+}
+
+impl<T, I> ops::DerefMut for InputStreamPreprocessor<T, I> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.queue
+    }
+}
+
+// ---- //
+// Test //
+// ---- //
+
 #[cfg(test)]
 mod tests {
+    use infra::primitive::codepoint::CodePoint;
+
     use super::*;
 
     fn get_input_stream(
         input: &'static str,
-    ) -> InputStreamPreprocessor<impl Iterator<Item = CodePoint>, CodePoint>
-    {
+    ) -> InputStreamPreprocessor<impl CodePointIterator, CodePoint> {
         InputStreamPreprocessor::new(input.chars())
     }
 
     #[test]
-    fn test_slice_until() {
+    fn test_next_n_input_character() {
         let mut stream = get_input_stream("Hello World");
-        assert_eq!(stream.slice_until(5), Cow::Borrowed("Hello"));
-        assert_eq!(stream.next(), Some('H'));
+        assert_eq!(
+            stream.next_n_input_character(5),
+            Cow::Borrowed("Hello")
+        );
+        assert_eq!(stream.consume_next_input(), Some('H'));
     }
 
     #[test]
-    fn test_rollback() {
+    fn test_reconsume() {
         let mut stream = get_input_stream("Hello World !");
-
-        stream.next(); // H
-        stream.next(); // e
-        stream.rollback(); // H
-
-        assert_eq!(stream.collect::<String>(), "ello World !".to_string());
+        stream.consume_next_input(); // H
+        stream.consume_next_input(); // e
+        stream.reconsume_current_input(); // H
     }
 }
