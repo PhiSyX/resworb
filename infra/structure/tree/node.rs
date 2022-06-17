@@ -5,7 +5,7 @@
 use core::ops;
 use std::{
     borrow::{Borrow, BorrowMut},
-    sync::RwLock,
+    cell::RefCell,
 };
 
 use super::{TreeNode, TreeNodeWeak};
@@ -18,13 +18,13 @@ use super::{TreeNode, TreeNodeWeak};
 pub struct Node<T> {
     data: T,
 
-    pub(super) parent: RwLock<Option<TreeNodeWeak<T>>>,
+    pub(super) parent: RefCell<Option<TreeNodeWeak<T>>>,
 
-    pub(super) first_child: RwLock<Option<TreeNode<T>>>,
-    pub(super) last_child: RwLock<Option<TreeNode<T>>>,
+    pub(super) first_child: RefCell<Option<TreeNode<T>>>,
+    pub(super) last_child: RefCell<Option<TreeNode<T>>>,
 
-    pub(super) prev_sibling: RwLock<Option<TreeNodeWeak<T>>>,
-    pub(super) next_sibling: RwLock<Option<TreeNode<T>>>,
+    pub(super) prev_sibling: RefCell<Option<TreeNodeWeak<T>>>,
+    pub(super) next_sibling: RefCell<Option<TreeNode<T>>>,
 }
 
 // ----------- //

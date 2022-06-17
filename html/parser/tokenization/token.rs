@@ -319,25 +319,25 @@ impl HTMLToken {
 // &Self
 
 impl HTMLToken {
-    pub(crate) const fn public_identifier(&self) -> Option<&String> {
+    pub(crate) fn public_identifier(&self) -> Option<String> {
         assert!(matches!(self, Self::DOCTYPE { .. }));
         if let Self::DOCTYPE {
             public_identifier, ..
         } = self
         {
-            public_identifier.as_ref()
+            public_identifier.to_owned()
         } else {
             None
         }
     }
 
-    pub(crate) const fn system_identifier(&self) -> Option<&String> {
+    pub(crate) fn system_identifier(&self) -> Option<String> {
         assert!(matches!(self, Self::DOCTYPE { .. }));
         if let Self::DOCTYPE {
             system_identifier, ..
         } = self
         {
-            system_identifier.as_ref()
+            system_identifier.to_owned()
         } else {
             None
         }

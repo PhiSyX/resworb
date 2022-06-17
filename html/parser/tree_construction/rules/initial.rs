@@ -110,8 +110,7 @@ impl HTMLTreeConstruction {
                     );
                 }
 
-                let mut doctype =
-                    DocumentType::new(doctype_data.name().into());
+                let mut doctype = DocumentType::new(doctype_data.name());
 
                 doctype.set_public_id(doctype_data.public_identifier());
                 doctype.set_system_id(doctype_data.system_identifier());

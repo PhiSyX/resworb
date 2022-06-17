@@ -6,7 +6,6 @@ use std::borrow::Cow;
 
 use dom::node::DocumentNode;
 use infra::primitive::codepoint::{CodePoint, CodePointIterator};
-use macros::dd;
 use named_character_references::{
     NamedCharacterReferences, NamedCharacterReferencesEntities,
 };
@@ -343,7 +342,7 @@ where
         }
 
         loop {
-            let state = match dd!(&self.state.current) {
+            let state = match self.state.current {
                 | State::Data => self.handle_data_state(),
                 | State::RCDATA => self.handle_rcdata_state(),
                 | State::RAWTEXT => self.handle_rawtext_state(),

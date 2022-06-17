@@ -11,6 +11,7 @@ use super::{Comment, Text};
 // --------- //
 
 #[derive(Debug)]
+#[derive(PartialEq, Eq)]
 pub struct CharacterData {
     inner: CharacterDataInner,
     data: DOMString,
@@ -36,20 +37,6 @@ impl CharacterData {
     }
 
     pub(crate) fn set_data(&self, data: &str) {
-        let dom_string = DOMString::new(data);
-        self.data.write(dom_string);
+        *self.data.borrow_mut() = data.to_owned();
     }
 }
-
-// -------------- //
-// Implémentation // -> Interface
-// -------------- //
-
-impl PartialEq for CharacterData {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
-            && *self.data.read() == *other.data.read()
-    }
-}
-
-impl Eq for CharacterData {}

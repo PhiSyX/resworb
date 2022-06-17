@@ -29,9 +29,11 @@ mod text;
 /// 4.14. Interface Comment
 mod comment;
 
-use std::sync::RwLock;
+use std::cell::RefCell;
 
-use html_elements::HTMLScriptElement;
+use html_elements::{
+    Element, HTMLElement, HTMLElementVariant, HTMLScriptElement,
+};
 use infra::structure::tree::{TreeNode, TreeNodeWeak};
 
 pub use self::{
@@ -41,7 +43,6 @@ pub use self::{
     document::{CreateElementOptions, Document, DocumentNode, QuirksMode},
     document_fragment::{DocumentFragment, DocumentFragmentNode},
     document_type::DocumentType,
-    element::Element,
     shadow_root::ShadowRoot,
     text::{Text, TextNode},
 };
@@ -53,13 +54,13 @@ pub use self::{
 /// 4.4. Interface Node
 #[derive(Debug)]
 pub struct Node {
-    owner_document: RwLock<Option<TreeNodeWeak<Self>>>,
+    owner_document: RefCell<Option<TreeNodeWeak<Self>>>,
     node_data: Option<NodeData>,
     node_type: NodeType,
 }
 
 pub(super) struct NodeBuilder {
-    owner_document: RwLock<Option<TreeNodeWeak<Node>>>,
+    owner_document: RefCell<Option<TreeNodeWeak<Node>>>,
     node_data: Option<NodeData>,
     node_type: NodeType,
 }
@@ -77,7 +78,7 @@ pub enum NodeData {
         fragment: Option<DocumentFragment>,
         shadow_root: Option<ShadowRoot>,
     },
-    Element(Element),
+    Element(HTMLElementVariant<DocumentNode, DocumentFragmentNode>),
     CharacterData(CharacterData),
     Attr(Attr),
 }
@@ -149,9 +150,31 @@ impl Node {
     /// Retourne la donnée du noeud, qui est l'élément courant.
     // NOTE(phisyx): au lieux de panic comme un demeuré: mieux gérer les
     // erreurs.
+    pub fn iref(
+        &self,
+    ) -> &HTMLElementVariant<DocumentNode, DocumentFragmentNode> {
+        match self.node_data.as_ref() {
+            | Some(NodeData::Element(element)) => element,
+            | _ => panic!("Élément attendu."),
+        }
+    }
+
+    /// Retourne la donnée du noeud, qui est l'élément courant.
+    // NOTE(phisyx): au lieux de panic comme un demeuré: mieux gérer les
+    // erreurs.
     pub fn element_ref(&self) -> &Element {
         match self.node_data.as_ref() {
             | Some(NodeData::Element(element)) => element,
+            | _ => panic!("Élément attendu."),
+        }
+    }
+
+    /// Retourne la donnée du noeud, qui est l'élément courant.
+    // NOTE(phisyx): au lieux de panic comme un demeuré: mieux gérer les
+    // erreurs.
+    pub fn html_element_ref(&self) -> &HTMLElement {
+        match self.node_data.as_ref() {
+            | Some(NodeData::Element(element)) => element.html(),
             | _ => panic!("Élément attendu."),
         }
     }
@@ -190,7 +213,7 @@ impl Node {
     pub fn set_document(&self, document: &TreeNode<Node>) {
         let document_weak: TreeNodeWeak<Node> =
             TreeNodeWeak::from(document);
-        self.owner_document.write().unwrap().replace(document_weak);
+        self.owner_document.borrow_mut().replace(document_weak);
     }
 }
 
@@ -237,3 +260,11 @@ impl PartialEq for Node {
 }
 
 impl Eq for Node {}
+
+// impl ops::Deref for Element {
+//     type Target = html_elements::Element;
+
+//     fn deref(&self) -> &Self::Target {
+//         &self.0
+//     }
+// }

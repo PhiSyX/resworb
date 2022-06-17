@@ -122,9 +122,7 @@ where
         }
     }
 
-    pub(crate) fn tree_construction(
-        &mut self,
-    ) -> &mut HTMLTreeConstruction {
+    pub fn tree_construction(&mut self) -> &mut HTMLTreeConstruction {
         self.tokenizer.tree_construction.borrow_mut()
     }
 }

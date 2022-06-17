@@ -2,31 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::interface::HTMLElementInterface;
+use crate::html_element;
 
-// --------- //
-// Structure //
-// --------- //
-
-#[derive(Debug)]
-#[derive(Default)]
-#[derive(PartialEq, Eq)]
-pub struct HTMLImageElement {}
-
-// -------------- //
-// Implémentation //
-// -------------- //
-
-impl HTMLImageElement {
-    pub const NAME: &'static str = "img";
-}
-
-// -------------- //
-// Implémentation // -> Interface
-// -------------- //
-
-impl HTMLElementInterface for HTMLImageElement {
-    fn tag_name(&self) -> &'static str {
-        Self::NAME
-    }
+html_element! {
+    struct HTMLImageElement(img) {}
 }

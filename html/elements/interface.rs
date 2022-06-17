@@ -9,7 +9,7 @@ use crate::{tag_attributes, tag_names};
 // --------- //
 
 pub trait HTMLElementInterface {
-    fn tag_name(&self) -> &'static str;
+    fn tag_name(&self) -> String;
 }
 
 pub trait IsOneOfTagsInterface: Copy {

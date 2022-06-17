@@ -5,13 +5,16 @@
 use core::ops;
 use std::{
     borrow::{Borrow, BorrowMut},
-    sync::{RwLock, RwLockReadGuard},
+    cell::RefCell,
 };
 
-use html_elements::tag_names;
-use infra::{namespace::Namespace, structure::tree::TreeNode};
+use html_elements::{tag_names, HTMLElementVariant};
+use infra::{
+    namespace::Namespace, primitive::string::DOMString,
+    structure::tree::TreeNode,
+};
 
-use super::{comment::CommentNode, element::HTMLElement, Element};
+use super::comment::CommentNode;
 use crate::{
     exception::DOMException,
     node::{DocumentType, Node, NodeData, NodeType},
@@ -31,9 +34,10 @@ pub struct DocumentNode {
 /// Chaque document XML et HTML dans une UA HTML est représenté par un
 /// objet Document. [DOM](https://dom.spec.whatwg.org/)
 #[derive(Debug)]
+#[derive(PartialEq, Eq)]
 pub struct Document {
-    doctype: RwLock<Option<DocumentType>>,
-    pub quirks_mode: RwLock<QuirksMode>,
+    doctype: RefCell<Option<DocumentType>>,
+    pub quirks_mode: RefCell<QuirksMode>,
 }
 
 // ----------- //
@@ -63,7 +67,7 @@ impl Document {
     pub fn new() -> Self {
         Self {
             doctype: Default::default(),
-            quirks_mode: RwLock::new(QuirksMode::Yes),
+            quirks_mode: RefCell::new(QuirksMode::Yes),
         }
     }
 
@@ -76,10 +80,6 @@ impl Document {
         if !tag_names::is_valid_name(&local_name) {
             return Err(DOMException::InvalidCharacterError);
         }
-
-        // 2) S'il s'agit d'un document HTML, définir localName en
-        // minuscules ASCII.
-        let maybe_element = local_name.as_ref().parse::<HTMLElement>();
 
         // 3) Laisser `is` être null.
         // 4) Si options est un dictionnaire et que options["is"] existe,
@@ -96,46 +96,50 @@ impl Document {
             Some(Namespace::HTML)
         };
 
+        // 2) S'il s'agit d'un document HTML, définir localName en
+        // minuscules ASCII.
+
+        let element = html_elements::Element::new(
+            DOMString::new(local_name.as_ref().to_owned()),
+            is,
+            namespace.unwrap_or(Namespace::HTML),
+        );
+        let html_element = html_elements::HTMLElement::new(element);
+
         // 6) Renvoie le résultat de la création d'un élément avec this,
         // localName, namespace, null, is, et avec l'indicateur d'éléments
         // personnalisés synchrones activé.
 
-        maybe_element
-            .map(|element| {
-                TreeNode::new(
-                    Node::builder()
-                        .set_data(NodeData::Element(Element::new(
-                            element,
-                            is,
-                            namespace.unwrap(),
-                        )))
-                        .set_type(NodeType::ELEMENT_NODE)
-                        .build(),
-                )
-            })
-            .map_err(|_| DOMException::InvalidNodeTypeError)
+        Ok(TreeNode::new(
+            Node::builder()
+                .set_data(NodeData::Element(HTMLElementVariant::from(
+                    html_element,
+                )))
+                .set_type(NodeType::ELEMENT_NODE)
+                .build(),
+        ))
     }
 }
 
 impl Document {
-    pub fn get_doctype(&self) -> RwLockReadGuard<Option<DocumentType>> {
-        self.doctype.read().unwrap()
+    pub fn get_doctype(&self) -> Option<DocumentType> {
+        self.doctype.borrow().clone()
     }
 
     pub fn isin_quirks_mode(&self) -> bool {
-        matches!(*self.quirks_mode.read().unwrap(), QuirksMode::Yes)
+        matches!(*self.quirks_mode.borrow(), QuirksMode::Yes)
     }
 }
 
 // &mut Self
 impl Document {
     pub fn set_doctype(&self, doctype: DocumentType) -> &Self {
-        *self.doctype.write().unwrap() = doctype.into();
+        *self.doctype.borrow_mut() = doctype.into();
         self
     }
 
     pub fn set_quirks_mode(&self, mode: QuirksMode) -> &Self {
-        *self.quirks_mode.write().unwrap() = mode;
+        *self.quirks_mode.borrow_mut() = mode;
         self
     }
 }
@@ -183,13 +187,3 @@ impl ops::Deref for DocumentNode {
         self.tree.borrow()
     }
 }
-
-impl PartialEq for Document {
-    fn eq(&self, other: &Self) -> bool {
-        *self.doctype.read().unwrap() == *other.doctype.read().unwrap()
-            && *self.quirks_mode.read().unwrap()
-                == *other.quirks_mode.read().unwrap()
-    }
-}
-
-impl Eq for Document {}
