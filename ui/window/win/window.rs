@@ -29,7 +29,7 @@ use windows::{
     },
 };
 
-use crate::window::api::{WindowAPI, WindowOptions};
+use crate::api::{WindowAPI, WindowOptions};
 
 // ----- //
 // Macro //

@@ -14,7 +14,7 @@ members = [
     "html/named-character-references",
     "html/parser",
     "ui",
-    "ui/gfx",
+    "ui/window",
 ]
 
 [[bin]]

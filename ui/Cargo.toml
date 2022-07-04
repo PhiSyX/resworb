@@ -8,4 +8,4 @@ edition = "2021"
 path = "./lib.rs"
 
 [dependencies]
-gfx = { path = "./gfx", package = "resworb-gfx" }
+window = { path = "./window", package = "resworb-window" }
